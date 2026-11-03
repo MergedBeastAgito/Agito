@@ -47,12 +47,12 @@ browser belongs in an ad-hoc run under `.hermes/tools/`, not in the gate.
 
 One convention, everywhere in the tree: folders, files, identifiers and prose.
 
-| Kind       | Rule                                                                    | Example                                     |
-| ---------- | ----------------------------------------------------------------------- | ------------------------------------------- |
-| Folder     | PascalCase when it names a role; lowercase where an ecosystem fixes it  | `Crate/BrowserCDP/Source`, `packages/runtime/src` |
-| File       | PascalCase, one concept per file                                        | `Port.ts`, `Library.rs`, `Scope.md`         |
-| Acronym    | fully uppercase, in names and prose                                     | `CLI`, `URL`, `API`, `JSON`, `CDP`          |
-| Identifier | PascalCase for types and values; camelCase for locals                   | `CDPClient`, `cdpValue`                     |
+| Kind       | Rule                                                                   | Example                                           |
+| ---------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
+| Folder     | PascalCase when it names a role; lowercase where an ecosystem fixes it | `Crate/BrowserCDP/Source`, `packages/runtime/src` |
+| File       | PascalCase, one concept per file                                       | `Port.ts`, `Library.rs`, `Scope.md`               |
+| Acronym    | fully uppercase, in names and prose                                    | `CLI`, `URL`, `API`, `JSON`, `CDP`                |
+| Identifier | PascalCase for types and values; camelCase for locals                  | `CDPClient`, `cdpValue`                           |
 
 A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a file or crate named after one
 keeps it - `BrowserCDP`, `CDPSession`.
@@ -65,10 +65,10 @@ names such as `webSocketDebuggerUrl`. A plural stays where the folder is a colle
 role: `Scripts/` holds independent scripts, `packages/` holds packages, while `Source/Fn` and
 `Source/Struct` name roles.
 
-The Rust tree is the strict case, because a module path is a file path: `Crate/<Name>/Source/Library.rs`
-is the library root, `Fn/` holds operations, `Struct/` holds data and contracts, and every module
-name matches its file. The TypeScript tree keeps PascalCase for the file that holds a concept and
-lowercase for the directory an ecosystem named.
+The Rust tree is the strict case, because a module path is a file path:
+`Crate/<Name>/Source/Library.rs` is the library root, `Fn/` holds operations, `Struct/` holds data
+and contracts, and every module name matches its file. The TypeScript tree keeps PascalCase for the
+file that holds a concept and lowercase for the directory an ecosystem named.
 
 A rename is mechanical: `git mv` the path, then follow every import, the `module.json` that names
 the package, and the paths quoted in `docs/` and `README.md`. A half-renamed tree does not pass the

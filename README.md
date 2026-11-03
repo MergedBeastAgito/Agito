@@ -62,8 +62,8 @@ starts Chromium or opens a socket.
 ## rust/
 
 The same specification as a Cargo workspace of seven crates, in the house layout: one directory per
-crate under `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for
-data and contracts, PascalCase module names, and one `Target/` at the workspace root.
+crate under `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/`
+for data and contracts, PascalCase module names, and one `Target/` at the workspace root.
 `rust/README.md` carries the per-crate dependency lists.
 
 - **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
@@ -119,6 +119,8 @@ a decision, and a document that changes its mind says so rather than rewriting t
   which document consumed it.
 - **`Open-Questions.md`** - every question still open, with the experiment that would settle it and
   what it blocks.
+- **`diagram/`** - the same design as storyboards: one page per category, each ending with the
+  states nobody has built yet, indexed by `diagram/Index.md`.
 
 ---
 

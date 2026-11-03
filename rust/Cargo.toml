@@ -6,7 +6,9 @@ members = ["Crate/*"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-license = "MIT"
+# The repository ships one licence, so this field agrees with it: `LICENSE` is
+# CC0 1.0 Universal. A crate cannot claim a licence the tree does not carry.
+license = "CC0-1.0"
 
 [workspace.dependencies]
 agentic-runtime = { path = "Crate/Runtime" }

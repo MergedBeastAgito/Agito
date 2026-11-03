@@ -50,7 +50,9 @@
 					"code": "timeout",
 					"message": "deadline"
 				},
-				"effects": ["launch:https://example.test/"],
+				"effects": [
+					"launch:https://example.test/"
+				],
 				"reports": 0
 			}
 		},
@@ -83,7 +85,9 @@
 					"code": "timeout",
 					"message": "cancelled"
 				},
-				"effects": ["launch:https://example.test/"],
+				"effects": [
+					"launch:https://example.test/"
+				],
 				"reports": 0
 			}
 		},

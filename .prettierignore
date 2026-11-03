@@ -1,11 +1,12 @@
 # Generated, vendored or data-shaped - never format these. Every entry is bytes
 # a tool owns or bytes whose exact text is the value: a formatter that rewrites
-# either turns a current artifact into a stale one, and `Scripts/Feed.mjs`
+# either turns a current artefact into a stale one, and `Scripts/Feed.mjs`
 # compares the bundler's output byte for byte.
 
-# Build output. The two entries are anchored on purpose: an unanchored `Target/`
-# matches that directory name at any depth, which is how a real source directory
-# gets hidden from the formatter for as long as the rule stays loose.
+# Build output. Both entries are anchored on purpose - a pattern with a slash in
+# it is relative to this file, while a bare `Target/` matches that directory name
+# at any depth, which is how a real source directory gets hidden from the
+# formatter for as long as the rule stays loose.
 /Target/
 rust/Target/
 
@@ -27,6 +28,12 @@ node_modules/
 # a paragraph to fit a column would edit the record. `catalog.mjs` beside them is
 # source and stays formattable.
 .hermes/research/*.md
+
+# Generated from `scenarios/generate.mjs`. The generator owns these bytes and
+# `scenarios/run.mjs` compares them exactly, so a format pass that rewrites them
+# turns a current artefact into a stale one - `JSON.stringify(document, null, "\t")`
+# puts every array element on its own line and prettier keeps a short array on one.
+scenarios/generated/
 
 # Dependencies and locks. `Cargo.lock` is a resolution artefact and the tree
 # treats it as local-only; the pnpm lockfiles are pnpm's to write.
