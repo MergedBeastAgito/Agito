@@ -19,6 +19,9 @@ stateDiagram-v2
 	Watching --> TimedOut: the deadline
 	Settled --> Batched: next batch
 	Settled --> [*]
+	note right of Collected
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 The gate that matters: `Confirmed` is reached only when the page itself shows the file name. A
@@ -36,6 +39,8 @@ flowchart LR
 	B2 --> C
 	C -- "yes" --> OK["a batch can be compared between runs"]
 	C -- "no" --> X["a batch is a one-off nobody can diff"]
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 `Scripts/Feed.mjs` asserts exactly this, because a feed whose batches differ between runs cannot be
@@ -53,6 +58,9 @@ stateDiagram-v2
 	Included --> Refused: larger than the cap
 	Excluded --> [*]
 	Refused --> [*]
+	note right of Walking
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 The first version compared case-sensitively, so `Target/` walked past an exclude of `target` and
@@ -68,6 +76,9 @@ stateDiagram-v2
 	Prompted --> RateLimited: the product refuses more uploads
 	RateLimited --> ContextOnly: prompt without files
 	ContextOnly --> Settled
+	note right of Prompted
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 `RateLimited` is real and unmodelled: a weekly upload quota turns a feed into a text-only

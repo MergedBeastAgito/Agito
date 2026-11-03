@@ -20,6 +20,9 @@ stateDiagram-v2
 	Launched --> Disposed: dispose() closes the process
 	Disposed --> [*]
 	Unavailable --> [*]
+	note right of Unbound
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 The distinction that must survive every refactor: `dispose` on a launched session may close the
@@ -37,6 +40,8 @@ flowchart TD
 	Q -- "deadline or caller abort" --> T["timeout"]
 	Q -- "socket open, nothing answers" --> D["looks alive<br/>no state reports it"]
 	D -. "the gap" .-> U
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 `D` is the state the adapter cannot currently name. An open socket is not a live browser, and a
@@ -57,6 +62,8 @@ flowchart LR
 	O -- "launched" --> L["may close"]
 	O -- "attached" --> A["may only disconnect"]
 	U2["the user's browser<br/>same endpoint, different identity"] -. "collides with" .-> T2
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 Three things are called "the browser" here: an endpoint, a page, and a user. The review flagged the
@@ -74,6 +81,9 @@ stateDiagram-v2
 	Stalled --> Unavailable: probe times out
 	Live --> Reclaimed: another client attached to the same page
 	Reclaimed --> [*]
+	note right of Live
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 `Stalled` and `Reclaimed` do not exist. Both are real: the first is the dead-but-open socket, the

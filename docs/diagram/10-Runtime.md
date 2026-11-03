@@ -18,6 +18,9 @@ stateDiagram-v2
 	Landed --> Free: release
 	Refused --> Free: release
 	Free --> [*]
+	note right of Free
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 `Refused` is the state the fence card added. It exists in the port and is exercised by tests;
@@ -43,6 +46,7 @@ sequenceDiagram
 	else destination trusts the ticket
 		D-->>W: accepted, and the effect landed
 	end
+	Note over [*]: legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
 ```
 
 The second branch is what "fencing the caller" means. A write that landed is not retracted because
@@ -62,6 +66,9 @@ stateDiagram-v2
 	Ambiguous --> Quarantined: the resource is held until a human rules
 	Reconciled --> Free
 	Quarantined --> Free
+	note right of Free
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 None of `Dispatched`, `Ambiguous`, `Reconciled` or `Quarantined` exists. They are the handover rule
@@ -86,6 +93,8 @@ flowchart LR
 	P2 --> Q3
 	Q1 --> P1
 	Q2 --> P1
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 The left column is effects. The right column is internalities. `Dispatched` and `Ambiguous` belong

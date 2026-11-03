@@ -6,11 +6,12 @@
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"scripts": {
-		"check": "node Scripts/Boundaries.mjs && node Scripts/Feed.mjs",
+		"check": "node Scripts/Boundaries.mjs && node Scripts/Feed.mjs && node Scripts/Legend.mjs",
 		"Format": "prettier --write .",
 		"Format:Check": "prettier --check .",
 		"Test": "node --test \"packages/*/Test/*.test.ts\"",
-		"Test:Feed": "node Scripts/Feed.mjs"
+		"Test:Feed": "node Scripts/Feed.mjs",
+		"Test:Legend": "node Scripts/Legend.mjs"
 	},
 	"devDependencies": {
 		"prettier": "3.9.10"

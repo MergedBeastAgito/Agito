@@ -22,6 +22,9 @@ stateDiagram-v2
 	Complete --> [*]
 	Truncated --> [*]
 	Refused --> [*]
+	note right of Idle
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 `Refused` is reached from four different places and means four different things. The manifest gives
@@ -42,6 +45,8 @@ flowchart TD
 	C -- "yes" --> X["truncated"]
 	C -- "no" --> OK["complete"]
 	D["deadline passed"] --> R["not-ready, no partial text"]
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 The three-read rule proves text stability, not that generation finished. That is the review's
@@ -58,6 +63,8 @@ flowchart LR
 	S["cited sources"] --> R1
 	M["mode and model"] --> R1
 	N["nothing else"] -.-> R1
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 The trace is how the answer was reached and it is not in the answer text. A capture that keeps only
@@ -75,6 +82,9 @@ stateDiagram-v2
 	Streaming --> Interrupted: the product stops mid-answer
 	Interrupted --> Settled: resumed
 	Interrupted --> Refused: never resumed
+	note right of Sent
+		legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have
+	end note
 ```
 
 `Queued` and `Interrupted` are real and unmodelled. The first is why a fixed sleep looks necessary;

@@ -126,13 +126,15 @@ a decision, and a document that changes its mind says so rather than rewriting t
 
 ## Scripts/
 
-The gate. Two checks, both plain Node with no build step and no dependency of their own:
+The gate. Plain Node, no build step and no dependency of their own:
 
 - **`Boundaries.mjs`** - walks every package's source and refuses an import that reverses an arrow
   or crosses a boundary its `module.json` does not declare.
 - **`Feed.mjs`** - drives `.hermes/tools/bundle.mjs` over a fixture and asserts that it splits,
   excludes and orders deterministically. A bundler that is not deterministic is a bundler whose
   batches cannot be compared between runs.
+- **`Legend.mjs`** - fails when a page under `docs/diagram/` carries a Mermaid block without the
+  shared legend, because a page added without one leaves its terms undefined for the next reader.
 
 ---
 

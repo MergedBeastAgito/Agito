@@ -36,6 +36,8 @@ flowchart TD
 	W --> S
 	C -. "declares its own Page port" .-> C
 	D -. "declares its own port" .-> D
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 The dotted self-edges are the point: a capability declares what it needs and imports nobody.
@@ -54,6 +56,8 @@ flowchart LR
 		K4["root: everything, once"]
 	end
 	K1 --> K2 --> K3 --> K4
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 A crate that knows more than its ring is a defect even when it compiles, which is why
@@ -72,6 +76,8 @@ flowchart TD
 	DB -- "issues a ticket" --> E
 	E -- "presents the ticket" --> X
 	X -. "refuses, or records the result" .-> DB
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 `X` does not exist yet. Until it does, the runtime crate is a second authority wearing the same
@@ -90,6 +96,8 @@ flowchart TD
 		DB2[("the database holds the lease")]
 	end
 	RT -. "should not exist as an authority" .-> DB2
+	subgraph Legend["legend: effect = touches the world (Rust) · internality = a record (database) · ticket = lease + fence + generation · fence = grant number, stale is refused · generation = one bound manifest · refused = a result, never a panic · missing = a state the code does not have"]
+	end
 ```
 
 The lease, the fence and the generation are internalities. A process that owns them is a parallel
