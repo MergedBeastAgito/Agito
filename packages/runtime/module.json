@@ -4,11 +4,7 @@
 	"version": "0.1.0",
 	"provides": {
 		"port": "agentic.runtime",
-		"errors": [
-			"admission-refused",
-			"lease-held",
-			"budget-exhausted"
-		]
+		"errors": ["admission-refused", "lease-held", "budget-exhausted"]
 	},
 	"requires": {},
 	"artefact": {

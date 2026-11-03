@@ -1,0 +1,8 @@
+{
+	"name": "@agentic/spacetime-catalog",
+	"version": "0.1.0",
+	"private": true,
+	"description": "The agentic database model as rules and table descriptions.",
+	"type": "module",
+	"main": "Target/index.js"
+}

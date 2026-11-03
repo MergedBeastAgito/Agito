@@ -1,0 +1,22 @@
+{
+	"name": "@agentic/spacetime-catalog",
+	"kind": "capability",
+	"version": "0.1.0",
+	"provides": {
+		"port": "agentic.catalog.rules",
+		"errors": ["admission-refused", "lease-held", "budget-exhausted"]
+	},
+	"requires": {},
+	"artefact": {
+		"entry": "Target/index.js",
+		"hash": null,
+		"runtime": "node>=22.23.4"
+	},
+	"state": "stateless",
+	"cost": {
+		"coldMs": 10,
+		"warmMs": 1,
+		"network": false
+	},
+	"verify": "node --test Test/*.test.ts"
+}

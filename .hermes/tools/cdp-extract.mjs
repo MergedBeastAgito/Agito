@@ -32,6 +32,7 @@ const At = (Name, Fallback) => {
 const Selector = At("--selector", null);
 const Out = At("--out", null);
 const MinChars = Number(At("--min-chars", 200));
+const Expand = Args.includes("--expand");
 
 if (!WsUrl) {
 	console.error("usage: node cdp-extract.mjs <ws-url> [--selector <css>] [--out <file>] [--min-chars N]");
@@ -83,6 +84,13 @@ const Extract = `(() => {
 
 	const shouldSkip = (Element) => {
 		if (Skip.has(Element.tagName)) return true;
+		// A hidden element is in the DOM and not on the page: a closed dialog, a
+		// collapsed section, a div marked hidden. Test the computed style rather
+		// than the box: display: contents has no box but does render its children,
+		// and content-visibility leaves an offscreen subtree with no rects while
+		// still being part of the page.
+		const Style = getComputedStyle(Element);
+		if (Style.display === "none" || Style.visibility === "hidden") return true;
 		const Label = (Element.getAttribute("aria-label") || "").trim();
 		if (Label.length > 0 && SkipLabel.test(Label)) return true;
 		const Class = typeof Element.className === "string" ? Element.className : "";
@@ -197,7 +205,6 @@ const Extract = `(() => {
 		code: Root.querySelectorAll("pre").length,
 		tables: Root.querySelectorAll("table").length,
 		images: Root.querySelectorAll("img").length,
-		collapsed: /^(read more|show more)$/im.test(Root.innerText || ""),
 		markdown: Markdown,
 	});
 })()`;
@@ -232,6 +239,26 @@ const Send = (Method, Params = {}) =>
 		Socket.send(JSON.stringify({ id: Key, method: Method, params: Params }));
 	});
 
+// A collapsed answer keeps its tail out of the DOM, so nothing downstream can
+// read it. Expanding first is the difference between a record of the visible
+// screen and a record of the conversation.
+if (Expand) {
+	const Opened = await Send("Runtime.evaluate", {
+		expression: `(() => {
+			const Root = document.querySelector(${JSON.stringify(Selector ?? "main")}) ?? document.body;
+			const Collapsed = [...Root.querySelectorAll('button[aria-expanded="false"]')].filter((Button) => {
+				const Label = (Button.getAttribute("aria-label") || Button.innerText || "").trim().toLowerCase();
+				return !/^(copy|share|more actions|model|add|dictation|search|computer|helpful|not helpful)$/.test(Label);
+			});
+			for (const Button of Collapsed) Button.click();
+			return Collapsed.length;
+		})()`,
+		returnByValue: true,
+	});
+	console.error(`expanded: ${Opened.result?.value ?? 0} control(s)`);
+	await new Promise((Done) => setTimeout(Done, 1500));
+}
+
 const Result = await Send("Runtime.evaluate", { expression: Extract, returnByValue: true });
 if (Result.exceptionDetails) {
 	console.error(`blocker: ${Result.exceptionDetails.text}`);
@@ -251,7 +278,7 @@ if (Parsed.error) {
 	process.exit(2);
 }
 
-const Summary = `container: ${Parsed.container}  chars: ${Parsed.chars}  formulas: ${Parsed.katex}  code: ${Parsed.code}  tables: ${Parsed.tables}  images: ${Parsed.images}${Parsed.collapsed ? "  COLLAPSED" : ""}`;
+const Summary = `container: ${Parsed.container}  chars: ${Parsed.chars}  formulas: ${Parsed.katex}  code: ${Parsed.code}  tables: ${Parsed.tables}  images: ${Parsed.images}`;
 
 if (Parsed.chars < MinChars) {
 	console.error(`blocker: the capture is ${Parsed.chars} characters, below --min-chars ${MinChars}; refusing a stub. ${Summary}`);

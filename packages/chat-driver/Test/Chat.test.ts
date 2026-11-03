@@ -547,6 +547,7 @@ describe("a collapsed answer is refused", () => {
 		assert.equal(error.code, ErrorCode.Truncated);
 		assert.match(error.detail, /Read more/);
 		assert.match(error.detail, /19 characters/);
+		assert.equal(page.disposed.length, 1);
 	});
 });
 
@@ -658,6 +659,7 @@ describe("a provider that answers the wrong shape", () => {
 		assert.match(error.detail, /42/);
 		assert.equal(submit.clicks, 0);
 		assert.deepEqual(composer.events, []);
+		assert.equal(page.disposed.length, 1);
 	});
 
 	test("refuses a thread read that is not a thread with not-ready", async () => {
@@ -686,6 +688,7 @@ describe("a provider that answers the wrong shape", () => {
 
 		assert.equal(error.code, ErrorCode.NotReady);
 		assert.match(error.detail, /instead of a list of steps/);
+		assert.equal(page.disposed.length, 1);
 	});
 
 	test("refuses sources that are not a list with not-ready", async () => {
@@ -697,6 +700,7 @@ describe("a provider that answers the wrong shape", () => {
 
 		assert.equal(error.code, ErrorCode.NotReady);
 		assert.match(error.detail, /instead of a list of sources/);
+		assert.equal(page.disposed.length, 1);
 	});
 });
 

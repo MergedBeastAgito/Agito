@@ -6,11 +6,11 @@ kind: research
 date: 2026-11-03
 status: captured
 source: https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b
-captured: 2026-11-03T20:28:32
+captured: 2026-11-03T21:57:33
 segments: 1
 collapsed: false
 steps: 3
-sources: 6
+sources: 35
 ---
 # Converting the capability system to Rust
 
@@ -19,11 +19,11 @@ sources: 6
 | Thread | `4ffde6d5-a7d3-404f-96b5-e24f8009a76b` |
 | Project | DELO |
 | Source | https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b |
-| Captured | 2026-11-03T20:28:32 |
+| Captured | 2026-11-03T21:57:33 |
 | Segments | 1 |
 | Trace steps | 3 |
-| Cited sources | 6 |
-| Characters | 29311 |
+| Cited sources | 35 |
+| Characters | 31499 |
 
 ## Transcript
 
@@ -76,6 +76,66 @@ github
 
 Chrome stays idle infinitely #49 - mattsse/chromiumoxide - GitHub
 github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://lib.rs/crates/headless_chrome_fork)
+
+headless_chrome_fork — WebSocket library in Rust // Lib.rs
+lib
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/headless_chrome_fork/latest/headless_chrome/browser/struct.Browser.html)
+
+Browser in headless_chrome::browser - Rust - Docs.rs
+docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://dev.to/vhub_systems_ed5641f65d59/headless-browsers-in-rust-chromiumoxide-vs-headlesschrome-vs-the-python-alternative-25e5)
+
+Headless Browsers in Rust: Chromiumoxide vs headless_chrome vs ...
+dev
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-headless-chrome/rust-headless-chrome/blob/master/src/browser/process.rs)
+
+rust-headless-chrome/src/browser/process.rs at main - GitHub
+github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://www.browsercat.com/docs/connect-with/headless-chrome)
+
+Getting Started with Rust Headless Chrome - BrowserCat
+browsercat
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://lib.rs/crates/spider_chromiumoxide_types)
+
+spider_chromiumoxide_types — Rust web dev library // Lib.rs
+lib
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-lang/cargo/issues/11133)
+
+Allow publishing with path dependencies without a version (RFC2906)
+github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/oxide-browser-sh)
+
+oxide_browser_sh - Rust - Docs.rs
+docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://crates.io/crates/cargo-workspace-deps)
+
+cargo-workspace-deps - crates.io: Rust Package Registry
+crates
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-lang/cargo/issues/5332)
+
+Allow to share versions of dependencies between unrelated Cargo ...
+github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/)
+
+Announcing the Headless Chrome crate ("Puppeteer for Rust")
+reddit
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/fob-browser-test)
+
+fob_browser_test - Rust - Docs.rs
+docs
 https://github.com/PlayForm/Run/tree/Current
 https://docs.rs/chromiumoxide/latest/chromiumoxide/
 https://doc.rust-lang.org/cargo/commands/cargo-metadata.html
@@ -646,6 +706,35 @@ The work the answer did, in the order it did it. Depth is nesting, so a step ins
 | https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html | Browser in headless_chrome - Rust - Docs.rs |
 | https://github.com/rust-lang/cargo/issues/10636 | default features always resolved for dependency in workspace mode |
 | https://github.com/mattsse/chromiumoxide/issues/49 | Chrome stays idle infinitely #49 - mattsse/chromiumoxide - GitHub |
+| https://lib.rs/crates/headless_chrome_fork | headless_chrome_fork — WebSocket library in Rust // Lib.rs |
+| https://docs.rs/headless_chrome_fork/latest/headless_chrome/browser/struct.Browser.html | Browser in headless_chrome::browser - Rust - Docs.rs |
+| https://dev.to/vhub_systems_ed5641f65d59/headless-browsers-in-rust-chromiumoxide-vs-headlesschrome-vs-the-python-alternative-25e5 | Headless Browsers in Rust: Chromiumoxide vs headless_chrome vs ... |
+| https://github.com/rust-headless-chrome/rust-headless-chrome/blob/master/src/browser/process.rs | rust-headless-chrome/src/browser/process.rs at main - GitHub |
+| https://www.browsercat.com/docs/connect-with/headless-chrome | Getting Started with Rust Headless Chrome - BrowserCat |
+| https://lib.rs/crates/spider_chromiumoxide_types | spider_chromiumoxide_types — Rust web dev library // Lib.rs |
+| https://github.com/rust-lang/cargo/issues/11133 | Allow publishing with path dependencies without a version (RFC2906) |
+| https://docs.rs/oxide-browser-sh | oxide_browser_sh - Rust - Docs.rs |
+| https://crates.io/crates/cargo-workspace-deps | cargo-workspace-deps - crates.io: Rust Package Registry |
+| https://github.com/rust-lang/cargo/issues/5332 | Allow to share versions of dependencies between unrelated Cargo ... |
+| https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/ | Announcing the Headless Chrome crate ("Puppeteer for Rust") |
+| https://docs.rs/fob-browser-test | fob_browser_test - Rust - Docs.rs |
 | https://docs.rs/chromiumoxide/latest/chromiumoxide/ | chromiumoxide - Rust |
 | https://doc.rust-lang.org/cargo/commands/cargo-metadata.html | cargo metadata - The Cargo Book |
 | https://doc.rust-lang.org/cargo/commands/cargo-metadata.html | doc.rust-lang |
+| https://docs.rs/chromiumoxide/latest/chromiumoxide/ | docs |
+| https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html | docs |
+| https://doc.rust-lang.org/cargo/commands/cargo-metadata.html | doc.rust-lang |
+| https://github.com/rust-lang/cargo/issues/10636 | github |
+| https://github.com/mattsse/chromiumoxide/issues/49 | github |
+| https://lib.rs/crates/headless_chrome_fork | lib |
+| https://docs.rs/headless_chrome_fork/latest/headless_chrome/browser/struct.Browser.html | docs |
+| https://dev.to/vhub_systems_ed5641f65d59/headless-browsers-in-rust-chromiumoxide-vs-headlesschrome-vs-the-python-alternative-25e5 | dev |
+| https://github.com/rust-headless-chrome/rust-headless-chrome/blob/master/src/browser/process.rs | github |
+| https://www.browsercat.com/docs/connect-with/headless-chrome | browsercat |
+| https://lib.rs/crates/spider_chromiumoxide_types | lib |
+| https://github.com/rust-lang/cargo/issues/11133 | github |
+| https://docs.rs/oxide-browser-sh | docs |
+| https://crates.io/crates/cargo-workspace-deps | crates |
+| https://github.com/rust-lang/cargo/issues/5332 | github |
+| https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/ | reddit |
+| https://docs.rs/fob-browser-test | docs |

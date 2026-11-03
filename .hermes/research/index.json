@@ -1,7 +1,7 @@
 {
-	"captured": "2026-11-03T18:28:42.442Z",
+	"captured": "2026-11-03T19:57:37.199Z",
 	"total": 6,
-	"characters": 184916,
+	"characters": 188743,
 	"records": [
 		{
 			"file": "432b4991.md",
@@ -11,12 +11,12 @@
 			"kind": "research",
 			"status": "captured",
 			"date": "2026-11-03",
-			"captured": "2026-11-03T20:28:32",
+			"captured": "2026-11-03T21:57:31",
 			"source": "https://www.perplexity.ai/search/432b4991-2059-425c-a046-fcbe27dae492",
 			"segments": 1,
 			"steps": 1,
-			"sources": 1,
-			"characters": 32753,
+			"sources": 16,
+			"characters": 27959,
 			"sections": [
 				"Transcript",
 				"One reconciled state chart",
@@ -46,12 +46,12 @@
 			"kind": "research",
 			"status": "captured",
 			"date": "2026-11-03",
-			"captured": "2026-11-03T20:28:32",
+			"captured": "2026-11-03T21:57:33",
 			"source": "https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b",
 			"segments": 1,
 			"steps": 3,
-			"sources": 6,
-			"characters": 30795,
+			"sources": 35,
+			"characters": 35775,
 			"sections": [
 				"Transcript",
 				"1. Crate boundaries and consumer-owned ports",
@@ -105,12 +105,12 @@
 			"kind": "research",
 			"status": "captured",
 			"date": "2026-11-03",
-			"captured": "2026-11-03T20:28:31",
+			"captured": "2026-11-03T21:57:29",
 			"source": "https://www.perplexity.ai/search/57ca3694-a4fa-4e94-817f-f79f5e5e0854",
 			"segments": 1,
 			"steps": 1,
-			"sources": 3,
-			"characters": 17357,
+			"sources": 18,
+			"characters": 18751,
 			"sections": [
 				"Transcript",
 				"Step trace",
@@ -125,12 +125,12 @@
 			"kind": "research",
 			"status": "captured",
 			"date": "2026-11-03",
-			"captured": "2026-11-03T20:28:33",
+			"captured": "2026-11-03T21:57:35",
 			"source": "https://www.perplexity.ai/search/d900b22a-f5b3-405c-b546-84fb25dd4483",
 			"segments": 1,
 			"steps": 1,
-			"sources": 11,
-			"characters": 48153,
+			"sources": 27,
+			"characters": 49292,
 			"sections": [
 				"Transcript",
 				"1. Execution and trust boundaries",
@@ -166,12 +166,12 @@
 			"kind": "research",
 			"status": "captured",
 			"date": "2026-11-03",
-			"captured": "2026-11-03T20:28:34",
+			"captured": "2026-11-03T21:57:37",
 			"source": "https://www.perplexity.ai/search/e9b61659-222b-4caf-9336-69487c7c1892",
 			"segments": 1,
 			"steps": 1,
-			"sources": 0,
-			"characters": 14179,
+			"sources": 10,
+			"characters": 15287,
 			"sections": [
 				"Transcript",
 				"Post identity is stable, but article position is not",
@@ -184,7 +184,8 @@
 				"CDP failures are usually loud; polling deliberately blurs their cause",
 				"Cleanup assumes attachment succeeded and close failures are harmless",
 				"The architectural distinction to preserve",
-				"Step trace"
+				"Step trace",
+				"Cited sources"
 			]
 		}
 	]
