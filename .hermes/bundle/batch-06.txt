@@ -1,0 +1,148 @@
+--- FILE: rust/Target/tmp/cli-corpus-json/Alpha/SKILL.md ---
+---
+name: alpha
+description: One honest skill.
+---
+
+--- FILE: rust/Target/tmp/cli-corpus-json/Index.md ---
+- [Alpha](Alpha/SKILL.md)
+
+--- FILE: rust/Target/tmp/cli-corpus/Alpha/SKILL.md ---
+---
+name: alpha
+description: One honest skill.
+---
+
+--- FILE: rust/Target/tmp/cli-corpus/Index.md ---
+- [Alpha](Alpha/SKILL.md)
+
+--- FILE: rust/Target/tmp/deterministic/Alpha/SKILL.md ---
+---
+description: Two.
+---
+
+# Alpha
+
+--- FILE: rust/Target/tmp/deterministic/Beta/SKILL.md ---
+---
+description: One.
+---
+
+# Beta
+
+--- FILE: rust/Target/tmp/deterministic/Gamma/SKILL.md ---
+---
+description: Three.
+---
+
+# Gamma
+
+--- FILE: rust/Target/tmp/digest-changes/Alpha/Reference/Index.md ---
+- [Notes.md](Notes.md)
+
+--- FILE: rust/Target/tmp/digest-changes/Alpha/Reference/Notes.md ---
+# Notes
+
+--- FILE: rust/Target/tmp/digest-changes/Alpha/SKILL.md ---
+---
+name: alpha
+description: One honest skill, with its reference listed.
+---
+
+# Alpha
+
+--- FILE: rust/Target/tmp/digest-changes/Index.md ---
+- [Alpha](Alpha/SKILL.md)
+
+--- FILE: rust/Target/tmp/digest-recorded/Alpha/Reference/Index.md ---
+- [Notes.md](Notes.md)
+
+--- FILE: rust/Target/tmp/digest-recorded/Alpha/Reference/Notes.md ---
+# Notes
+
+--- FILE: rust/Target/tmp/digest-recorded/Alpha/SKILL.md ---
+---
+name: alpha
+description: One honest skill, with its reference listed.
+---
+
+# Alpha
+
+--- FILE: rust/Target/tmp/digest-recorded/Index.md ---
+- [Alpha](Alpha/SKILL.md)
+
+--- FILE: rust/Target/tmp/digest-times/Alpha/Reference/Index.md ---
+- [Notes.md](Notes.md)
+
+--- FILE: rust/Target/tmp/digest-times/Alpha/Reference/Notes.md ---
+# Notes
+
+--- FILE: rust/Target/tmp/digest-times/Alpha/SKILL.md ---
+---
+name: alpha
+description: One honest skill, with its reference listed.
+---
+
+# Alpha
+
+--- FILE: rust/Target/tmp/digest-times/Index.md ---
+- [Alpha](Alpha/SKILL.md)
+
+--- FILE: rust/Target/tmp/folded/Index.md ---
+- [Xi](Xi/SKILL.md)
+
+--- FILE: rust/Target/tmp/folded/Xi/SKILL.md ---
+---
+name: xi
+description: >
+  A description that spans
+  two lines.
+---
+
+# Xi
+
+--- FILE: rust/Target/tmp/no-corpus-index/Lambda/SKILL.md ---
+---
+name: lambda
+description: No index to cite it.
+---
+
+# Lambda
+
+--- FILE: rust/Target/tmp/no-description/Index.md ---
+- [Zeta](Zeta/SKILL.md)
+
+--- FILE: rust/Target/tmp/no-description/Zeta/SKILL.md ---
+---
+name: zeta
+---
+
+# Zeta
+
+--- FILE: rust/Target/tmp/no-index/Gamma/Reference/One.md ---
+# One
+
+--- FILE: rust/Target/tmp/no-index/Gamma/Reference/Two.md ---
+# Two
+
+--- FILE: rust/Target/tmp/no-index/Gamma/SKILL.md ---
+---
+name: gamma
+description: No index at all.
+---
+
+# Gamma
+
+--- FILE: rust/Target/tmp/no-index/Index.md ---
+- [Gamma](Gamma/SKILL.md)
+
+--- FILE: rust/Target/tmp/no-references/Index.md ---
+- [Nu](Nu/SKILL.md)
+
+--- FILE: rust/Target/tmp/no-references/Nu/SKILL.md ---
+---
+name: nu
+description: Nothing but a body.
+---
+
+# Nu

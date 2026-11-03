@@ -1,0 +1,3318 @@
+--- FILE: rust/Crate/Agentic/Source/Fn/Composition.rs ---
+//! The wiring: the only place that names a concrete adapter.
+//!
+//! Three builders, one per thing that needs a browser. Each returns a port,
+//! never the adapter behind it, so a caller cannot reach past the composition
+//! root into `chromiumoxide`.
+//!
+//! The pace is the tokio one because this binary is a tokio program. A
+//! capability never sees it: it is handed a `Pace` through the driver and the
+//! verifier, which is what keeps their dependency lists free of an executor.
+
+use std::sync::Arc;
+
+use AgenticBrowserCDP::{Browse, Chrome, ChromeOptions, Create as CreateSession, Options, Report, Tokio};
+use AgenticChatDriver::{Create as CreateChat, Driver, Options as ChatOptions, Page as ChatPage};
+use AgenticDesignVerification::{Create as CreateVerify, Verifier};
+use AgenticWorkflow::Struct::Binding::{Measure, Page};
+
+/// A browser session with the workspace's pace, reporting a failed release to
+/// stderr.
+///
+/// The reporter writes to stderr rather than stdout because a caller that is
+/// piping the tool's answer must not find a diagnostic in the middle of it.
+pub fn Browser(Chrome:ChromeOptions) -> Arc<dyn Browse> {
+	let Report:Report = Arc::new(|Target, Why| {
+		eprintln!("browser-cdp: dispose of {} failed: {}", Target.Url, Why.Message());
+	});
+	Arc::new(CreateSession(
+		Chrome::New(Chrome),
+		Arc::new(Tokio),
+		Options { Report, ..Options::default() },
+	))
+}
+
+/// A chat driver over a browser, with the workflow's page binding installed.
+pub fn Chat(Browse:Arc<dyn Browse>, Url:impl Into<String>) -> Driver {
+	let Page = Arc::new(Page::Create(Browse));
+	CreateChat(Page as Arc<dyn ChatPage>, ChatOptions::New(Url), Arc::new(Tokio))
+}
+
+/// A design verifier over a browser, with the workflow's measurement binding
+/// installed.
+pub fn Design(Browse:Arc<dyn Browse>, Url:impl Into<String>) -> Verifier {
+	CreateVerify(Arc::new(Measure::Create(Browse, Url)), Arc::new(Tokio))
+}
+
+/// What a caller passes to `Browser` when it wants a visible browser on the
+/// machine's own display.
+pub fn Visible() -> ChromeOptions { ChromeOptions { Executable:None, Headless:false, NoSandbox:false } }
+
+/// What a caller passes to `Browser` when it wants a headless one.
+pub fn Headless() -> ChromeOptions { ChromeOptions { Executable:None, Headless:true, NoSandbox:false } }
+
+--- FILE: rust/Crate/Agentic/Source/Fn/Run.rs ---
+//! What each verb does.
+//!
+//! The two that need no browser are answered from the library alone, so a
+//! machine with no Chromium can still check the corpus and every manifest. The
+//! three that do need one build a session through [`crate::Fn::Composition`]
+//! and hand it to a capability: nothing here calls an adapter directly.
+
+use std::{sync::Arc, time::Duration};
+
+use AgenticBrowserCDP::{OpenOptions, Ownership};
+use AgenticChatDriver::{Chat, Mode, Question};
+use AgenticDesignVerification::Verify;
+use AgenticRuntime::{BlockOn, Call, Never};
+use AgenticSkillContract::{Create as CreateContract, SkillContract};
+use serde_json::json;
+
+use crate::{
+	Fn::{
+		Composition::{Browser, Chat as ChatOver, Design, Headless},
+		VerifyModule::{ReadinessJSON, VerifyModule},
+	},
+	Struct::{Binary::Command::Verb, Manifest::All},
+};
+
+/// Run one verb, answering the text to print or the reason it could not be run.
+pub async fn Run(Command:Verb) -> Result<String, String> {
+	match Command {
+		Verb::Manifests => {
+			Ok(All
+				.iter()
+				.map(|Manifest| {
+					format!(
+						"{:<32} {:<12} {:<24} {}",
+						Manifest.Name, Manifest.Kind, Manifest.Port, Manifest.State
+					)
+				})
+				.collect::<Vec<String>>()
+				.join("\n"))
+		},
+		Verb::Verify { Module } => {
+			let Readiness = VerifyModule(&Module)?;
+			let Text = serde_json::to_string_pretty(&ReadinessJSON(&Readiness)).unwrap_or_else(|_| "{}".to_string());
+			if Readiness.Ready { Ok(Text) } else { Err(Text) }
+		},
+		Verb::Skills { Root, Json } => {
+			let Contract = CreateContract();
+			let Skills = Contract.Discover(&Root).await;
+			let mut Findings = Vec::new();
+			for Skill in &Skills {
+				Findings.extend(Contract.Validate(Skill).await);
+			}
+			let Digest = Contract.Digest(&Skills);
+			if Json {
+				Ok(serde_json::to_string_pretty(&json!({
+					"root": Root,
+					"digest": Digest,
+					"skills": Skills,
+					"findings": Findings,
+				}))
+				.unwrap_or_else(|_| "{}".to_string()))
+			} else {
+				let mut Lines = vec![format!(
+					"{} skill(s) under {Root}, {} finding(s), {Digest}",
+					Skills.len(),
+					Findings.len()
+				)];
+				for Finding in &Findings {
+					Lines.push(format!("  {} {}: {}", Finding.Skill, Finding.Rule, Finding.Detail));
+				}
+				Ok(Lines.join("\n"))
+			}
+		},
+		Verb::Browse { Url, Expression, Attach, Timeout } => {
+			let Browse = Browser(Headless());
+			let Call = Budget(Timeout);
+			let Options = match Attach {
+				Some(Endpoint) => OpenOptions::Attach(Endpoint, Call.clone()),
+				None => OpenOptions::Launch(Call.clone()),
+			};
+			let Ownership = Options.Ownership();
+			let Target = Browse
+				.Open(&Url, Options)
+				.await
+				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+			let Value = Browse
+				.Evaluate(&Target, &Expression, Call)
+				.await
+				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+			Browse.Dispose(Target).await;
+			Ok(serde_json::to_string_pretty(&json!({
+				"url": Url,
+				"ownership": match Ownership {
+					Ownership::Launched => "launched",
+					Ownership::Attached => "attached",
+				},
+				"value": Value,
+			}))
+			.unwrap_or_else(|_| "{}".to_string()))
+		},
+		Verb::Chat { Url, Model, Question: Text, Timeout } => {
+			let Driver = ChatOver(Browser(Headless()), Url.clone());
+			let Call = Budget(Timeout);
+			let Answer = Driver
+				.Ask(Question { Text, Mode:Mode::Search, Model }, Call)
+				.await
+				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+			Ok(serde_json::to_string_pretty(&json!({
+				"url": Url,
+				"text": Answer.Text,
+				"model": Answer.Model,
+				"mode": Answer.Mode,
+				"trace": Answer.Trace.iter().map(|Step| json!({
+					"depth": Step.Depth,
+					"label": Step.Label,
+					"detail": Step.Detail,
+				})).collect::<Vec<_>>(),
+				"sources": Answer.Sources.iter().map(|Source| json!({
+					"url": Source.Url,
+					"label": Source.Label,
+				})).collect::<Vec<_>>(),
+			}))
+			.unwrap_or_else(|_| "{}".to_string()))
+		},
+		Verb::Design { Url, Selectors, Timeout } => {
+			let Verifier = Design(Browser(Headless()), Url.clone());
+			let Measurements = Verifier
+				.Measure(&Selectors, Budget(Timeout))
+				.await
+				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+			Ok(serde_json::to_string_pretty(&json!({
+				"url": Url,
+				"measurements": Measurements.iter().map(|Measurement| json!({
+					"selector": Measurement.Selector,
+					"present": Measurement.Present,
+					"value": Measurement.Value,
+				})).collect::<Vec<_>>(),
+			}))
+			.unwrap_or_else(|_| "{}".to_string()))
+		},
+	}
+}
+
+/// One call's budget, on the wall clock.
+///
+/// The composition root is the one place a wall clock is read: a capability is
+/// handed a deadline, never a clock of its own.
+fn Budget(Milliseconds:u64) -> Call {
+	Call::Within(Duration::from_millis(Milliseconds), &AgenticBrowserCDP::Tokio, Arc::new(Never))
+}
+
+/// Drive a future to completion, for the two verbs that are pure.
+///
+/// A caller that already has an executor should `await` instead; this exists so
+/// a test can call a verb without starting a runtime.
+pub fn Drive<Work:std::future::Future>(Work:Work) -> Work::Output { BlockOn(Work) }
+
+--- FILE: rust/Crate/Agentic/Source/Fn/VerifyModule.rs ---
+//! One module's readiness, from the manifest it ships.
+//!
+//! The check is the interesting part: a manifest that names four errors while
+//! the crate's own type names three is a manifest that has drifted from its
+//! code, and a harness reading it would prepare the wrong thing. Comparing the
+//! two is what makes `provides.errors` a claim rather than a comment, which is
+//! the job the TypeScript contract tests did and the job this verb does for the
+//! Rust tree.
+
+use AgenticBrowserCDP::Code as BrowserCode;
+use AgenticChatDriver::Code as ChatCode;
+use AgenticDesignVerification::Code as DesignCode;
+use AgenticRuntime::Code as RuntimeCode;
+use AgenticSkillContract::Rule as SkillRule;
+use serde_json::{Value, json};
+
+use crate::Struct::Manifest::{Find, Manifest};
+
+/// What one module reports about itself.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Readiness {
+	/// The module's logical name.
+	pub Module:String,
+	/// What kind of thing it is.
+	pub Kind:String,
+	/// The port it provides.
+	pub Port:String,
+	/// The retention class it declares.
+	pub State:String,
+	/// The errors the manifest names.
+	pub Manifest:Vec<String>,
+	/// The codes the crate's own type declares.
+	pub Code:Vec<String>,
+	/// Whether the two agree, the state class is one of the four, and the
+	/// manifest parses at all.
+	pub Ready:bool,
+	/// Why it is not ready, when it is not.
+	pub Reason:Option<String>,
+}
+
+/// The codes each crate's type declares, by module name.
+///
+/// A crate with no error vocabulary of its own - the workflow and the
+/// composition root - declares an empty list, and its manifest must too.
+pub fn Declared(Name:&str) -> Option<Vec<&'static str>> {
+	Some(match Name {
+		"@agentic/runtime" => RuntimeCode::All().into_iter().map(RuntimeCode::Name).collect(),
+		"@agentic/skill-contract" => SkillRule::All().into_iter().map(SkillRule::Name).collect(),
+		"@agentic/chat-driver" => ChatCode::All().into_iter().map(ChatCode::Name).collect(),
+		"@agentic/browser-cdp" => BrowserCode::All().into_iter().map(BrowserCode::Name).collect(),
+		"@agentic/design-verification" => DesignCode::All().into_iter().map(DesignCode::Name).collect(),
+		"@agentic/workflow" | "@agentic/composition" => Vec::new(),
+		_ => return None,
+	})
+}
+
+/// The states the manifest may name.
+fn States() -> Vec<&'static str> {
+	AgenticRuntime::States
+		.into_iter()
+		.map(AgenticRuntime::StateClass::Name)
+		.collect()
+}
+
+/// Report one module.
+pub fn VerifyModule(Name:&str) -> Result<Readiness, String> {
+	let Some(Manifest) = Find(Name) else {
+		return Err(format!(
+			"{Name} is not a module this workspace ships; try one of: {}",
+			crate::Struct::Manifest::All
+				.iter()
+				.map(|Manifest| Manifest.Name)
+				.collect::<Vec<&str>>()
+				.join(", ")
+		));
+	};
+	let Some(Code) = Declared(Name) else {
+		return Err(format!("{Name} has no code vocabulary in this binary"));
+	};
+	let Parsed:Value = serde_json::from_str(Manifest.JSON)
+		.map_err(|Why| format!("{} ships a manifest that does not parse: {Why}", Manifest.Name))?;
+	let ManifestErrors:Vec<String> = Parsed
+		.get("provides")
+		.and_then(|Provides| Provides.get("errors"))
+		.and_then(Value::as_array)
+		.map(|Errors| Errors.iter().filter_map(Value::as_str).map(str::to_string).collect())
+		.unwrap_or_default();
+	let Declared:Vec<String> = Code.iter().map(|Code| (*Code).to_string()).collect();
+	let State = Parsed.get("state").and_then(Value::as_str).unwrap_or_default().to_string();
+	let Reason = if ManifestErrors != Declared {
+		Some(format!(
+			"the manifest names [{}] and the crate names [{}]",
+			ManifestErrors.join(", "),
+			Declared.join(", ")
+		))
+	} else if !States().contains(&State.as_str()) {
+		Some(format!("{State:?} is not one of the four state classes"))
+	} else {
+		None
+	};
+	Ok(Readiness {
+		Module:Manifest.Name.to_string(),
+		Kind:Manifest.Kind.to_string(),
+		Port:Manifest.Port.to_string(),
+		State,
+		Manifest:ManifestErrors,
+		Code:Declared,
+		Ready:Reason.is_none(),
+		Reason,
+	})
+}
+
+/// A readiness report as the JSON a harness reads.
+pub fn ReadinessJSON(Readiness:&Readiness) -> Value {
+	json!({
+		"module": Readiness.Module,
+		"kind": Readiness.Kind,
+		"port": Readiness.Port,
+		"state": Readiness.State,
+		"ready": Readiness.Ready,
+		"errors": { "manifest": Readiness.Manifest, "code": Readiness.Code },
+		"reason": Readiness.Reason,
+	})
+}
+
+/// Every manifest, as the summary `agentic manifests` prints.
+pub fn Catalogue() -> Vec<Manifest> { crate::Struct::Manifest::All.to_vec() }
+
+--- FILE: rust/Crate/Agentic/Source/Library.rs ---
+//! The composition root: the only place that names concrete adapters.
+//!
+//! Everything below this crate is a port that somebody else implements. This
+//! crate is where a browser is chosen, where a pace is chosen, and where the
+//! two bindings that translate a consumer's port onto the substrate are
+//! installed. It is also where the seven manifests live, embedded at compile
+//! time, so the binary can report what the workspace ships without reading a
+//! file.
+//!
+//! The one thing it must not do is leak an adapter downwards: no crate below
+//! this one depends on another's concrete type, and the only crate that names
+//! `chromiumoxide` is `agentic-browser-cdp`.
+
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+
+pub use crate::{
+	Fn::{
+		Composition::{Browser, Chat, Design},
+		Run::{Drive, Run},
+		VerifyModule::{Declared, Readiness, VerifyModule},
+	},
+	Struct::{
+		Binary::Command::{Command, Verb},
+		Manifest::{All, Find, Manifest},
+	},
+};
+
+--- FILE: rust/Crate/Agentic/Source/Main.rs ---
+//! The executable entry point.
+//!
+//! One `#[tokio::main]`, and everything after it is the library. The runtime is
+//! started here and nowhere else: a capability that started its own would be a
+//! capability that decides which executor runs the process, and the whole point
+//! of the pace being supplied is that it does not.
+
+use std::process::ExitCode;
+
+use Agentic::Struct::Binary::Command::Command;
+
+#[tokio::main]
+async fn main() -> ExitCode {
+	let Command = Command::Parse();
+	match Agentic::Run(Command.Verb).await {
+		Ok(Text) => {
+			println!("{Text}");
+			ExitCode::SUCCESS
+		},
+		Err(Why) => {
+			eprintln!("{Why}");
+			ExitCode::FAILURE
+		},
+	}
+}
+
+--- FILE: rust/Crate/Agentic/Source/Struct.rs ---
+//! Types: the command line and the manifest table.
+
+pub mod Binary;
+pub mod Manifest;
+
+--- FILE: rust/Crate/Agentic/Source/Struct/Binary.rs ---
+//! The command line, as data.
+//!
+//! One verb per thing the composition root can actually do, and no verb for
+//! anything a capability does on its own: `skills` and `verify` need no
+//! browser, and `browse`, `chat` and `design` need one. That split is the
+//! release story - a machine with no browser can still verify the corpus and
+//! every manifest.
+
+pub mod Command;
+
+--- FILE: rust/Crate/Agentic/Source/Struct/Binary/Command.rs ---
+//! What `agentic` can be asked to do.
+
+use clap::{Parser, Subcommand};
+
+/// The composition root.
+#[derive(Clone, Debug, Parser)]
+#[command(
+	name = "agentic",
+	about = "Compose the agentic capabilities: skills, design verification, chat and the browser they share.",
+	version
+)]
+pub struct Command {
+	/// What to do.
+	#[command(subcommand)]
+	pub Verb:Verb,
+}
+
+/// One verb.
+#[derive(Clone, Debug, Subcommand)]
+pub enum Verb {
+	/// List the modules this workspace ships, with the port each provides.
+	Manifests,
+	/// Report one module's readiness, and whether its manifest still matches
+	/// its code.
+	Verify {
+		/// The module to report, by its manifest name.
+		#[arg(long)]
+		Module:String,
+	},
+	/// Discover, validate and digest a skill corpus. Needs no browser.
+	Skills {
+		/// The corpus root: a directory of skill directories.
+		Root:String,
+		/// Print the whole record as JSON instead of a summary.
+		#[arg(long)]
+		Json:bool,
+	},
+	/// Open a page and evaluate one expression in it.
+	Browse {
+		/// The page to open.
+		#[arg(long)]
+		Url:String,
+		/// The expression to evaluate.
+		#[arg(long, default_value = "1 + 1")]
+		Expression:String,
+		/// Attach to a browser already listening here instead of launching one.
+		#[arg(long)]
+		Attach:Option<String>,
+		/// The whole operation's budget, in milliseconds.
+		#[arg(long, default_value_t = 30_000)]
+		Timeout:u64,
+	},
+	/// Ask a chat product one question and print the answer once it settles.
+	Chat {
+		/// The chat product's URL.
+		#[arg(long)]
+		Url:String,
+		/// The model the answer must come from, as the page labels it.
+		#[arg(long)]
+		Model:String,
+		/// The question, sent as written.
+		#[arg(long)]
+		Question:String,
+		/// The whole call's budget, in milliseconds.
+		#[arg(long, default_value_t = 120_000)]
+		Timeout:u64,
+	},
+	/// Measure a page's named elements and print what was read.
+	Design {
+		/// The page to measure.
+		#[arg(long)]
+		Url:String,
+		/// A selector to measure. Repeat for each one.
+		#[arg(long = "selector", required = true)]
+		Selectors:Vec<String>,
+		/// The whole measurement's budget, in milliseconds.
+		#[arg(long, default_value_t = 30_000)]
+		Timeout:u64,
+	},
+}
+
+impl Command {
+	/// Read the process's arguments.
+	pub fn Parse() -> Self { <Self as Parser>::parse() }
+
+	/// Read a specific argument list, for a test that must not touch the
+	/// process.
+	pub fn ParseFrom(Arguments:Vec<String>) -> Result<Self, clap::Error> { <Self as Parser>::try_parse_from(Arguments) }
+}
+
+--- FILE: rust/Crate/Agentic/Source/Struct/Manifest.rs ---
+//! The seven manifests, embedded.
+//!
+//! `include_str!` rather than a build script or a serde load at launch: the
+//! bytes the crate reports are the bytes that were checked in, and the harness
+//! that reads them does not have to start the application. A release descriptor
+//! can bind these to a binary later; that is a packaging step, not a source
+//! one.
+
+/// One module, as the workspace ships it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Manifest {
+	/// The manifest's own name, which is the logical identity across the
+	/// migration.
+	pub Name:&'static str,
+	/// The kind of thing it is: adapter, capability, runtime, workflow,
+	/// composition.
+	pub Kind:&'static str,
+	/// The port it provides.
+	pub Port:&'static str,
+	/// The retention class the manifest declares.
+	pub State:&'static str,
+	/// The manifest's bytes, exactly as checked in.
+	pub JSON:&'static str,
+}
+
+/// Every module this workspace ships, in dependency order.
+pub const All:[Manifest; 7] = [
+	Manifest {
+		Name:"@agentic/runtime",
+		Kind:"runtime",
+		Port:"agentic.runtime",
+		State:"holds-workspace",
+		JSON:include_str!("../../../Runtime/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/skill-contract",
+		Kind:"capability",
+		Port:"agentic.skill.validate",
+		State:"stateless",
+		JSON:include_str!("../../../SkillContract/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/chat-driver",
+		Kind:"capability",
+		Port:"agentic.chat.ask",
+		State:"holds-transport",
+		JSON:include_str!("../../../ChatDriver/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/browser-cdp",
+		Kind:"adapter",
+		Port:"agentic.browse",
+		State:"holds-transport",
+		JSON:include_str!("../../../BrowserCDP/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/design-verification",
+		Kind:"capability",
+		Port:"agentic.verify.design",
+		State:"stateless",
+		JSON:include_str!("../../../DesignVerification/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/workflow",
+		Kind:"workflow",
+		Port:"agentic.workflow",
+		State:"stateless",
+		JSON:include_str!("../../../Workflow/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/composition",
+		Kind:"composition",
+		Port:"agentic.compose",
+		State:"stateless",
+		JSON:include_str!("../../module.json"),
+	},
+];
+
+/// The module with this name, if the workspace ships it.
+pub fn Find(Name:&str) -> Option<&'static Manifest> { All.iter().find(|Manifest| Manifest.Name == Name) }
+
+--- FILE: rust/Crate/Agentic/Test/Composition.rs ---
+//! The composition root: the manifest table, the readiness check, and the
+//! command line.
+//!
+//! Nothing here starts a browser: the two verbs that need one are exercised by
+//! hand, and the two that do not are the ones a machine without Chromium still
+//! has to be able to run.
+
+use std::{fs, path::Path};
+
+use Agentic::{All, Command, Declared, Drive, Find, Run, Verb, VerifyModule};
+
+#[test]
+fn the_workspace_ships_seven_manifests_each_with_a_name_a_port_and_a_state() {
+	assert_eq!(All.len(), 7);
+	for Manifest in All {
+		assert!(!Manifest.Name.is_empty());
+		assert!(Manifest.Name.starts_with("@agentic/"));
+		assert!(Manifest.Port.starts_with("agentic."), "{}", Manifest.Name);
+		assert!(!Manifest.Kind.is_empty());
+		assert!(!Manifest.JSON.is_empty());
+		assert!(Find(Manifest.Name).is_some(), "{} cannot be found by name", Manifest.Name);
+	}
+	assert!(Find("@agentic/not-a-module").is_none());
+}
+
+#[test]
+fn every_manifest_names_exactly_the_errors_its_crate_declares() {
+	// The check the TypeScript contract tests did, in one place: a manifest
+	// that has drifted from its code is a manifest a harness would prepare
+	// the wrong thing for.
+	for Manifest in All {
+		let Readiness = VerifyModule(Manifest.Name).expect("the module is known");
+		assert_eq!(
+			Readiness.Manifest,
+			Readiness.Code,
+			"{}: manifest [{}] vs code [{}]",
+			Manifest.Name,
+			Readiness.Manifest.join(", "),
+			Readiness.Code.join(", ")
+		);
+		assert!(Readiness.Ready, "{}: {:?}", Manifest.Name, Readiness.Reason);
+	}
+}
+
+#[test]
+fn the_error_vocabulary_of_each_crate_is_the_one_the_manifest_promises() {
+	assert_eq!(
+		Declared("@agentic/runtime").unwrap(),
+		vec!["admission-refused", "lease-held", "budget-exhausted"]
+	);
+	assert_eq!(
+		Declared("@agentic/skill-contract").unwrap(),
+		vec!["unparsable", "unlisted-reference", "uncited"]
+	);
+	assert_eq!(
+		Declared("@agentic/chat-driver").unwrap(),
+		vec!["not-ready", "wrong-mode", "wrong-model", "truncated"]
+	);
+	assert_eq!(
+		Declared("@agentic/browser-cdp").unwrap(),
+		vec!["browser-unavailable", "navigation-failed", "timeout"]
+	);
+	assert_eq!(
+		Declared("@agentic/design-verification").unwrap(),
+		vec!["absent-element", "invariant-broke", "not-ready"]
+	);
+	assert_eq!(Declared("@agentic/workflow").unwrap(), Vec::<&str>::new());
+	assert!(Declared("@agentic/not-a-module").is_none());
+}
+
+#[test]
+fn an_unknown_module_is_refused_with_the_list_of_the_ones_that_exist() {
+	let Why = VerifyModule("@agentic/nope").expect_err("refused");
+	assert!(Why.contains("@agentic/nope"));
+	assert!(Why.contains("@agentic/runtime"));
+}
+
+#[test]
+fn the_readiness_report_is_the_json_a_harness_reads() {
+	let Readiness = VerifyModule("@agentic/chat-driver").expect("the module is known");
+	let JSON = Agentic::Fn::VerifyModule::ReadinessJSON(&Readiness);
+	assert_eq!(JSON["module"], "@agentic/chat-driver");
+	assert_eq!(JSON["ready"], true);
+	assert_eq!(JSON["state"], "holds-transport");
+	assert_eq!(JSON["errors"]["manifest"], JSON["errors"]["code"]);
+}
+
+#[test]
+fn the_manifests_verb_lists_every_module() {
+	let Text = Drive(Run(Verb::Manifests)).expect("listed");
+	let Lines:Vec<&str> = Text.lines().collect();
+	assert_eq!(Lines.len(), 7);
+	assert!(Text.contains("@agentic/runtime"));
+	assert!(Text.contains("agentic.browse"));
+}
+
+#[test]
+fn the_verify_verb_answers_ready_for_every_module() {
+	for Manifest in All {
+		let Text = Drive(Run(Verb::Verify { Module:Manifest.Name.to_string() })).expect("ready");
+		assert!(Text.contains("\"ready\": true"), "{}", Manifest.Name);
+	}
+}
+
+#[test]
+fn the_skills_verb_reports_a_corpus_without_a_browser() {
+	let Root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cli-corpus");
+	let _ = fs::remove_dir_all(&Root);
+	let Skill = Root.join("Alpha");
+	fs::create_dir_all(&Skill).expect("the corpus is writable");
+	fs::write(
+		Skill.join("SKILL.md"),
+		"---\nname: alpha\ndescription: One honest skill.\n---\n",
+	)
+	.expect("SKILL.md");
+	fs::write(Root.join("Index.md"), "- [Alpha](Alpha/SKILL.md)\n").expect("the index");
+	let Text = Drive(Run(Verb::Skills { Root:Root.to_string_lossy().into_owned(), Json:false })).expect("swept");
+	assert!(Text.contains("1 skill(s)"));
+	assert!(Text.contains("0 finding(s)"));
+	assert!(Text.contains("sha256:"));
+}
+
+#[test]
+fn the_skills_verb_can_answer_json() {
+	let Root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cli-corpus-json");
+	let _ = fs::remove_dir_all(&Root);
+	let Skill = Root.join("Alpha");
+	fs::create_dir_all(&Skill).expect("the corpus is writable");
+	fs::write(
+		Skill.join("SKILL.md"),
+		"---\nname: alpha\ndescription: One honest skill.\n---\n",
+	)
+	.expect("SKILL.md");
+	fs::write(Root.join("Index.md"), "- [Alpha](Alpha/SKILL.md)\n").expect("the index");
+	let Text = Drive(Run(Verb::Skills { Root:Root.to_string_lossy().into_owned(), Json:true })).expect("swept");
+	let Parsed:serde_json::Value = serde_json::from_str(&Text).expect("parsed");
+	assert_eq!(Parsed["skills"][0]["Name"], "Alpha");
+	assert_eq!(Parsed["findings"], serde_json::json!([]));
+	assert!(Parsed["digest"].as_str().unwrap_or_default().starts_with("sha256:"));
+}
+
+#[test]
+fn the_command_line_parses_every_verb() {
+	let Cases = vec![
+		vec!["agentic", "manifests"],
+		vec!["agentic", "verify", "--module", "@agentic/runtime"],
+		vec!["agentic", "skills", "/tmp"],
+		vec!["agentic", "skills", "/tmp", "--json"],
+		vec!["agentic", "browse", "--url", "https://example.test/"],
+		vec![
+			"agentic",
+			"chat",
+			"--url",
+			"https://chat.example/",
+			"--model",
+			"sol",
+			"--question",
+			"why",
+		],
+		vec![
+			"agentic",
+			"design",
+			"--url",
+			"https://example.test/",
+			"--selector",
+			"[data-rail]",
+		],
+	];
+	for Case in Cases {
+		let Arguments:Vec<String> = Case.iter().map(|Argument| Argument.to_string()).collect();
+		assert!(Command::ParseFrom(Arguments.clone()).is_ok(), "{Arguments:?} did not parse");
+	}
+}
+
+#[test]
+fn the_help_lists_every_command() {
+	let Error = Command::ParseFrom(vec!["agentic".to_string(), "--help".to_string()]).expect_err("--help is not a run");
+	let Text = Error.to_string();
+	for Verb in ["manifests", "verify", "skills", "browse", "chat", "design"] {
+		assert!(Text.contains(Verb), "{Verb} is not in --help:\n{Text}");
+	}
+}
+
+#[test]
+fn an_unknown_verb_is_a_parse_error_and_not_a_run() {
+	assert!(Command::ParseFrom(vec!["agentic".to_string(), "frobnicate".to_string()]).is_err());
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Fn.rs ---
+//! Functions: the error mapping, and nothing else yet.
+//!
+//! The session's own logic is in `Struct/Session.rs` because it is the
+//! adapter's one stateful thing, and splitting it across a `Fn` tree would make
+//! the lifetime it owns harder to see, not easier.
+
+pub mod Classify;
+
+--- FILE: rust/Crate/BrowserCDP/Source/Fn/Classify.rs ---
+//! The mapping from `chromiumoxide`'s errors onto the three codes.
+//!
+//! The rule is the port's, applied to a substrate that has more failure modes
+//! than the port has codes:
+//!
+//! - **a dead socket is `browser-unavailable`.** A WebSocket error, an I/O
+//!   error, no response at all, a channel that closed under a request, and a
+//!   browser process that exited or never announced its endpoint all mean the
+//!   same thing to a consumer: there is no browser to talk to. So do the
+//!   failures that can only happen before a page exists - a URL that does not
+//!   parse, a response that does not decode, a frame id that is not there.
+//! - **a page that could not be used is `navigation-failed`.** A JavaScript
+//!   exception, a protocol error naming the page, a scrolling failure: the
+//!   transport is alive and the page is what went wrong.
+//! - **a deadline is `timeout`.** `CdpError::Timeout` is the protocol's own
+//!   timeout, which is the same event as the session's deadline from a
+//!   consumer's side.
+//!
+//! `Fatal` is the second half of the mapping: it says which errors mean the
+//! transport is gone, so the transport can report itself closed and the session
+//! can classify the *next* failure as `browser-unavailable` rather than as a
+//! page defect.
+
+use chromiumoxide::error::CdpError;
+
+use crate::Struct::Error::Error;
+
+/// Map one substrate error onto the port's three codes, keeping the provider's
+/// words in `detail`.
+pub fn Classify(Cdp:&CdpError) -> Error {
+	match Cdp {
+		CdpError::Ws(Why) => {
+			Error::Unavailable("the browser could not be reached", format!("the websocket failed: {Why}"))
+		},
+		CdpError::Io(Why) => {
+			Error::Unavailable("the browser could not be reached", format!("the connection failed: {Why}"))
+		},
+		CdpError::NoResponse => Error::Unavailable("the browser did not answer", "the request produced no response"),
+		CdpError::ChannelSendError(Why) => {
+			Error::Unavailable(
+				"the browser is no longer listening",
+				format!("the request channel closed: {Why}"),
+			)
+		},
+		CdpError::LaunchExit(Status, _) => {
+			Error::Unavailable(
+				"the browser exited before it was ready",
+				format!("the process exited with {Status:?}"),
+			)
+		},
+		CdpError::LaunchTimeout(_) => {
+			Error::Unavailable("the browser never announced its endpoint", "the launch timed out")
+		},
+		CdpError::LaunchIo(Why, _) => {
+			Error::Unavailable(
+				"the browser could not be started",
+				format!("the process could not be spawned: {Why}"),
+			)
+		},
+		CdpError::NotFound => Error::Unavailable("the browser did not answer", "the requested value was not found"),
+		CdpError::Url(Why) => {
+			Error::Unavailable("the browser could not be reached", format!("the endpoint is not a URL: {Why}"))
+		},
+		CdpError::Serde(Why) => {
+			Error::Unavailable(
+				"the browser answered something this client cannot read",
+				format!("the response did not decode: {Why}"),
+			)
+		},
+		CdpError::DecodeError(Why) => {
+			Error::Unavailable(
+				"the browser answered something this client cannot read",
+				format!("the payload did not decode: {Why}"),
+			)
+		},
+		CdpError::FrameNotFound(Frame) => {
+			Error::Unavailable("the page is no longer there", format!("frame {Frame:?} was not found"))
+		},
+		CdpError::Timeout => Error::Timeout("the page did not answer in time", "the protocol reported a timeout"),
+		CdpError::JavascriptException(Details) => {
+			Error::Navigation("the page threw while it was being asked", format!("{Details:?}"))
+		},
+		CdpError::ChromeMessage(Message) => Error::Navigation("the page could not answer", Message.clone()),
+		CdpError::Chrome(Why) => Error::Navigation("the page could not answer", format!("the protocol reported {Why}")),
+		CdpError::ScrollingFailed(Why) => Error::Navigation("the page could not be scrolled", Why.clone()),
+		CdpError::UnexpectedWsMessage(Message) => {
+			Error::Navigation("the browser sent a message this client does not handle", format!("{Message:?}"))
+		},
+		CdpError::InvalidMessage(Message, Why) => {
+			Error::Unavailable(
+				"the browser sent a message this client cannot read",
+				format!("{Message}: {Why}"),
+			)
+		},
+	}
+}
+
+/// Whether the transport is gone after this error.
+pub fn Fatal(Cdp:&CdpError) -> bool { matches!(Classify(Cdp).Code(), crate::Struct::Error::Code::Unavailable) }
+
+/// The page-error rule: a closed transport wins over a page defect, because the
+/// socket is gone rather than the page being wrong. A deadline is left alone -
+/// it is the caller's own bound, not a fact about the socket.
+pub fn ClassifyPage(Why:Error, Closed:bool) -> Error {
+	match Why.Code() {
+		crate::Struct::Error::Code::Timeout => Why,
+		_ if Closed => {
+			Error::Unavailable("the transport closed while the page was being asked", Why.Detail().to_string())
+		},
+		_ => Why,
+	}
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Library.rs ---
+//! `agentic.browse`: the concrete browser substrate.
+//!
+//! Attach and launch are separate operations, not a boolean hidden in a
+//! constructor, because they differ in who owns the process: a session that
+//! launched a browser may close it, and a session that attached to one may not.
+//! [`Struct::Port::Ownership`] records which happened, and disposal reads it.
+//!
+//! Every classification rule lives in [`Fn::Classify`], in one place:
+//!
+//! - silence is a timeout. Nothing but the deadline can end a page that never
+//!   answers, so a hang is reported as `timeout` and never as a dead transport;
+//! - a closed transport is `browser-unavailable`, whatever error arrived with
+//!   it, because the socket is gone rather than the page being slow;
+//! - a live transport that could not be used is `navigation-failed`.
+//!
+//! Cancellation belongs to the caller: every operation races the caller's
+//! signal and its own deadline through [`AgenticRuntime::Bound`], and both lose
+//! to `timeout` rather than to a bare error, so a consumer can distinguish "I
+//! gave up" from "the browser broke".
+//!
+//! `chromiumoxide` is behind [`Struct::Chrome`] and nowhere else. Nothing in
+//! the session, the port or the transports mentions it: a different substrate
+//! would replace one file.
+
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+
+pub use crate::{
+	Fn::Classify::Classify,
+	Struct::{
+		Cancellation::Stop,
+		Chrome::{Chrome, ChromeOptions},
+		Error::{Code, Error},
+		Pace::Tokio,
+		Port::{Browse, OpenOptions, Ownership, Target},
+		Session::{Create, Options, Report, Session},
+		Transport::{Launcher, Transport},
+	},
+};
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct.rs ---
+//! Types: the port, its three codes, the provider seam, the session that
+//! applies the rules, and the two concrete implementations this crate supplies.
+
+pub mod Cancellation;
+pub mod Chrome;
+pub mod Error;
+pub mod Pace;
+pub mod Port;
+pub mod Session;
+pub mod Transport;
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Cancellation.rs ---
+//! A cancellation source a tokio caller can fire from anywhere.
+//!
+//! The runtime's `Signal` is executor-neutral and works here, but a tokio
+//! program usually already has a token it shares with other tasks, and
+//! converting one into the port's shape is cheaper than a second source of
+//! truth. This is that conversion and nothing else.
+
+use std::sync::Arc;
+
+use AgenticRuntime::{Cancellation, FutureBox};
+use tokio_util::sync::CancellationToken;
+
+/// A token, seen as a cancellation.
+#[derive(Debug, Clone, Default)]
+pub struct Stop(CancellationToken);
+
+impl Stop {
+	/// A token nobody has cancelled.
+	pub fn New() -> Arc<Self> { Arc::new(Self(CancellationToken::new())) }
+
+	/// Cancel it, waking every waiter.
+	pub fn Cancel(&self) { self.0.cancel(); }
+
+	/// The token itself, for a caller that wants to share it.
+	pub fn Token(&self) -> CancellationToken { self.0.clone() }
+}
+
+impl Cancellation for Stop {
+	fn IsCancelled(&self) -> bool { self.0.is_cancelled() }
+
+	fn Cancelled(&self) -> FutureBox<'_, ()> {
+		let Token = self.0.clone();
+		Box::pin(async move { Token.cancelled().await })
+	}
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Chrome.rs ---
+//! The concrete substrate: `chromiumoxide`, and the only file that names it.
+//!
+//! Two entry points, because attach and launch are different operations:
+//! `Launch` starts a browser process this session owns, and `Attach` connects
+//! to one that is already listening. The session decides which to call from
+//! [`crate::Struct::Port::OpenOptions::AttachTo`], and records the ownership it
+//! implies, so disposal closes only what was launched.
+//!
+//! The handler task is not optional. `chromiumoxide`'s usage model is a
+//! `Browser` plus a `Handler` that must be polled: a client that keeps the
+//! browser and drops the handler gets a connection that accepts commands and
+//! never answers them. The task is owned here and aborted on release.
+//!
+//! A caller must already be inside a tokio runtime: `Launch` and `Attach` spawn
+//! the handler, and a spawn outside a runtime panics. That is the composition
+//! root's contract, and the only place in the workspace where it applies.
+
+use std::{
+	path::PathBuf,
+	sync::{
+		Arc,
+		Mutex,
+		MutexGuard,
+		atomic::{AtomicBool, Ordering},
+	},
+};
+
+use AgenticRuntime::{Call, FutureBox};
+use chromiumoxide::{Browser, BrowserConfig, Handler, Page};
+use futures_util::StreamExt;
+use serde_json::Value;
+use tokio::task::JoinHandle;
+
+use crate::{
+	Fn::Classify::{Classify, Fatal},
+	Struct::{
+		Error::Error,
+		Transport::{Launcher, Transport},
+	},
+};
+
+/// How to start or reach a browser.
+#[derive(Clone, Debug, Default)]
+pub struct ChromeOptions {
+	/// The browser binary, when it is not the one `chromiumoxide` finds.
+	pub Executable:Option<PathBuf>,
+	/// Whether to run without a window. Off means a visible browser, which is
+	/// what an attached session usually wants to share with a person.
+	pub Headless:bool,
+	/// Whether to pass `--no-sandbox`. Needed in containers, never on a
+	/// desktop.
+	pub NoSandbox:bool,
+}
+
+/// The `chromiumoxide` launcher.
+pub struct Chrome {
+	Options:ChromeOptions,
+}
+
+impl Chrome {
+	/// A launcher with the caller's configuration.
+	pub fn New(Options:ChromeOptions) -> Arc<Self> { Arc::new(Self { Options }) }
+
+	/// A browser whose handler is already being polled, bound to `Url`.
+	async fn Bound(Browser:Browser, Handler:Handler, Url:&str) -> Result<Arc<dyn Transport>, Error> {
+		let Endpoint = Browser.websocket_address().clone();
+		let Task = tokio::spawn(async move {
+			let mut Handler = Handler;
+			while Handler.next().await.is_some() {}
+		});
+		let Page = Browser.new_page(Url).await.map_err(|Why| Classify(&Why))?;
+		Ok(Arc::new(ChromeTransport {
+			Page,
+			Browser:Mutex::new(Some(Browser)),
+			Handler:Mutex::new(Some(Task)),
+			Endpoint,
+			Closed:AtomicBool::new(false),
+		}))
+	}
+}
+
+impl Launcher for Chrome {
+	fn Launch<'a>(&'a self, Url:&'a str, _Call:Call) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>> {
+		Box::pin(async move {
+			let mut Builder = BrowserConfig::builder();
+			if let Some(Path) = &self.Options.Executable {
+				Builder = Builder.chrome_executable(Path);
+			}
+			if self.Options.Headless {
+				Builder = Builder.new_headless_mode();
+			} else {
+				Builder = Builder.with_head();
+			}
+			if self.Options.NoSandbox {
+				Builder = Builder.no_sandbox();
+			}
+			let Config = Builder
+				.build()
+				.map_err(|Why| Error::Unavailable("the browser configuration is not usable", Why.to_string()))?;
+			let (Browser, Handler) = Browser::launch(Config).await.map_err(|Why| Classify(&Why))?;
+			Self::Bound(Browser, Handler, Url).await
+		})
+	}
+
+	fn Attach<'a>(
+		&'a self,
+		Endpoint:&'a str,
+		Url:&'a str,
+		_Call:Call,
+	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>> {
+		Box::pin(async move {
+			let (Browser, Handler) = Browser::connect(Endpoint).await.map_err(|Why| Classify(&Why))?;
+			Self::Bound(Browser, Handler, Url).await
+		})
+	}
+}
+
+/// One page on one browser, and the handler that keeps it answering.
+struct ChromeTransport {
+	Page:Page,
+	Browser:Mutex<Option<Browser>>,
+	Handler:Mutex<Option<JoinHandle<()>>>,
+	Endpoint:String,
+	Closed:AtomicBool,
+}
+
+impl ChromeTransport {
+	fn Lock<T>(Guard:&Mutex<T>) -> MutexGuard<'_, T> { Guard.lock().unwrap_or_else(|Poison| Poison.into_inner()) }
+
+	/// Stop polling the handler, which is what ends this session's side of the
+	/// connection whatever happens to the browser.
+	fn Stop(&self) {
+		if let Some(Handler) = Self::Lock(&self.Handler).take() {
+			Handler.abort();
+		}
+		self.Closed.store(true, Ordering::SeqCst);
+	}
+}
+
+impl Transport for ChromeTransport {
+	fn Endpoint(&self) -> &str { &self.Endpoint }
+
+	fn Closed(&self) -> bool { self.Closed.load(Ordering::SeqCst) }
+
+	fn Evaluate<'a>(&'a self, Expression:&'a str, _Call:Call) -> FutureBox<'a, Result<Value, Error>> {
+		Box::pin(async move {
+			match self.Page.evaluate(Expression).await {
+				Ok(Result) => Ok(Result.value().cloned().unwrap_or(Value::Null)),
+				Err(Why) => {
+					if Fatal(&Why) {
+						self.Closed.store(true, Ordering::SeqCst);
+					}
+					Err(Classify(&Why))
+				},
+			}
+		})
+	}
+
+	fn Close(&self) -> FutureBox<'_, ()> {
+		Box::pin(async move {
+			// Closing the page first runs its unload hooks; then the browser
+			// this session launched, which nobody else may close.
+			let _ = self.Page.clone().close().await;
+			// Taken out of the lock before the await: a guard held across one
+			// is not `Send`, and a browser handle is the only thing
+			// that needs to survive.
+			let Browser = Self::Lock(&self.Browser).take();
+			if let Some(mut Browser) = Browser {
+				let _ = Browser.close().await;
+			}
+			self.Stop();
+		})
+	}
+
+	fn Detach(&self) -> FutureBox<'_, ()> {
+		Box::pin(async move {
+			// Somebody else owns this browser: stop listening and leave it
+			// running.
+			self.Stop();
+		})
+	}
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Error.rs ---
+//! The three failure modes `module.json` declares, and no others.
+//!
+//! One enum, one variant per code, `detail` kept apart from the message in
+//! every one of them: what was observed is the only thing that says which part
+//! of the transport broke, and a sentence written for a human loses it.
+
+use std::fmt;
+
+/// The codes, in the order the manifest names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Code {
+	/// The transport is gone: a dead socket, not a slow page.
+	Unavailable,
+	/// The page exists but could not be used: it failed to load, or it threw.
+	Navigation,
+	/// The signal fired or the deadline passed before an answer arrived.
+	Timeout,
+}
+
+impl Code {
+	/// The string the manifest uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			Code::Unavailable => "browser-unavailable",
+			Code::Navigation => "navigation-failed",
+			Code::Timeout => "timeout",
+		}
+	}
+
+	/// Every code, so a harness can compare the manifest against the type.
+	pub const fn All() -> [Code; 3] { [Code::Unavailable, Code::Navigation, Code::Timeout] }
+
+	/// The code a manifest string names, if it names one of the three.
+	pub fn Parse(Value:&str) -> Option<Code> { Code::All().into_iter().find(|Code| Code.Name() == Value) }
+}
+
+/// The one error type a `Browse` call fails with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+	/// The transport is gone.
+	Unavailable {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed, kept apart from the sentence.
+		Detail:String,
+	},
+	/// The page exists but could not be used.
+	Navigation {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+	/// The signal fired or the deadline passed.
+	Timeout {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+}
+
+impl Error {
+	/// A dead transport.
+	pub fn Unavailable(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Unavailable { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// A page that could not be used.
+	pub fn Navigation(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Navigation { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// A deadline that passed or a caller that gave up.
+	pub fn Timeout(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Timeout { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// The code this failure carries.
+	pub const fn Code(&self) -> Code {
+		match self {
+			Error::Unavailable { .. } => Code::Unavailable,
+			Error::Navigation { .. } => Code::Navigation,
+			Error::Timeout { .. } => Code::Timeout,
+		}
+	}
+
+	/// The sentence a human reads.
+	pub fn Message(&self) -> &str {
+		match self {
+			Error::Unavailable { Message, .. } | Error::Navigation { Message, .. } | Error::Timeout { Message, .. } => {
+				Message
+			},
+		}
+	}
+
+	/// What was observed, which may be empty.
+	pub fn Detail(&self) -> &str {
+		match self {
+			Error::Unavailable { Detail, .. } | Error::Navigation { Detail, .. } | Error::Timeout { Detail, .. } => {
+				Detail
+			},
+		}
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(Formatter, "{}: {}", self.Code().Name(), self.Message())
+	}
+}
+
+impl std::error::Error for Error {}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Pace.rs ---
+//! The tokio implementation of the runtime's `Pace`.
+//!
+//! The runtime crate keeps its own tokio implementation behind a feature
+//! nothing enables, so that a capability never inherits an executor. This is
+//! where the executor actually lives: the adapter that drives a browser is the
+//! one thing in the workspace that must have one, and the composition root
+//! hands this pace to every capability it composes.
+
+use std::time::{Duration, Instant};
+
+use AgenticRuntime::{Clock, FutureBox, Pace};
+
+/// The clock and the wait, on tokio.
+#[derive(Debug, Default)]
+pub struct Tokio;
+
+impl Clock for Tokio {
+	fn Now(&self) -> Instant { Instant::now() }
+}
+
+impl Pace for Tokio {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> { Box::pin(tokio::time::sleep(Span)) }
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Port.rs ---
+//! The port `agentic.browse` promises, written the way a consumer asks for it.
+//!
+//! `module.json` names three errors - `browser-unavailable`,
+//! `navigation-failed` and `timeout` - and [`crate::Struct::Error`] is where
+//! they live. A caller narrows on the variant; a provider that fails in some
+//! fourth way is mapped onto one of the three at the boundary, so a consumer
+//! never has to guess.
+
+use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
+
+/// Who owns the page behind a target, and therefore who may close it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Ownership {
+	/// Somebody else owns the browser: disposal only disconnects.
+	Attached,
+	/// This session started the browser and may close it.
+	Launched,
+}
+
+impl Ownership {
+	/// The word the port uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			Ownership::Attached => "attached",
+			Ownership::Launched => "launched",
+		}
+	}
+}
+
+/// The handle a session is bound to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Target {
+	/// The page this session is bound to.
+	pub Url:String,
+	/// The endpoint the transport behind that page is connected to.
+	pub Ws:String,
+	/// Whether this session launched the browser or attached to one.
+	pub Ownership:Ownership,
+}
+
+/// What every operation is bounded by, plus whether to attach.
+#[derive(Clone, Debug)]
+pub struct OpenOptions {
+	/// The deadline and the caller's cancellation.
+	pub Call:Call,
+	/// Attach to a browser already listening here instead of launching one.
+	pub AttachTo:Option<String>,
+}
+
+impl OpenOptions {
+	/// Open a new browser, bounded by `Call`.
+	pub fn Launch(Call:Call) -> Self { Self { Call, AttachTo:None } }
+
+	/// Attach to the browser at `Endpoint`, bounded by `Call`.
+	pub fn Attach(Endpoint:impl Into<String>, Call:Call) -> Self { Self { Call, AttachTo:Some(Endpoint.into()) } }
+
+	/// The ownership this option implies: attaching means somebody else owns
+	/// it.
+	pub fn Ownership(&self) -> Ownership {
+		match self.AttachTo {
+			None => Ownership::Launched,
+			Some(_) => Ownership::Attached,
+		}
+	}
+}
+
+/// The one port this crate offers.
+///
+/// `Dispose` returns `()` and cannot fail. A release that fails is a fact about
+/// the browser, and a caller that already has its answer must not lose it to a
+/// failing cleanup; the reason goes to the session's report, which is the
+/// supervisor's record.
+pub trait Browse: Send + Sync {
+	/// Open a page, returning the handle the session is bound to.
+	fn Open<'a>(
+		&'a self,
+		Url:&'a str,
+		Options:OpenOptions,
+	) -> FutureBox<'a, Result<Target, crate::Struct::Error::Error>>;
+	/// Evaluate an expression in the page and return its value.
+	fn Evaluate<'a>(
+		&'a self,
+		Target:&'a Target,
+		Expression:&'a str,
+		Call:Call,
+	) -> FutureBox<'a, Result<Value, crate::Struct::Error::Error>>;
+	/// Release everything this session holds. Never fails.
+	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()>;
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Session.rs ---
+//! `Browse` over a transport the composition root supplies.
+//!
+//! The session is the supervisor the port's rules talk about: it owns the
+//! transport map, the pending operations and the cleanup. A caller's
+//! cancellation stops *its wait* and nothing else - it never closes an attached
+//! page - and disposal is the only thing that ends a transport's life.
+//!
+//! Every classification rule lives in [`crate::Fn::Classify`], in one place:
+//!
+//! - silence is a timeout. Nothing but the deadline can end a page that never
+//!   answers, so a hang is reported as `timeout` and never as a dead transport;
+//! - a closed transport is `browser-unavailable`, whatever error arrived with
+//!   it, because the socket is gone rather than the page being slow;
+//! - a live transport that could not be used is `navigation-failed`.
+
+use std::{
+	collections::{HashMap, HashSet},
+	sync::{Arc, Mutex, MutexGuard},
+	time::Duration,
+};
+
+use AgenticRuntime::{Bound, Call, Expired, FutureBox, Never, Pace};
+use serde_json::Value;
+
+use crate::{
+	Fn::Classify::ClassifyPage,
+	Struct::{
+		Error::Error,
+		Port::{Browse, OpenOptions, Ownership, Target},
+		Transport::{Launcher, Transport},
+	},
+};
+
+/// A release that has not finished in this long is reported, not waited on.
+pub const DefaultDisposeBudget:Duration = Duration::from_secs(5);
+
+/// Where a dispose failure goes, because it may not be returned.
+pub type Report = Arc<dyn Fn(&Target, &Error) + Send + Sync>;
+
+/// How one session is configured.
+pub struct Options {
+	/// Where a dispose failure goes.
+	pub Report:Report,
+	/// How long a release may take before it is reported as a failure.
+	pub DisposeBudget:Duration,
+}
+
+impl Default for Options {
+	fn default() -> Self {
+		Self {
+			// Silent by default: a library that writes to the process's stderr
+			// behind a caller's back is a library that corrupts a protocol.
+			Report:Arc::new(|_, _| {}),
+			DisposeBudget:DefaultDisposeBudget,
+		}
+	}
+}
+
+/// A session is one `Browse` bound to one launcher.
+pub struct Session {
+	Launcher:Arc<dyn Launcher>,
+	Pace:Arc<dyn Pace>,
+	Options:Options,
+	/// What this session holds, by endpoint.
+	Held:Mutex<HashMap<String, Arc<dyn Transport>>>,
+	/// What it has already released, so a second dispose is silent.
+	Released:Mutex<HashSet<String>>,
+}
+
+/// Build a session over one launcher, on the pace the caller supplied.
+pub fn Create(Launcher:Arc<dyn Launcher>, Pace:Arc<dyn Pace>, Options:Options) -> Session {
+	Session {
+		Launcher,
+		Pace,
+		Options,
+		Held:Mutex::new(HashMap::new()),
+		Released:Mutex::new(HashSet::new()),
+	}
+}
+
+impl Session {
+	fn Lock<T>(Guard:&Mutex<T>) -> MutexGuard<'_, T> { Guard.lock().unwrap_or_else(|Poison| Poison.into_inner()) }
+
+	/// A reporter that throws must not turn dispose into a throw.
+	fn ReportQuietly(&self, Target:&Target, Why:&Error) {
+		let Report = self.Options.Report.clone();
+		let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+			Report(Target, Why);
+		}));
+	}
+
+	/// Release one transport, bounded, and report why if it did not finish.
+	async fn Release(&self, Transport:Arc<dyn Transport>, Ownership:Ownership) -> Option<Error> {
+		let Deadline = self
+			.Pace
+			.Now()
+			.checked_add(self.Options.DisposeBudget)
+			.unwrap_or_else(|| self.Pace.Now());
+		let Call = Call { Deadline, Cancellation:Arc::new(Never) };
+		let Work = match Ownership {
+			Ownership::Launched => Transport.Close(),
+			Ownership::Attached => Transport.Detach(),
+		};
+		match Bound(Work, &Call, self.Pace.as_ref()).await {
+			Ok(()) => None,
+			Err(Why) => {
+				Some(Error::Timeout(
+					format!("dispose exceeded its {}ms budget", self.Options.DisposeBudget.as_millis()),
+					Why.Name(),
+				))
+			},
+		}
+	}
+}
+
+impl Browse for Session {
+	fn Open<'a>(&'a self, Url:&'a str, Options:OpenOptions) -> FutureBox<'a, Result<Target, Error>> {
+		Box::pin(async move {
+			let Ownership = Options.Ownership();
+			let Phase = match Ownership {
+				Ownership::Launched => "open (launch)",
+				Ownership::Attached => "open (attach)",
+			};
+			// A caller that has already given up must not start a browser.
+			if Options.Call.Cancelled() {
+				return Err(Error::Timeout(
+					format!("{Phase} was cancelled before it started"),
+					"the signal was already fired",
+				));
+			}
+			let Work = match &Options.AttachTo {
+				None => self.Launcher.Launch(Url, Options.Call.clone()),
+				Some(Endpoint) => self.Launcher.Attach(Endpoint, Url, Options.Call.clone()),
+			};
+			let Transport = match Bound(Work, &Options.Call, self.Pace.as_ref()).await {
+				Ok(Ok(Transport)) => Transport,
+				Ok(Err(Why)) => return Err(Why),
+				Err(Expired::Timeout) => {
+					return Err(Error::Timeout(
+						format!("{Phase} exceeded its deadline"),
+						"the browser never answered",
+					));
+				},
+				Err(Expired::Cancelled) => {
+					return Err(Error::Timeout(
+						format!("{Phase} was cancelled by the caller"),
+						"the signal fired while the browser was being opened",
+					));
+				},
+			};
+			let Target = Target { Url:Url.to_string(), Ws:Transport.Endpoint().to_string(), Ownership };
+			if Transport.Closed() {
+				if let Some(Why) = self.Release(Transport.clone(), Ownership).await {
+					self.ReportQuietly(&Target, &Why);
+				}
+				return Err(Error::Unavailable(
+					"the transport was already closed when it arrived",
+					format!("{Url} on {}", Target.Ws),
+				));
+			}
+			Self::Lock(&self.Held).insert(Target.Ws.clone(), Transport);
+			Self::Lock(&self.Released).remove(&Target.Ws);
+			Ok(Target)
+		})
+	}
+
+	fn Evaluate<'a>(&'a self, Target:&'a Target, Expression:&'a str, Call:Call) -> FutureBox<'a, Result<Value, Error>> {
+		Box::pin(async move {
+			let Transport = Self::Lock(&self.Held).get(&Target.Ws).cloned();
+			let Some(Transport) = Transport else {
+				return Err(Error::Unavailable(
+					"this session holds no transport for the target",
+					format!("{} was never opened here, or it was already disposed", Target.Ws),
+				));
+			};
+			if Transport.Closed() {
+				return Err(Error::Unavailable(
+					"the transport is closed",
+					format!("{} is no longer connected", Target.Ws),
+				));
+			}
+			// A caller that has already given up must not ask the page
+			// anything.
+			if Call.Cancelled() {
+				return Err(Error::Timeout(
+					"evaluate was cancelled before it started",
+					"the signal was already fired",
+				));
+			}
+			let Work = Transport.Evaluate(Expression, Call.clone());
+			match Bound(Work, &Call, self.Pace.as_ref()).await {
+				Ok(Ok(Value)) => Ok(Value),
+				Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
+				Err(Expired::Timeout) => {
+					Err(Error::Timeout("evaluate exceeded its deadline", "the page never answered"))
+				},
+				Err(Expired::Cancelled) => {
+					Err(Error::Timeout(
+						"evaluate was cancelled by the caller",
+						"the signal fired while the page was being asked",
+					))
+				},
+			}
+		})
+	}
+
+	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()> {
+		Box::pin(async move {
+			// Never throws: not on a failed release, and not on a target this
+			// session never opened.
+			if !Self::Lock(&self.Released).insert(Target.Ws.clone()) {
+				return;
+			}
+			let Transport = Self::Lock(&self.Held).remove(&Target.Ws);
+			let Some(Transport) = Transport else {
+				return;
+			};
+			if let Some(Why) = self.Release(Transport, Target.Ownership).await {
+				self.ReportQuietly(&Target, &Why);
+			}
+		})
+	}
+}
+
+--- FILE: rust/Crate/BrowserCDP/Source/Struct/Transport.rs ---
+//! The seam a provider implements, and the fake in `Test/` stands in for.
+//!
+//! Nothing in this file starts a browser. A [`Launcher`] is supplied by the
+//! composition root - it may speak CDP over a WebSocket, drive a subprocess, or
+//! answer from a fixture - and the session applies the port's rules to whatever
+//! it returns.
+//!
+//! The contract on a provider:
+//!
+//! - a transport reports its own death through `Closed`, so the session can
+//!   tell a dead socket from a page that is merely not ready;
+//! - a failed `Attach`/`Launch` carries a [`crate::Struct::Error`] when it
+//!   knows why (`Navigation` for a page that did not load); anything else is
+//!   read as an unreachable browser;
+//! - `Close` and `Detach` are idempotent: the session may call them on a target
+//!   it has already released.
+
+use std::sync::Arc;
+
+use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
+
+use crate::Struct::Error::Error;
+
+/// One live page connection.
+pub trait Transport: Send + Sync {
+	/// The endpoint this transport is bound to; it becomes `Target::Ws`.
+	fn Endpoint(&self) -> &str;
+	/// True once the connection is gone. A closed transport is dead, not slow.
+	fn Closed(&self) -> bool;
+	/// Ask the page one expression and return what it produced.
+	fn Evaluate<'a>(&'a self, Expression:&'a str, Call:Call) -> FutureBox<'a, Result<Value, Error>>;
+	/// Close the page this session launched.
+	fn Close(&self) -> FutureBox<'_, ()>;
+	/// Let go of a page somebody else owns, without closing it.
+	fn Detach(&self) -> FutureBox<'_, ()>;
+}
+
+/// Where a transport comes from: an existing browser, or a new one.
+pub trait Launcher: Send + Sync {
+	/// Attach to a browser already listening at `Endpoint`, bound to `Url`.
+	fn Attach<'a>(
+		&'a self,
+		Endpoint:&'a str,
+		Url:&'a str,
+		Call:Call,
+	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>>;
+	/// Start a browser and open `Url` in it.
+	fn Launch<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>>;
+}
+
+--- FILE: rust/Crate/BrowserCDP/Test/Browse.rs ---
+//! `agentic.browse`, exercised against a fake launcher and a clock the test
+//! owns.
+//!
+//! No browser, no network and no sleeping: a launcher that never answers is one
+//! whose script says so, and a deadline passes because the test advanced its
+//! own clock.
+
+use std::{
+	sync::{
+		Arc,
+		Mutex,
+		atomic::{AtomicBool, AtomicU64, Ordering},
+	},
+	time::{Duration, Instant},
+};
+
+use AgenticBrowserCDP::{
+	Browse,
+	Code,
+	Create,
+	Error,
+	Launcher,
+	OpenOptions,
+	Options,
+	Ownership,
+	Report,
+	Session,
+	Target,
+	Transport,
+};
+use AgenticRuntime::{BlockOn, Call, Clock, FutureBox, Never, Pace, Signal};
+use serde_json::{Value, json};
+
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
+
+/// A clock the test owns, and a wait that advances it.
+struct TestPace {
+	Now:Mutex<Instant>,
+	Fire:Mutex<Option<Arc<Signal>>>,
+}
+
+impl TestPace {
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()), Fire:Mutex::new(None) }) }
+
+	fn Firing(self: &Arc<Self>, Signal:Arc<Signal>) -> Arc<Self> {
+		*self.Fire.lock().unwrap() = Some(Signal);
+		self.clone()
+	}
+}
+
+impl Clock for TestPace {
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
+}
+
+impl Pace for TestPace {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> {
+		// A pace that is about to fire models a caller giving up, not time
+		// passing: it never finishes its wait, so the cancellation is
+		// what ends the call.
+		if let Some(Signal) = self.Fire.lock().unwrap().take() {
+			*self.Now.lock().unwrap() += Duration::from_millis(1);
+			Signal.Fire();
+			return Box::pin(std::future::pending());
+		}
+		*self.Now.lock().unwrap() += Span.max(Duration::from_millis(1));
+		Box::pin(std::future::ready(()))
+	}
+}
+
+/// One live page, scripted.
+struct FakeTransport {
+	Endpoint:String,
+	Closed:AtomicBool,
+	Evaluations:AtomicU64,
+	Closes:AtomicU64,
+	Detaches:AtomicU64,
+	Answer:Mutex<Result<Value, Error>>,
+	Hang:bool,
+	Dies:bool,
+	Release:Release,
+}
+
+#[derive(PartialEq)]
+enum Release {
+	Quick,
+	Hang,
+}
+
+impl FakeTransport {
+	fn Base(Endpoint:&str) -> Self {
+		Self {
+			Endpoint:Endpoint.to_string(),
+			Closed:AtomicBool::new(false),
+			Evaluations:AtomicU64::new(0),
+			Closes:AtomicU64::new(0),
+			Detaches:AtomicU64::new(0),
+			Answer:Mutex::new(Ok(json!(null))),
+			Hang:false,
+			Dies:false,
+			Release:Release::Quick,
+		}
+	}
+
+	fn New(Endpoint:&str) -> Arc<Self> { Arc::new(Self::Base(Endpoint)) }
+
+	fn Answering(Endpoint:&str, Value:Value) -> Arc<Self> {
+		let Transport = Self::New(Endpoint);
+		*Transport.Answer.lock().unwrap() = Ok(Value);
+		Transport
+	}
+
+	fn Failing(Endpoint:&str, Why:Error) -> Arc<Self> {
+		let Transport = Self::New(Endpoint);
+		*Transport.Answer.lock().unwrap() = Err(Why);
+		Transport
+	}
+
+	fn Hanging(Endpoint:&str) -> Arc<Self> { Arc::new(Self { Hang:true, ..Self::Base(Endpoint) }) }
+
+	fn Dead(Endpoint:&str) -> Arc<Self> {
+		let Transport = Self::New(Endpoint);
+		Transport.Closed.store(true, Ordering::SeqCst);
+		Transport
+	}
+
+	/// A transport whose release never finishes.
+	fn Stuck(Endpoint:&str) -> Arc<Self> { Arc::new(Self { Release:Release::Hang, ..Self::Base(Endpoint) }) }
+}
+
+impl Transport for FakeTransport {
+	fn Endpoint(&self) -> &str { &self.Endpoint }
+
+	fn Closed(&self) -> bool { self.Closed.load(Ordering::SeqCst) }
+
+	fn Evaluate<'a>(&'a self, _Expression:&'a str, _Call:Call) -> FutureBox<'a, Result<Value, Error>> {
+		self.Evaluations.fetch_add(1, Ordering::SeqCst);
+		let Hang = self.Hang;
+		if self.Dies {
+			self.Closed.store(true, Ordering::SeqCst);
+		}
+		let Answer = self.Answer.lock().unwrap().clone();
+		Box::pin(async move {
+			if Hang {
+				std::future::pending::<()>().await;
+			}
+			Answer
+		})
+	}
+
+	fn Close(&self) -> FutureBox<'_, ()> {
+		self.Closes.fetch_add(1, Ordering::SeqCst);
+		let Hang = self.Release == Release::Hang;
+		Box::pin(async move {
+			if Hang {
+				std::future::pending::<()>().await;
+			}
+			self.Closed.store(true, Ordering::SeqCst);
+		})
+	}
+
+	fn Detach(&self) -> FutureBox<'_, ()> {
+		self.Detaches.fetch_add(1, Ordering::SeqCst);
+		let Hang = self.Release == Release::Hang;
+		Box::pin(async move {
+			if Hang {
+				std::future::pending::<()>().await;
+			}
+			self.Closed.store(true, Ordering::SeqCst);
+		})
+	}
+}
+
+/// A launcher that hands out one scripted transport, or one scripted failure.
+struct FakeLauncher {
+	Hands:Mutex<Option<Arc<FakeTransport>>>,
+	Failure:Mutex<Option<Error>>,
+	Hang:bool,
+	Launches:AtomicU64,
+	Attaches:AtomicU64,
+}
+
+impl FakeLauncher {
+	fn Base(Transport:Arc<FakeTransport>) -> Self {
+		Self {
+			Hands:Mutex::new(Some(Transport)),
+			Failure:Mutex::new(None),
+			Hang:false,
+			Launches:AtomicU64::new(0),
+			Attaches:AtomicU64::new(0),
+		}
+	}
+
+	fn Handing(Transport:Arc<FakeTransport>) -> Arc<Self> { Arc::new(Self::Base(Transport)) }
+
+	fn Failing(Why:Error) -> Arc<Self> {
+		let Launcher = Self::Handing(FakeTransport::New("ws://none"));
+		*Launcher.Failure.lock().unwrap() = Some(Why);
+		Launcher
+	}
+
+	/// A launcher that never answers.
+	fn Hanging() -> Arc<Self> { Arc::new(Self { Hang:true, ..Self::Base(FakeTransport::New("ws://none")) }) }
+
+	fn Answer(&self) -> FutureBox<'_, Result<Arc<dyn Transport>, Error>> {
+		let Hand = self.Hands.lock().unwrap().clone();
+		let Failure = self.Failure.lock().unwrap().clone();
+		let Hang = self.Hang;
+		Box::pin(async move {
+			if Hang {
+				std::future::pending::<()>().await;
+			}
+			if let Some(Why) = Failure {
+				return Err(Why);
+			}
+			match Hand {
+				Some(Transport) => Ok(Transport as Arc<dyn Transport>),
+				None => Err(Error::Unavailable("nothing to hand out", "")),
+			}
+		})
+	}
+}
+
+impl Launcher for FakeLauncher {
+	fn Attach<'a>(
+		&'a self,
+		_Endpoint:&'a str,
+		_Url:&'a str,
+		_Call:Call,
+	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>> {
+		self.Attaches.fetch_add(1, Ordering::SeqCst);
+		self.Answer()
+	}
+
+	fn Launch<'a>(&'a self, _Url:&'a str, _Call:Call) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>> {
+		self.Launches.fetch_add(1, Ordering::SeqCst);
+		self.Answer()
+	}
+}
+
+fn Built(Launcher:Arc<dyn Launcher>, Pace:Arc<TestPace>) -> Session { Create(Launcher, Pace, Options::default()) }
+
+fn Reported(Launcher:Arc<dyn Launcher>, Pace:Arc<TestPace>) -> (Session, Arc<Mutex<Vec<String>>>) {
+	let Seen:Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+	let Collected = Seen.clone();
+	let Report:Report = Arc::new(move |_Target, Why| {
+		Collected.lock().unwrap().push(Why.Message().to_string());
+	});
+	(
+		Create(Launcher, Pace, Options { Report, DisposeBudget:Duration::from_secs(5) }),
+		Seen,
+	)
+}
+
+fn Call(Pace:&TestPace, Budget:Duration) -> Call { Call::Within(Budget, Pace, Arc::new(Never)) }
+
+fn Opened(Session:&Session, Pace:&TestPace, Budget:Duration) -> Result<Target, Error> {
+	BlockOn(Session.Open("https://example.test/", OpenOptions::Launch(Call(Pace, Budget))))
+}
+
+#[test]
+fn the_port_declares_exactly_the_errors_the_manifest_promises() {
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["browser-unavailable", "navigation-failed", "timeout"]);
+	let Manifest = include_str!("../module.json");
+	for Name in Declared {
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
+	}
+}
+
+#[test]
+fn launches_a_browser_when_the_caller_names_no_endpoint() {
+	let Pace = TestPace::New();
+	let Launcher = FakeLauncher::Handing(FakeTransport::New("ws://launched"));
+	let Session = Built(Launcher.clone(), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	assert_eq!(Target.Ownership, Ownership::Launched);
+	assert_eq!(Target.Ws, "ws://launched");
+	assert_eq!(Target.Url, "https://example.test/");
+	assert_eq!(Launcher.Launches.load(Ordering::SeqCst), 1);
+	assert_eq!(Launcher.Attaches.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn attaches_to_a_browser_the_caller_already_owns() {
+	let Pace = TestPace::New();
+	let Launcher = FakeLauncher::Handing(FakeTransport::New("ws://attached"));
+	let Session = Built(Launcher.clone(), Pace.clone());
+	let Target = BlockOn(Session.Open(
+		"https://example.test/",
+		OpenOptions::Attach("ws://attached", Call(&Pace, Span(2_000))),
+	))
+	.expect("opened");
+	assert_eq!(Target.Ownership, Ownership::Attached);
+	assert_eq!(Launcher.Attaches.load(Ordering::SeqCst), 1);
+	assert_eq!(Launcher.Launches.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn fails_with_navigation_failed_when_the_page_does_not_load() {
+	let Pace = TestPace::New();
+	let Launcher = FakeLauncher::Failing(Error::Navigation("the page did not load", "404"));
+	let Session = Built(Launcher, Pace.clone());
+	let Error = Opened(&Session, &Pace, Span(2_000)).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Navigation);
+	assert_eq!(Error.Detail(), "404");
+}
+
+#[test]
+fn fails_with_browser_unavailable_when_the_browser_cannot_be_reached() {
+	let Pace = TestPace::New();
+	let Launcher = FakeLauncher::Failing(Error::Unavailable("connection refused", "ws://nothing"));
+	let Session = Built(Launcher, Pace.clone());
+	let Error = Opened(&Session, &Pace, Span(2_000)).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Unavailable);
+}
+
+#[test]
+fn fails_with_timeout_when_the_launcher_never_answers() {
+	let Pace = TestPace::New();
+	let Launcher = FakeLauncher::Hanging();
+	let Session = Built(Launcher, Pace.clone());
+	let Error = Opened(&Session, &Pace, Span(2_000)).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Timeout);
+	assert!(Error.Detail().contains("never answered"));
+}
+
+#[test]
+fn fails_with_timeout_when_the_callers_signal_fires() {
+	let Signal = Signal::New();
+	let Pace = TestPace::New().Firing(Signal.clone());
+	let Launcher = FakeLauncher::Hanging();
+	let Session = Built(Launcher, Pace.clone());
+	let Call = Call { Deadline:Pace.Now() + Span(30_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Session.Open("https://example.test/", OpenOptions::Launch(Call))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Timeout);
+	assert!(Error.Detail().contains("signal"));
+}
+
+#[test]
+fn releases_a_transport_that_arrives_already_dead() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Dead("ws://dead");
+	let Launcher = FakeLauncher::Handing(Transport.clone());
+	let (Session, Seen) = Reported(Launcher, Pace.clone());
+	let Error = Opened(&Session, &Pace, Span(2_000)).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Unavailable);
+	assert!(Error.Message().contains("already closed"));
+	assert_eq!(Transport.Closes.load(Ordering::SeqCst), 1, "it was released");
+	let _ = Seen;
+}
+
+#[test]
+fn returns_the_value_the_page_produced() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Answering("ws://live", json!({ "count": 2 }));
+	let Session = Built(FakeLauncher::Handing(Transport), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Value = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect("evaluated");
+	assert_eq!(Value, json!({ "count": 2 }));
+}
+
+#[test]
+fn fails_with_timeout_when_the_page_never_answers() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Hanging("ws://live");
+	let Session = Built(FakeLauncher::Handing(Transport), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Timeout);
+	assert!(Error.Detail().contains("never answered"));
+}
+
+#[test]
+fn fails_with_timeout_when_the_signal_fires_mid_flight() {
+	let Signal = Signal::New();
+	// The launcher answers, so the open finishes without a wait; the page never
+	// answers, so the first wait is the one that fires.
+	let Pace = TestPace::New().Firing(Signal.clone());
+	let Transport = FakeTransport::Hanging("ws://live");
+	let Session = Built(FakeLauncher::Handing(Transport), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Call = Call { Deadline:Pace.Now() + Span(30_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call)).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Timeout);
+	assert!(Error.Detail().contains("signal"));
+}
+
+#[test]
+fn fails_with_timeout_before_asking_when_the_signal_is_already_aborted() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Answering("ws://live", json!(1));
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Signal = Signal::New();
+	Signal.Fire();
+	let Call = Call { Deadline:Pace.Now() + Span(5_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call)).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Timeout);
+	assert!(Error.Detail().contains("signal"));
+	assert_eq!(Transport.Evaluations.load(Ordering::SeqCst), 0, "the page was never asked");
+}
+
+#[test]
+fn still_honours_the_deadline_with_a_cancellation_that_never_fires() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Hanging("ws://live");
+	let Session = Built(FakeLauncher::Handing(Transport), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(500)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Timeout);
+}
+
+#[test]
+fn fails_with_browser_unavailable_when_the_transport_closed_during_the_call() {
+	let Pace = TestPace::New();
+	// A page error, but the transport died underneath it: the socket is gone,
+	// so the page is not what went wrong.
+	let Transport = Arc::new(FakeTransport { Dies:true, ..FakeTransport::Base("ws://live") });
+	*Transport.Answer.lock().unwrap() = Err(Error::Navigation("the page threw", "boom"));
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Unavailable);
+	assert_eq!(Error.Detail(), "boom", "the observation survives");
+}
+
+#[test]
+fn never_asks_a_transport_it_already_knows_is_closed() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Answering("ws://live", json!(1));
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	Transport.Closed.store(true, Ordering::SeqCst);
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Unavailable);
+	assert_eq!(Transport.Evaluations.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn fails_with_navigation_failed_when_the_page_throws() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Failing("ws://live", Error::Navigation("the page threw", "boom"));
+	let Session = Built(FakeLauncher::Handing(Transport), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Navigation);
+	assert_eq!(Error.Detail(), "boom");
+}
+
+#[test]
+fn fails_with_browser_unavailable_on_a_target_this_session_does_not_hold() {
+	let Pace = TestPace::New();
+	let Session = Built(FakeLauncher::Handing(FakeTransport::New("ws://live")), Pace.clone());
+	let Target = Target {
+		Url:"https://example.test/".to_string(),
+		Ws:"ws://somebody-elses".to_string(),
+		Ownership:Ownership::Attached,
+	};
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Unavailable);
+	assert!(Error.Detail().contains("never opened here"));
+}
+
+#[test]
+fn closes_a_launched_target() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New("ws://launched");
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	BlockOn(Session.Dispose(Target));
+	assert_eq!(Transport.Closes.load(Ordering::SeqCst), 1);
+	assert_eq!(Transport.Detaches.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn detaches_an_attached_target_without_closing_it() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New("ws://attached");
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = BlockOn(Session.Open(
+		"https://example.test/",
+		OpenOptions::Attach("ws://attached", Call(&Pace, Span(2_000))),
+	))
+	.expect("opened");
+	BlockOn(Session.Dispose(Target));
+	assert_eq!(Transport.Detaches.load(Ordering::SeqCst), 1);
+	assert_eq!(Transport.Closes.load(Ordering::SeqCst), 0, "not ours to close");
+}
+
+#[test]
+fn is_silent_when_called_twice() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New("ws://launched");
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	BlockOn(Session.Dispose(Target.clone()));
+	BlockOn(Session.Dispose(Target));
+	assert_eq!(Transport.Closes.load(Ordering::SeqCst), 1, "released once");
+}
+
+#[test]
+fn reports_a_failing_release_instead_of_returning_it() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Stuck("ws://launched");
+	let (Session, Seen) = Reported(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	BlockOn(Session.Dispose(Target));
+	let Seen = Seen.lock().unwrap();
+	assert_eq!(Seen.len(), 1);
+	assert!(Seen[0].contains("dispose"));
+}
+
+#[test]
+fn does_not_fail_when_its_own_reporter_panics() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Stuck("ws://launched");
+	let Session = Create(
+		FakeLauncher::Handing(Transport),
+		Pace.clone(),
+		Options {
+			Report:Arc::new(|_Target, _Why| panic!("the reporter is broken")),
+			DisposeBudget:Duration::from_secs(5),
+		},
+	);
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	BlockOn(Session.Dispose(Target));
+}
+
+#[test]
+fn reports_a_release_that_hangs_instead_of_waiting_for_it() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Stuck("ws://launched");
+	let (Session, Seen) = Reported(FakeLauncher::Handing(Transport), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	BlockOn(Session.Dispose(Target));
+	assert_eq!(Seen.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn resolves_for_a_target_this_session_never_opened() {
+	let Pace = TestPace::New();
+	let Session = Built(FakeLauncher::Handing(FakeTransport::New("ws://live")), Pace.clone());
+	BlockOn(Session.Dispose(Target {
+		Url:"https://example.test/".to_string(),
+		Ws:"ws://never-opened".to_string(),
+		Ownership:Ownership::Launched,
+	}));
+}
+
+#[test]
+fn resolves_even_when_handed_a_target_with_no_endpoint() {
+	let Pace = TestPace::New();
+	let Session = Built(FakeLauncher::Handing(FakeTransport::New("ws://live")), Pace.clone());
+	BlockOn(Session.Dispose(Target { Url:String::new(), Ws:String::new(), Ownership:Ownership::Attached }));
+}
+
+#[test]
+fn leaves_the_target_unusable_afterwards() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Answering("ws://live", json!(1));
+	let Session = Built(FakeLauncher::Handing(Transport.clone()), Pace.clone());
+	let Target = Opened(&Session, &Pace, Span(2_000)).expect("opened");
+	BlockOn(Session.Dispose(Target.clone()));
+	let Error = BlockOn(Session.Evaluate(&Target, "1 + 1", Call(&Pace, Span(2_000)))).expect_err("failed");
+	assert_eq!(Error.Code(), Code::Unavailable);
+	assert_eq!(Transport.Evaluations.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn the_page_error_rule_leaves_a_timeout_alone() {
+	// The classification rule itself, without a session: a deadline is the
+	// caller's own bound, not a fact about the socket, so a closed
+	// transport does not reclassify it.
+	let Why = Error::Timeout("the page did not answer", "the deadline passed");
+	let Classified = AgenticBrowserCDP::Fn::Classify::ClassifyPage(Why.clone(), true);
+	assert_eq!(Classified.Code(), Code::Timeout);
+	assert_eq!(Classified, Why);
+}
+
+--- FILE: rust/Crate/ChatDriver/Source/Fn.rs ---
+//! Functions: the expressions sent to a page, and the readers that turn what
+//! came back into the port's types.
+//!
+//! Nothing here decides anything. A reader answers `None` when the page
+//! answered something that is not the shape the port promised, and the driver
+//! turns that `None` into one of its four codes rather than into a panic: a
+//! provider that answers a number where a label was asked for must not be able
+//! to make `ask` fail outside the vocabulary the manifest declares.
+
+pub mod Expressions;
+pub mod Read;
+
+--- FILE: rust/Crate/ChatDriver/Source/Fn/Expressions.rs ---
+//! The expressions the driver sends to a page.
+//!
+//! These are the whole protocol between the capability and the browser. They
+//! are deliberately small and literal: each one reads one thing, returns a
+//! plain value, and touches nothing but `document`. That is what lets the same
+//! driver run against a real tab and against a fake, which answers by
+//! recognising the expression it was handed rather than by matching a string
+//! this crate happened to send.
+//!
+//! Two conventions hold across all of them:
+//!
+//! - a value the page does not have is `null`, never a guess. A missing toggle
+//!   is not "search", a missing label is not the model the caller asked for,
+//!   and a missing answer is not an empty answer;
+//! - the text they return is trimmed, because a page's own whitespace is not
+//!   part of what it said, and an answer that differs only in trailing spaces
+//!   has not changed.
+
+use crate::Struct::Selectors::Selectors;
+
+/// A string as a JavaScript literal, so a selector cannot end the expression.
+fn Literal(Value:&str) -> String { serde_json::to_string(Value).unwrap_or_else(|_| "\"\"".to_string()) }
+
+/// A label reader, repeated in the expressions that read one.
+fn Label() -> &'static str {
+	"(Element) => (Element.getAttribute(\"aria-label\") || Element.innerText || \"\").trim().toLowerCase()"
+}
+
+/// The composer's mode: the label of the single pressed toggle.
+///
+/// `null` when there is no toggle, when none is pressed, or when several are -
+/// a page that cannot say which mode it is in has not said it is in search
+/// mode.
+pub fn ReadMode(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Label = {};\n\tconst Pressed = [...document.querySelectorAll({})].filter((Toggle) => \
+		 Toggle.getAttribute(\"aria-pressed\") === \"true\");\n\treturn Pressed.length === 1 ? Label(Pressed[0]) : \
+		 null;\n}})()",
+		Label(),
+		Literal(&Selectors.Mode)
+	)
+}
+
+/// Press the mode toggle.
+///
+/// The toggle that reads `search` is preferred, so a product that renders one
+/// button per mode is switched rather than cycled; a single cycling toggle is
+/// the fallback. Pressing is not verifying - the caller reads the mode again
+/// and decides - so this returns whether anything was there to press.
+pub fn PressMode(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Label = {};\n\tconst Toggles = [...document.querySelectorAll({})];\n\tconst Wanted = \
+		 Toggles.find((Toggle) => Label(Toggle) === \"search\");\n\tconst Target = Wanted === undefined ? Toggles[0] \
+		 : Wanted;\n\tif (Target === undefined) return false;\n\tTarget.click();\n\treturn true;\n}})()",
+		Label(),
+		Literal(&Selectors.Mode)
+	)
+}
+
+/// The model label the composer will send to, as the page shows it.
+pub fn ReadModel(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Label = document.querySelector({});\n\tif (Label === null) return null;\n\treturn \
+		 (Label.innerText || Label.getAttribute(\"aria-label\") || \"\").trim();\n}})()",
+		Literal(&Selectors.Model)
+	)
+}
+
+/// Put the question in the composer.
+///
+/// A `textarea` or an `input` takes it as a value; anything else is treated as
+/// a contenteditable and takes it as text. Both paths dispatch `input`, because
+/// a composer that never saw an input event keeps its send control disabled and
+/// the question would sit there looking sent.
+pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
+	format!(
+		"(() => {{\n\tconst Composer = document.querySelector({});\n\tif (Composer === null) return false;\n\tconst \
+		 Text = {};\n\tif (Composer.tagName === \"TEXTAREA\" || Composer.tagName === \"INPUT\") Composer.value = \
+		 Text;\n\telse Composer.innerText = Text;\n\tComposer.dispatchEvent(new Event(\"input\", {{ bubbles: true \
+		 }}));\n\treturn true;\n}})()",
+		Literal(&Selectors.Composer),
+		Literal(Text)
+	)
+}
+
+/// Press the send control, and say what stopped it when it could not be
+/// pressed.
+///
+/// A disabled control is not clicked: the click would land on nothing, the page
+/// would look sent, and the caller would wait out its whole deadline for an
+/// answer that was never asked for.
+pub fn PressSubmit(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Submit = document.querySelector({});\n\tif (Submit === null) return \"missing\";\n\tif \
+		 (Submit.disabled === true) return \"disabled\";\n\tSubmit.click();\n\treturn \"sent\";\n}})()",
+		Literal(&Selectors.Submit)
+	)
+}
+
+/// How many answers the thread holds, and the text of the newest one.
+pub fn ReadAnswers(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Answers = [...document.querySelectorAll({})];\n\tif (Answers.length === 0) return {{ \
+		 count: 0, text: \"\" }};\n\tconst Last = Answers[Answers.length - 1];\n\treturn {{ count: Answers.length, \
+		 text: (Last.innerText || \"\").trim() }};\n}})()",
+		Literal(&Selectors.Answer)
+	)
+}
+
+/// The label of the control that collapses the newest answer, or `null`.
+///
+/// Only `Read more` counts. `Read less` is the label of the control that
+/// expands an answer again, so an answer already open is complete and its text
+/// is what the caller asked for.
+pub fn ReadCollapse(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Answers = [...document.querySelectorAll({})];\n\tif (Answers.length === 0) return \
+		 null;\n\tconst Last = Answers[Answers.length - 1];\n\tfor (const Control of [...Last.querySelectorAll({})]) \
+		 {{\n\t\tconst Label = (Control.getAttribute(\"aria-label\") || Control.innerText || \"\").trim();\n\t\tif \
+		 (/^read more$/i.test(Label)) return Label;\n\t}}\n\treturn null;\n}})()",
+		Literal(&Selectors.Answer),
+		Literal(&Selectors.Collapse)
+	)
+}
+
+/// The work the newest answer reports having done, in the order it did it.
+///
+/// Scoped to the newest answer for the same reason the collapse control is: a
+/// thread holds every turn's steps, and a document-wide read would hand back
+/// the trace of a question the caller did not ask. No answer yet is no steps.
+pub fn ReadTrace(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Answers = [...document.querySelectorAll({})];\n\tif (Answers.length === 0) return \
+		 [];\n\tconst Last = Answers[Answers.length - 1];\n\treturn [...Last.querySelectorAll({})].map((Step) => \
+		 ({{\n\t\tdepth: Number(Step.getAttribute(\"data-depth\") || 0),\n\t\tlabel: (Step.innerText || \
+		 \"\").trim(),\n\t\tdetail: (Step.getAttribute(\"data-detail\") || Step.getAttribute(\"aria-label\") || \
+		 \"\").trim(),\n\t}}));\n}})()",
+		Literal(&Selectors.Answer),
+		Literal(&Selectors.Trace)
+	)
+}
+
+/// The sources the newest answer cites.
+///
+/// Scoped to the newest answer, because the sources of an earlier turn are that
+/// turn's: an answer that cites nothing is a different fact from an answer
+/// whose thread happens to contain citations elsewhere.
+pub fn ReadSources(Selectors:&Selectors) -> String {
+	format!(
+		"(() => {{\n\tconst Answers = [...document.querySelectorAll({})];\n\tif (Answers.length === 0) return \
+		 [];\n\tconst Last = Answers[Answers.length - 1];\n\treturn [...Last.querySelectorAll({})].map((Source) => \
+		 ({{\n\t\turl: Source.getAttribute(\"href\") || \"\",\n\t\tlabel: (Source.innerText || \
+		 \"\").trim(),\n\t}}));\n}})()",
+		Literal(&Selectors.Answer),
+		Literal(&Selectors.Sources)
+	)
+}
+
+--- FILE: rust/Crate/ChatDriver/Source/Fn/Read.rs ---
+//! Turning what a page answered into the port's types, or into `None`.
+//!
+//! Every value the page returns crosses the port boundary as a
+//! [`serde_json::Value`]: the expressions are the driver's own, but the provider is
+//! not, and a provider that answers a number where a label was asked for must
+//! not be able to make `ask` fail outside the four codes the manifest declares.
+//! So a value is read as text when it is text and rendered as text when it is
+//! not - the rules then refuse it on its merits, with a code the manifest
+//! actually has.
+
+use serde_json::Value;
+
+use crate::Struct::Port::{Source, Step};
+
+/// One read of the thread.
+///
+/// A thread with no answers is `{ Count: 0, Text: "" }`, so "there is no answer
+/// yet" and "the page did not answer the question I asked" are different
+/// values. Folding them together would let a provider's wrong shape look like
+/// an empty thread and cost the caller its whole deadline before `not-ready`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Answers {
+	/// How many answers the thread holds.
+	pub Count:f64,
+	/// The last answer's text, trimmed; empty when there is none.
+	pub Text:String,
+}
+
+/// A value as text: as it is when it is text, rendered when it is not.
+pub fn TextOf(Value:Option<&Value>) -> String {
+	match Value {
+		None | Some(Value::Null) => String::new(),
+		Some(Value::String(Text)) => Text.clone(),
+		Some(Other) => Other.to_string(),
+	}
+}
+
+/// A label as it is compared: case and runs of whitespace are not part of a
+/// model's name, so both sides are folded. Nothing else is folded: a different
+/// model is a different model.
+pub fn Normalise(Value:Option<&Value>) -> String {
+	TextOf(Value).split_whitespace().collect::<Vec<&str>>().join(" ").to_lowercase()
+}
+
+/// What was read, for a failure's detail, without pretending `null` is a value.
+pub fn Describe(Value:Option<&Value>) -> String {
+	match Value {
+		None | Some(Value::Null) => "nothing".to_string(),
+		Some(Value::String(Text)) if Text.trim().is_empty() => "nothing".to_string(),
+		Some(Other) => Other.to_string(),
+	}
+}
+
+/// What a text read, for a failure's detail.
+pub fn DescribeText(Value:Option<&str>) -> String {
+	match Value {
+		None => "nothing".to_string(),
+		Some(Text) if Text.trim().is_empty() => "nothing".to_string(),
+		Some(Text) => serde_json::to_string(Text).unwrap_or_else(|_| format!("{Text:?}")),
+	}
+}
+
+/// One read of the thread, or `None` when the page answered with something that
+/// is not one.
+pub fn AsAnswers(Value:&Value) -> Option<Answers> {
+	let Object = Value.as_object()?;
+	let Count = Object.get("count")?.as_f64()?;
+	Some(Answers { Count, Text:TextOf(Object.get("text")) })
+}
+
+/// The steps the page reported, or `None` when it reported something else.
+pub fn AsSteps(Value:&Value) -> Option<Vec<Step>> {
+	let Entries = Value.as_array()?;
+	Some(
+		Entries
+			.iter()
+			.map(|Entry| {
+				let Object = Entry.as_object();
+				Step {
+					Depth:Object
+						.and_then(|Object| Object.get("depth"))
+						.and_then(Value::as_f64)
+						.map(|Depth| Depth as i64)
+						.unwrap_or(0),
+					Label:TextOf(Object.and_then(|Object| Object.get("label"))),
+					Detail:TextOf(Object.and_then(|Object| Object.get("detail"))),
+				}
+			})
+			.collect(),
+	)
+}
+
+/// The sources the page cited, or `None` when it cited something else.
+pub fn AsSources(Value:&Value) -> Option<Vec<Source>> {
+	let Entries = Value.as_array()?;
+	Some(
+		Entries
+			.iter()
+			.map(|Entry| {
+				let Object = Entry.as_object();
+				Source {
+					Url:TextOf(Object.and_then(|Object| Object.get("url"))),
+					Label:TextOf(Object.and_then(|Object| Object.get("label"))),
+				}
+			})
+			.collect(),
+	)
+}
+
+--- FILE: rust/Crate/ChatDriver/Source/Library.rs ---
+//! `agentic.chat.ask`: ask a chat product one question, and return the answer
+//! once the page has stopped changing it.
+//!
+//! The capability declares the port it needs. [`Struct::Port::Page`] is this
+//! crate's own trait - not `agentic-browser-cdp`'s `Browse`, and deliberately
+//! not a copy of it: the same three verbs, because a page is opened, asked and
+//! released, and it stops there. No ownership, no attach, no transport, no
+//! launcher. The composition root adapts a browser to this, and that is where
+//! "a browser this session launched" and "a tab somebody else owns" is settled.
+//!
+//! The dependency list is the enforcement: no browser crate and no executor.
+//! Time arrives as a [`AgenticRuntime::Call`] and a [`AgenticRuntime::Pace`],
+//! so a page that hangs is bounded by the thing that supplied the deadline
+//! rather than by a timer this crate reached for.
+
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+
+pub use crate::{
+	Fn::{
+		Expressions,
+		Expressions::{
+			PressMode,
+			PressSubmit,
+			ReadAnswers,
+			ReadCollapse,
+			ReadMode,
+			ReadModel,
+			ReadSources,
+			ReadTrace,
+			TypeQuestion,
+		},
+	},
+	Struct::{
+		Driver::{Create, Driver, Options},
+		Error::{Code, Error},
+		Port::{Answer, Chat, Failure, Mode, Page, Question, Source, Step, Target},
+		Selectors::{DefaultSelectors, Selectors},
+		Settlement::{Confirmations, Settlement, StableReads},
+	},
+};
+
+--- FILE: rust/Crate/ChatDriver/Source/Struct.rs ---
+//! Types: the port, its four codes, the selectors, the settlement state and the
+//! driver that applies them.
+
+pub mod Driver;
+pub mod Error;
+pub mod Port;
+pub mod Selectors;
+pub mod Settlement;
+
+--- FILE: rust/Crate/ChatDriver/Source/Struct/Driver.rs ---
+//! `agentic.chat.ask` over a page the composition root supplies.
+//!
+//! The four rules of the port, applied in the order that makes each of them
+//! mean something:
+//!
+//! 1. **The mode is a precondition.** The composer's toggle is read before
+//!    anything is typed. When it does not read `search` it is pressed once and
+//!    read again; when it still does not, the call fails with `wrong-mode` and
+//!    nothing was sent. One press, not a loop: a toggle that does not move on
+//!    the first press is a page that will not move on the fifth, and a retry
+//!    loop would spend the caller's deadline proving it.
+//! 2. **The model is a precondition.** The label is compared before anything is
+//!    typed, so a page set to another model is refused rather than asked.
+//! 3. **Completion is a rule, not a sleep.** The answer's text is read until
+//!    three consecutive reads report no change, which is [`Settlement`]. A
+//!    sleep would return whatever the network happened to have delivered; a
+//!    count of reads would return an answer that had stopped at a paragraph
+//!    break. A deadline hit is `not-ready`, never a partial answer presented as
+//!    a whole one.
+//! 4. **A collapsed answer is `truncated`.** The control that hides the rest of
+//!    an answer is looked for inside the newest answer once it has settled,
+//!    because the text in the DOM is then demonstrably not all of it.
+//!
+//! Everything the page does that is not one of those four is `not-ready`: a
+//! page that will not open, a page that fails mid-read, a composer that is not
+//! there, a send control that never enables. The manifest has four codes and
+//! the driver does not invent a fifth; the cause rides along in `detail`
+//! instead.
+//!
+//! Nothing here opens a browser, knows a transport, or reads an environment
+//! variable: the page is the composition root's to supply, and the fake in
+//! `Test/` is the proof that the rules hold without one.
+
+use std::{sync::Arc, time::Duration};
+
+use AgenticRuntime::{Bound, Call, Expired, FutureBox, Never, Pace};
+use serde_json::Value;
+
+use crate::{
+	Fn::{
+		Expressions::{
+			PressMode,
+			PressSubmit,
+			ReadAnswers,
+			ReadCollapse,
+			ReadMode,
+			ReadModel,
+			ReadSources,
+			ReadTrace,
+			TypeQuestion,
+		},
+		Read::{Answers, AsAnswers, AsSources, AsSteps, Describe, DescribeText, Normalise, TextOf},
+	},
+	Struct::{
+		Error::Error,
+		Port::{Answer, Chat, Page, Question, Target},
+		Selectors::{DefaultSelectors, Selectors},
+		Settlement::Settlement,
+	},
+};
+
+/// How long between two reads of an answer while it is being written.
+pub const DefaultPoll:Duration = Duration::from_millis(250);
+
+/// A release that has not finished in this long is reported, not waited on.
+pub const DefaultDisposeBudget:Duration = Duration::from_secs(5);
+
+/// Where a dispose failure goes, because it may not be returned.
+pub type Report = Arc<dyn Fn(&Target, &Error) + Send + Sync>;
+
+/// How one driver is configured.
+#[derive(Clone, Debug)]
+pub struct Options {
+	/// The page to open: the chat product's URL.
+	pub Url:String,
+	/// How the page is read.
+	pub Selectors:Selectors,
+	/// How long between two reads of the answer while it is being written.
+	pub Poll:Duration,
+	/// How long a release may take before it is reported as a failure.
+	pub DisposeBudget:Duration,
+}
+
+impl Options {
+	/// The defaults: the reference product's selectors, a quarter-second
+	/// between reads, and five seconds for a release.
+	pub fn New(Url:impl Into<String>) -> Self {
+		Self {
+			Url:Url.into(),
+			Selectors:DefaultSelectors(),
+			Poll:DefaultPoll,
+			DisposeBudget:DefaultDisposeBudget,
+		}
+	}
+}
+
+/// A `Chat` over one `Page`.
+pub struct Driver {
+	Page:Arc<dyn Page>,
+	Options:Options,
+	Pace:Arc<dyn Pace>,
+	Report:Report,
+}
+
+/// Build a `Chat` over one `Page`, on the pace the caller supplied.
+///
+/// The pace is a parameter for the same reason the clock is: a driver that
+/// reached for a timer would decide which executor is running it, and a driver
+/// whose waits are supplied can be tested by advancing a clock instead of
+/// sleeping.
+pub fn Create(Page:Arc<dyn Page>, Options:Options, Pace:Arc<dyn Pace>) -> Driver {
+	Driver {
+		Page,
+		Options,
+		Pace,
+		// Silent by default: a library that writes to the process's stderr behind a
+		// caller's back is a library that corrupts a protocol. The composition root
+		// supplies the record.
+		Report:Arc::new(|_, _| {}),
+	}
+}
+
+impl Driver {
+	/// The same driver, with somewhere to put a dispose failure.
+	pub fn Reporting(mut self, Report:Report) -> Self {
+		self.Report = Report;
+		self
+	}
+
+	/// How much of the caller's budget is left, for a failure's wording.
+	fn Budget(&self, Call:&Call) -> Duration { Call.Remaining(self.Pace.as_ref()) }
+
+	/// One expression, run inside whatever budget is left.
+	async fn Probe(
+		&self,
+		Phase:&str,
+		Expression:String,
+		Target:&Target,
+		Call:&Call,
+		Budget:Duration,
+	) -> Result<Value, Error> {
+		if Call.Cancelled() {
+			return Err(Error::NotReady(
+				format!("{Phase} was cancelled before it started"),
+				"the caller's signal had already fired",
+			));
+		}
+		if Call.Expired(self.Pace.as_ref()) {
+			return Err(Error::NotReady(
+				format!("{Phase} exceeded the {}ms deadline", Budget.as_millis()),
+				"the page was still working when the budget ran out",
+			));
+		}
+		let Work = self.Page.Evaluate(Target, &Expression, Call.clone());
+		match Bound(Work, Call, self.Pace.as_ref()).await {
+			Ok(Ok(Value)) => Ok(Value),
+			Ok(Err(Failure)) => {
+				Err(Error::NotReady(
+					format!("{Phase} could not be read from the page"),
+					Failure.Message,
+				))
+			},
+			Err(Expired::Timeout) => {
+				Err(Error::NotReady(
+					format!("{Phase} exceeded the {}ms deadline", Budget.as_millis()),
+					"the page never answered",
+				))
+			},
+			Err(Expired::Cancelled) => {
+				Err(Error::NotReady(
+					format!("{Phase} was cancelled by the caller"),
+					"the signal fired while the page was being asked",
+				))
+			},
+		}
+	}
+
+	/// Open the configured page, bounded.
+	async fn Open(&self, Call:&Call, Budget:Duration) -> Result<Target, Error> {
+		if Call.Cancelled() {
+			return Err(Error::NotReady(
+				"open was cancelled before it started",
+				"the caller's signal had already fired",
+			));
+		}
+		if Call.Expired(self.Pace.as_ref()) {
+			return Err(Error::NotReady(
+				format!("open exceeded the {}ms deadline", Budget.as_millis()),
+				"the page was still working when the budget ran out",
+			));
+		}
+		let Work = self.Page.Open(&self.Options.Url, Call.clone());
+		match Bound(Work, Call, self.Pace.as_ref()).await {
+			Ok(Ok(Target)) => Ok(Target),
+			Ok(Err(Failure)) => Err(Error::NotReady("the chat page could not be opened", Failure.Message)),
+			Err(Expired::Timeout) => {
+				Err(Error::NotReady("the chat page could not be opened", "the page never answered"))
+			},
+			Err(Expired::Cancelled) => {
+				Err(Error::NotReady(
+					"the chat page could not be opened",
+					"the caller gave up before the page opened",
+				))
+			},
+		}
+	}
+
+	/// One read of the thread, refusing a page that answers something else.
+	async fn ReadAnswers(&self, Phase:&str, Target:&Target, Call:&Call, Budget:Duration) -> Result<Answers, Error> {
+		let Expression = ReadAnswers(&self.Options.Selectors);
+		let Value = self.Probe(Phase, Expression, Target, Call, Budget).await?;
+		AsAnswers(&Value).ok_or_else(|| {
+			Error::NotReady(
+				format!("{Phase} could not be read from the page"),
+				format!("the page answered {} instead of a thread", Describe(Some(&Value))),
+			)
+		})
+	}
+
+	/// Release the target, bounded, and never fail.
+	async fn Release(&self, Target:&Target) {
+		let Deadline = self
+			.Pace
+			.Now()
+			.checked_add(self.Options.DisposeBudget)
+			.unwrap_or_else(|| self.Pace.Now());
+		let Call = Call { Deadline, Cancellation:Arc::new(Never) };
+		let Work = self.Page.Dispose(Target.clone());
+		if let Err(Why) = Bound(Work, &Call, self.Pace.as_ref()).await {
+			let Error = Error::NotReady(
+				format!(
+					"dispose of {} exceeded its {}ms budget",
+					Target.Url,
+					self.Options.DisposeBudget.as_millis()
+				),
+				Why.Name(),
+			);
+			// A reporter that panics must not turn a release into a failure the
+			// caller never asked for. Under `panic = "abort"` this cannot catch
+			// anything, which is the stated cost of the release profile.
+			let Report = self.Report.clone();
+			let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+				Report(Target, &Error);
+			}));
+		}
+	}
+
+	/// Everything between an open page and a released one.
+	async fn Body(&self, Question:&Question, Call:&Call, Budget:Duration, Target:&Target) -> Result<Answer, Error> {
+		let Selectors = &self.Options.Selectors;
+
+		// The mode is a precondition, not a preference.
+		let mut Mode = self.Probe("mode", ReadMode(Selectors), Target, Call, Budget).await?;
+		if Normalise(Some(&Mode)) != "search" {
+			self.Probe("mode press", PressMode(Selectors), Target, Call, Budget).await?;
+			Mode = self.Probe("mode", ReadMode(Selectors), Target, Call, Budget).await?;
+			if Normalise(Some(&Mode)) != "search" {
+				return Err(Error::WrongMode(
+					"the composer does not offer search mode",
+					format!("after pressing the toggle it reads {}", Describe(Some(&Mode))),
+				));
+			}
+		}
+
+		// The model is a precondition, and it is compared before the send.
+		let Label = self.Probe("model", ReadModel(Selectors), Target, Call, Budget).await?;
+		let Wanted = Value::String(Question.Model.clone());
+		if Normalise(Some(&Label)) != Normalise(Some(&Wanted)) {
+			return Err(Error::WrongModel(
+				"the page is set to a different model",
+				format!(
+					"wanted {}, the page reads {}",
+					serde_json::to_string(&Question.Model).unwrap_or_else(|_| format!("{:?}", Question.Model)),
+					Describe(Some(&Label))
+				),
+			));
+		}
+
+		// Correlate the turn: what is already in the thread is not this answer.
+		let Before = self.ReadAnswers("answers", Target, Call, Budget).await?;
+
+		let Typed = self
+			.Probe("composer", TypeQuestion(Selectors, &Question.Text), Target, Call, Budget)
+			.await?;
+		if Typed.as_bool() != Some(true) {
+			return Err(Error::NotReady(
+				"the composer could not be found",
+				format!("nothing matched {:?}", Selectors.Composer),
+			));
+		}
+
+		let Sent = self.Probe("submit", PressSubmit(Selectors), Target, Call, Budget).await?;
+		match Sent.as_str() {
+			Some("sent") => {},
+			Some("disabled") => {
+				return Err(Error::NotReady(
+					"the question could not be sent",
+					"the send control is disabled after the question was typed",
+				));
+			},
+			_ => {
+				return Err(Error::NotReady(
+					"the question could not be sent",
+					format!("nothing matched {:?}", Selectors.Submit),
+				));
+			},
+		}
+
+		// Completion is stable text: unchanged for three consecutive reads.
+		let mut Progress = Settlement::Empty;
+		let Text = loop {
+			// The deadline is checked here, not only inside the read, so a page
+			// that keeps writing is reported as an answer that
+			// never settled rather than as one slow read.
+			if Call.Expired(self.Pace.as_ref()) {
+				return Err(Error::NotReady(
+					format!("the answer did not settle within the {}ms deadline", Budget.as_millis()),
+					format!("the last read was {}", DescribeText(Progress.Text())),
+				));
+			}
+			let Read = self.ReadAnswers("answer", Target, Call, Budget).await?;
+			let Current = if Read.Count > Before.Count { Some(Read.Text.as_str()) } else { None };
+			if Progress.Observe(Current) {
+				break Progress.Text().unwrap_or_default().to_string();
+			}
+			let Wait = self.Options.Poll.min(Call.Remaining(self.Pace.as_ref()));
+			self.Pace.Sleep(Wait).await;
+		};
+
+		// A collapsed answer is not the whole answer.
+		let Collapsed = self.Probe("collapse", ReadCollapse(Selectors), Target, Call, Budget).await?;
+		let Collapsed = TextOf(Some(&Collapsed)).trim().to_string();
+		if !Collapsed.is_empty() {
+			return Err(Error::Truncated(
+				"the answer is collapsed behind a control",
+				format!(
+					"the page shows {} over {} characters",
+					serde_json::to_string(&Collapsed).unwrap_or_else(|_| format!("{Collapsed:?}")),
+					Text.chars().count()
+				),
+			));
+		}
+
+		let Trace = self.Probe("trace", ReadTrace(Selectors), Target, Call, Budget).await?;
+		let Trace = AsSteps(&Trace).ok_or_else(|| {
+			Error::NotReady(
+				"the trace could not be read from the page",
+				format!("the page answered {} instead of a list of steps", Describe(Some(&Trace))),
+			)
+		})?;
+
+		let Sources = self.Probe("sources", ReadSources(Selectors), Target, Call, Budget).await?;
+		let Sources = AsSources(&Sources).ok_or_else(|| {
+			Error::NotReady(
+				"the sources could not be read from the page",
+				format!("the page answered {} instead of a list of sources", Describe(Some(&Sources))),
+			)
+		})?;
+
+		let Model = {
+			let Read = TextOf(Some(&Label)).trim().to_string();
+			if Read.is_empty() { Question.Model.trim().to_string() } else { Read }
+		};
+
+		Ok(Answer { Text, Trace, Sources, Model, Mode:"search".to_string() })
+	}
+
+	/// The whole call, with the release guaranteed on every path.
+	async fn Perform(&self, Question:Question, Call:Call) -> Result<Answer, Error> {
+		let Budget = self.Budget(&Call);
+
+		// The port is defined for search mode, so a question that asks for
+		// another one is refused here, before a page is opened: there
+		// is nothing to verify against a toggle the driver is not
+		// willing to use.
+		if !Question.Mode.IsSearch() {
+			return Err(Error::WrongMode(
+				"this port only asks in search mode",
+				format!(
+					"the question asked for {}",
+					serde_json::to_string(Question.Mode.Name())
+						.unwrap_or_else(|_| format!("{:?}", Question.Mode.Name()))
+				),
+			));
+		}
+
+		let Target = self.Open(&Call, Budget).await?;
+		let Outcome = self.Body(&Question, &Call, Budget, &Target).await;
+		self.Release(&Target).await;
+		Outcome
+	}
+}
+
+impl Chat for Driver {
+	fn Ask<'a>(&'a self, Question:Question, Call:Call) -> FutureBox<'a, Result<Answer, Error>> {
+		Box::pin(async move { self.Perform(Question, Call).await })
+	}
+}
+
+--- FILE: rust/Crate/ChatDriver/Source/Struct/Error.rs ---
+//! The four failure modes `module.json` declares, and no others.
+//!
+//! One enum, one variant per code, `detail` kept apart from the message in
+//! every one of them.
+
+use std::fmt;
+
+/// The codes, in the order the manifest names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Code {
+	/// The page could not answer.
+	NotReady,
+	/// The composer would not enter search mode.
+	WrongMode,
+	/// The page is set to a different model.
+	WrongModel,
+	/// The answer is collapsed behind a control.
+	Truncated,
+}
+
+impl Code {
+	/// The string the manifest uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			Code::NotReady => "not-ready",
+			Code::WrongMode => "wrong-mode",
+			Code::WrongModel => "wrong-model",
+			Code::Truncated => "truncated",
+		}
+	}
+
+	/// Every code, so a harness can compare the manifest against the type.
+	pub const fn All() -> [Code; 4] { [Code::NotReady, Code::WrongMode, Code::WrongModel, Code::Truncated] }
+
+	/// The code a manifest string names, if it names one of the four.
+	pub fn Parse(Value:&str) -> Option<Code> { Code::All().into_iter().find(|Code| Code.Name() == Value) }
+}
+
+/// The one error type an `Ask` call fails with.
+///
+/// `NotReady` is the one code that covers a provider's failures as well,
+/// because the manifest has no fifth code and "the page could not answer" is
+/// what a dead transport, a navigation failure and a slow page all mean to this
+/// capability. The cause is carried in `detail` rather than flattened, so the
+/// difference survives.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+	/// The page is not in a state where it can answer.
+	NotReady {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed, kept apart from the sentence.
+		Detail:String,
+	},
+	/// The composer would not enter search mode, so nothing was sent.
+	WrongMode {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+	/// The page is set to a different model, so nothing was sent.
+	WrongModel {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+	/// The answer is collapsed, so the text in the DOM is only part of it.
+	Truncated {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+}
+
+impl Error {
+	/// A page that could not answer.
+	pub fn NotReady(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::NotReady { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// A composer that would not enter search mode.
+	pub fn WrongMode(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::WrongMode { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// A page set to a different model.
+	pub fn WrongModel(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::WrongModel { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// An answer that is only part of itself.
+	pub fn Truncated(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Truncated { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// The code this failure carries.
+	pub const fn Code(&self) -> Code {
+		match self {
+			Error::NotReady { .. } => Code::NotReady,
+			Error::WrongMode { .. } => Code::WrongMode,
+			Error::WrongModel { .. } => Code::WrongModel,
+			Error::Truncated { .. } => Code::Truncated,
+		}
+	}
+
+	/// The sentence a human reads.
+	pub fn Message(&self) -> &str {
+		match self {
+			Error::NotReady { Message, .. }
+			| Error::WrongMode { Message, .. }
+			| Error::WrongModel { Message, .. }
+			| Error::Truncated { Message, .. } => Message,
+		}
+	}
+
+	/// What was observed, which may be empty.
+	pub fn Detail(&self) -> &str {
+		match self {
+			Error::NotReady { Detail, .. }
+			| Error::WrongMode { Detail, .. }
+			| Error::WrongModel { Detail, .. }
+			| Error::Truncated { Detail, .. } => Detail,
+		}
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(Formatter, "{}: {}", self.Code().Name(), self.Message())
+	}
+}
+
+impl std::error::Error for Error {}
+
+--- FILE: rust/Crate/ChatDriver/Source/Struct/Port.rs ---
+//! The port `agentic.chat.ask` promises, written the way its consumer asks for
+//! it.
+//!
+//! `module.json` names four errors - `not-ready`, `wrong-mode`, `wrong-model`
+//! and `truncated` - and [`crate::Struct::Error`] is where they live. A caller
+//! narrows on the variant; anything a page does that is not one of those four
+//! is mapped onto one of them at the boundary, so a consumer never has to guess
+//! what a failure meant.
+//!
+//! The port states more than data shapes, because two drivers that agreed on
+//! the shapes alone would still behave differently:
+//!
+//! - **A question is answered or it is not.** `Ask` returns an answer whose
+//!   text the page had stopped changing, or it fails. A partial answer is never
+//!   returned as a whole one, and an empty string is never an answer.
+//! - **Mode and model are preconditions.** The composer is in search mode and
+//!   set to the requested model before anything is typed, so a wrong answer is
+//!   refused rather than produced.
+//! - **The answer is the one this question caused.** A thread already holds the
+//!   answers to earlier questions, so the turn is correlated by counting them
+//!   before the send and reading only the one that appeared after it.
+//! - **A collapsed answer is refused.** When the page hides the rest of an
+//!   answer behind a control, the text in the DOM is not the answer, and
+//!   returning it would be a quiet lie.
+//! - **Cancellation is `not-ready`.** A signal that fires and a deadline that
+//!   passes are the same event to a consumer - the answer did not arrive - so
+//!   both are `not-ready`. `detail` says which one happened.
+
+use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
+
+/// One step of the work an answer reports having done.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Step {
+	/// Nesting: a step inside a step is one level deeper than it.
+	pub Depth:i64,
+	/// What the step is called, as the page labels it.
+	pub Label:String,
+	/// The page's own note about it - a duration, a state - when it has one.
+	pub Detail:String,
+}
+
+/// One cited source behind an answer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Source {
+	/// Where the citation points.
+	pub Url:String,
+	/// How the page labels the citation.
+	pub Label:String,
+}
+
+/// The composer mode a question must be asked in.
+///
+/// The port is defined for search only. An agent mode answers by running tools
+/// on the caller's behalf, which is a different capability with different costs
+/// and a different budget, so a driver that silently used one would be spending
+/// somebody else's allowance. [`Mode::Other`] exists so that asking for one is
+/// a refusal with a code rather than a value the type system quietly forbids: a
+/// caller migrating from another driver learns why from `wrong-mode`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Mode {
+	/// The one mode this port asks in.
+	Search,
+	/// Some other mode, named as the caller named it.
+	Other(String),
+}
+
+impl Mode {
+	/// The mode's name, as a caller would write it.
+	pub fn Name(&self) -> &str {
+		match self {
+			Mode::Search => "search",
+			Mode::Other(Name) => Name,
+		}
+	}
+
+	/// Whether this is the mode the port asks in.
+	pub fn IsSearch(&self) -> bool { matches!(self, Mode::Search) }
+}
+
+/// What a caller asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Question {
+	/// The question, sent as written.
+	pub Text:String,
+	/// The composer mode the question must be asked in.
+	pub Mode:Mode,
+	/// The model the answer must come from, matched against the page's label.
+	pub Model:String,
+}
+
+/// What a settled turn produced.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Answer {
+	/// The answer's text, read once the page stopped changing it.
+	pub Text:String,
+	/// The work the answer reports having done, in the order it did it.
+	pub Trace:Vec<Step>,
+	/// The sources the answer cites.
+	pub Sources:Vec<Source>,
+	/// The model label the page showed when the question was sent.
+	pub Model:String,
+	/// The composer mode the page was in when the question was sent.
+	pub Mode:String,
+}
+
+/// The handle a page is bound to.
+///
+/// The driver passes it back to the `Page` that issued it and never reads it,
+/// so a provider may hang whatever it needs there - a target id, a session, a
+/// socket. `Url` is the one field the port keeps, because a failure report that
+/// cannot say which page failed is not a report.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Target {
+	/// The page this session is bound to.
+	pub Url:String,
+}
+
+/// What a page operation reports when it fails.
+///
+/// A page is not this capability, so it does not speak this capability's four
+/// codes. It says what it observed, and the driver maps that onto `not-ready`
+/// with the observation in `detail` - which is the whole point of keeping the
+/// detail apart from the sentence.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Failure {
+	/// The sentence a human reads.
+	pub Message:String,
+	/// What was observed.
+	pub Detail:String,
+}
+
+impl Failure {
+	/// A failure with a sentence and nothing observed.
+	pub fn Of(Message:impl Into<String>) -> Self { Self { Message:Message.into(), Detail:String::new() } }
+}
+
+/// The browser as this capability needs it: one page, asked one expression at a
+/// time.
+///
+/// What the port demands of an implementation:
+///
+/// - `Evaluate` returns the value of the expression, not a wrapper around it,
+///   and the expression is a complete JavaScript expression whose value is
+///   JSON-serialisable. `document` is the only host object it may touch, so a
+///   page that is a tab and a page that is a fixture answer the same driver.
+/// - the [`Call`] is honoured: a page that never answers is failed, not
+///   awaited. The driver checks the same deadline on its side, so an
+///   implementation that ignores it cannot quietly turn a bounded call into an
+///   unbounded one.
+/// - `Dispose` never fails. A release that fails is a fact about the browser,
+///   and a caller that already has its answer must not lose it to a failing
+///   cleanup.
+pub trait Page: Send + Sync {
+	/// Open the page at `Url`.
+	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>>;
+	/// Evaluate one expression in the page and return its value.
+	fn Evaluate<'a>(
+		&'a self,
+		Target:&'a Target,
+		Expression:&'a str,
+		Call:Call,
+	) -> FutureBox<'a, Result<Value, Failure>>;
+	/// Release everything the page holds. Never fails.
+	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()>;
+}
+
+/// The one port this capability offers.
+pub trait Chat: Send + Sync {
+	/// Ask one question and return the answer once the page has settled.
+	fn Ask<'a>(&'a self, Question:Question, Call:Call) -> FutureBox<'a, Result<Answer, crate::Struct::Error::Error>>;
+}

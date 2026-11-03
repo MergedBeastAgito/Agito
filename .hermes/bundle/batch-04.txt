@@ -1,0 +1,4030 @@
+--- FILE: rust/Crate/ChatDriver/Source/Struct/Selectors.rs ---
+//! Where a chat product keeps the things this driver has to read.
+//!
+//! A driver written against one product's markup is not reusable, and a driver
+//! written against nothing cannot apply its rules at all: the mode and the
+//! model are preconditions because there is a toggle and a label to read, and
+//! an answer is `truncated` because there is a control that hides the rest of
+//! it. So the shape is fixed here and the strings are configuration.
+//!
+//! A selector may be a CSS selector list - `"textarea, [contenteditable]"` -
+//! which is how one product is covered by one entry without the driver knowing
+//! which of the two a given page used.
+
+/// Where one chat product keeps the things this driver reads.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Selectors {
+	/// The composer's mode toggles. Each carries its mode as its label and
+	/// `aria-pressed="true"` on the one that is active, so the mode is the
+	/// label of the single pressed toggle, and unknown when no toggle is
+	/// pressed or several are.
+	pub Mode:String,
+	/// The element naming the model the composer will send to.
+	pub Model:String,
+	/// Where the question is typed: a `textarea`, an `input` or a
+	/// contenteditable.
+	pub Composer:String,
+	/// The control that sends the question.
+	pub Submit:String,
+	/// Every answer in the thread, in document order; the last one is the
+	/// newest.
+	pub Answer:String,
+	/// The control that collapses an answer, searched for *inside* the answer
+	/// container. Not across the page: an earlier answer's control is not this
+	/// answer's.
+	pub Collapse:String,
+	/// One step of the answer's trace, searched for *inside* the newest answer.
+	pub Trace:String,
+	/// One cited source: an anchor whose `href` is the citation, searched for
+	/// *inside* the newest answer, for the same reason as `Trace`.
+	pub Sources:String,
+}
+
+/// A chat product whose composer footer names its mode and its model.
+pub fn DefaultSelectors() -> Selectors {
+	Selectors {
+		Mode:"[data-command-menu-control]".to_string(),
+		Model:"[data-testid='model-selector'], [aria-label='Model']".to_string(),
+		Composer:"textarea, [contenteditable='true']".to_string(),
+		Submit:"[data-testid='submit-button'], button[aria-label='Submit']".to_string(),
+		Answer:"[data-testid='answer'], [role='article']".to_string(),
+		Collapse:"button".to_string(),
+		Trace:"[data-testid='trace-step'], [role='listitem']".to_string(),
+		Sources:"a[href^='http']".to_string(),
+	}
+}
+
+impl Default for Selectors {
+	fn default() -> Self { DefaultSelectors() }
+}
+
+--- FILE: rust/Crate/ChatDriver/Source/Struct/Settlement.rs ---
+//! Completion as an explicit state, not a loop with a counter.
+//!
+//! Three consecutive reads must report no change before an answer counts as
+//! settled, and the counter counts *comparisons*: the third read that equals
+//! the one before it is what settles the answer, so a page that delivers its
+//! last token and stops is read four times in all. Fewer than three is a page
+//! that paused mid-sentence; more than three is latency nobody asked for.
+//!
+//! Written as a state machine because a loop with a counter cannot say what it
+//! is doing: `Reading { Text, Confirmed }` is a claim about the page - "this
+//! text has been confirmed twice" - and `Settled(Text)` is the only state a
+//! caller may read an answer out of. The empty state is not an answer either: a
+//! thread with no answer yet resets the machine rather than confirming an empty
+//! string.
+
+/// How many comparisons must agree before an answer counts as settled.
+pub const StableReads:u8 = 3;
+
+/// How many consecutive reads have confirmed the text currently held.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Confirmations(u8);
+
+impl Confirmations {
+	/// No confirmation yet: the text was just read for the first time.
+	pub const fn First() -> Self { Self(0) }
+
+	/// One more read that agreed.
+	pub const fn Next(self) -> Self { Self(self.0.saturating_add(1)) }
+
+	/// How many comparisons have agreed.
+	pub const fn Count(self) -> u8 { self.0 }
+
+	/// Whether this many confirmations is enough to settle an answer.
+	pub const fn Settles(self) -> bool { self.0 >= StableReads }
+}
+
+/// What the driver knows about the answer it is reading.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Settlement {
+	/// Nothing has been read yet, or the newest answer is still empty.
+	#[default]
+	Empty,
+	/// Text the page has shown, and how many reads have agreed on it.
+	Reading {
+		/// The text as last read.
+		Text:String,
+		/// How many consecutive reads have confirmed it.
+		Confirmed:Confirmations,
+	},
+	/// Text three reads agreed on. This is the only state an answer comes from.
+	Settled(String),
+}
+
+impl Settlement {
+	/// Fold one read into the state, and say whether it is settled.
+	///
+	/// `Current` is the answer's text when this question caused a new answer,
+	/// and `None` when the thread has not grown: an unchanged thread is not
+	/// a confirmation of anything, so it resets the state instead of
+	/// advancing it.
+	pub fn Observe(&mut self, Current:Option<&str>) -> bool {
+		let Current = match Current {
+			Some(Text) if !Text.is_empty() => Text,
+			_ => {
+				*self = Settlement::Empty;
+				return false;
+			},
+		};
+		*self = match std::mem::take(self) {
+			Settlement::Reading { Text, Confirmed } if Text == Current => {
+				let Confirmed = Confirmed.Next();
+				if Confirmed.Settles() {
+					Settlement::Settled(Current.to_string())
+				} else {
+					Settlement::Reading { Text, Confirmed }
+				}
+			},
+			_ => Settlement::Reading { Text:Current.to_string(), Confirmed:Confirmations::First() },
+		};
+		matches!(self, Settlement::Settled(_))
+	}
+
+	/// The text this state holds, if it holds one.
+	pub fn Text(&self) -> Option<&str> {
+		match self {
+			Settlement::Empty => None,
+			Settlement::Reading { Text, .. } => Some(Text),
+			Settlement::Settled(Text) => Some(Text),
+		}
+	}
+}
+
+--- FILE: rust/Crate/ChatDriver/Test/Chat.rs ---
+//! `agentic.chat.ask`, exercised against a scripted page and a clock the test
+//! owns.
+//!
+//! No browser, no network and no sleeping: a page that never answers is a page
+//! whose script says so, and a deadline is passed because the test advanced its
+//! own clock.
+
+mod Fake;
+
+use std::{
+	sync::{Arc, Mutex, atomic::Ordering},
+	time::Duration,
+};
+
+use AgenticChatDriver::{Answer, Chat, Code, Create, DefaultSelectors, Driver, Error, Mode, Options, Question};
+use AgenticRuntime::{BlockOn, Call, Clock, Never, Signal};
+use Fake::{Answers, FakePage, Release, Script, TestPace};
+use serde_json::json;
+
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
+
+fn Asked(Text:&str, Model:&str) -> Question {
+	Question { Text:Text.to_string(), Mode:Mode::Search, Model:Model.to_string() }
+}
+
+fn Built(Page:&Arc<FakePage>, Pace:&Arc<TestPace>) -> Driver {
+	Create(
+		Page.clone(),
+		Options {
+			Url:"https://chat.example/".to_string(),
+			Selectors:DefaultSelectors(),
+			Poll:Span(250),
+			DisposeBudget:Duration::from_secs(5),
+		},
+		Pace.clone(),
+	)
+}
+
+fn Ask(Driver:&Driver, Pace:&TestPace, Question:Question, Budget:Duration) -> Result<Answer, Error> {
+	let Call = Call::Within(Budget, Pace, Arc::new(Never));
+	BlockOn(Driver.Ask(Question, Call))
+}
+
+#[test]
+fn the_port_declares_exactly_the_errors_the_manifest_promises() {
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["not-ready", "wrong-mode", "wrong-model", "truncated"]);
+	let Manifest = include_str!("../module.json");
+	for Name in Declared {
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
+	}
+}
+
+#[test]
+fn returns_the_answer_its_trace_and_its_sources() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "gpt-6.1 sol", "Because."));
+	let Driver = Built(&Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "gpt-6.1 sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Text, "Because.");
+	assert_eq!(Answer.Model, "gpt-6.1 sol");
+	assert_eq!(Answer.Mode, "search");
+	assert_eq!(Answer.Trace, vec![]);
+	assert_eq!(Answer.Sources, vec![]);
+}
+
+#[test]
+fn opens_the_configured_page_and_disposes_the_target_once() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "Because."));
+	let Driver = Built(&Page, &Pace);
+	Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+	assert_eq!(Page.Opens.load(Ordering::SeqCst), 1);
+	assert_eq!(Page.Releases.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn presses_the_toggle_when_the_composer_is_not_in_search_mode() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "Because.");
+	Script.Mode = json!("Computer");
+	Script.ModeAfterPress = json!("Search");
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Mode, "search");
+	assert_eq!(Page.Presses.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn refuses_with_wrong_mode_and_sends_nothing_when_the_toggle_never_reads_search() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "Because.");
+	Script.Mode = json!("Computer");
+	Script.ModeAfterPress = json!("Computer");
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::WrongMode);
+	assert!(Error.Detail().contains("\"Computer\""));
+	assert!(!Page.Typed(), "nothing was typed");
+	assert!(!Page.Sent(), "nothing was sent");
+}
+
+#[test]
+fn refuses_a_question_that_asks_for_a_mode_this_port_does_not_offer() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "Because."));
+	let Driver = Built(&Page, &Pace);
+	let Question = Question {
+		Text:"why".to_string(),
+		Mode:Mode::Other("computer".to_string()),
+		Model:"sol".to_string(),
+	};
+	let Error = Ask(&Driver, &Pace, Question, Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::WrongMode);
+	assert!(Error.Detail().contains("computer"));
+	assert_eq!(Page.Opens.load(Ordering::SeqCst), 0, "no page was opened");
+}
+
+#[test]
+fn refuses_with_wrong_model_and_sends_nothing() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "another-model", "Because."));
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::WrongModel);
+	assert!(Error.Detail().contains("another-model"));
+	assert!(!Page.Typed(), "nothing was typed");
+	assert_eq!(Page.Releases.load(Ordering::SeqCst), 1, "the page was released");
+}
+
+#[test]
+fn matches_the_label_across_case_and_whitespace_and_reports_what_it_read() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "  GPT-6.1   SOL ", "Because.");
+	Script.Model = json!("  GPT-6.1   SOL ");
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "gpt-6.1 sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Model, "GPT-6.1   SOL");
+}
+
+#[test]
+fn returns_the_last_text_of_an_answer_that_stops_changing() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "answer"));
+	let Driver = Built(&Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Text, "answer");
+	// One correlation read plus four answer reads: the fourth is the third
+	// comparison that agreed.
+	assert_eq!(Page.Reads.load(Ordering::SeqCst), 5);
+}
+
+#[test]
+fn reads_the_answer_this_question_caused_not_the_one_already_in_the_thread() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Thread = Answers::Fixed(vec![
+		json!({ "count": 1, "text": "an earlier answer" }),
+		json!({ "count": 2, "text": "this answer" }),
+	]);
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Text, "this answer");
+}
+
+#[test]
+fn reads_the_steps_and_sources_of_this_turn() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Trace = json!([
+		{ "depth": 0, "label": "Finished", "detail": "12s" },
+		{ "depth": 1, "label": "Searching", "detail": "" },
+	]);
+	Script.Sources = json!([{ "url": "https://example.test/a", "label": "A source" }]);
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Trace.len(), 2);
+	assert_eq!(Answer.Trace[0].Label, "Finished");
+	assert_eq!(Answer.Trace[0].Detail, "12s");
+	assert_eq!(Answer.Trace[1].Depth, 1);
+	assert_eq!(Answer.Sources.len(), 1);
+	assert_eq!(Answer.Sources[0].Url, "https://example.test/a");
+	assert_eq!(Answer.Sources[0].Label, "A source");
+}
+
+#[test]
+fn refuses_with_not_ready_when_the_answer_never_stops_changing() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Thread = Answers::Changing;
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(1_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Message().contains("did not settle"));
+}
+
+#[test]
+fn refuses_before_asking_when_the_deadline_has_already_passed() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "answer"));
+	let Driver = Built(&Page, &Pace);
+	let Call = Call { Deadline:Pace.Now() - Span(1), Cancellation:Arc::new(Never) };
+	let Error = BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert_eq!(Page.Opens.load(Ordering::SeqCst), 0, "no page was opened");
+	assert!(Page.Asked().is_empty(), "no expression was sent");
+}
+
+#[test]
+fn hands_the_page_the_callers_own_deadline() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "answer"));
+	let Driver = Built(&Page, &Pace);
+	let Call = Call::Within(Span(3_000), Pace.as_ref(), Arc::new(Never));
+	let Deadline = Call.Deadline;
+	BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect("answered");
+	assert_eq!(*Page.Deadline.lock().unwrap(), Some(Deadline));
+}
+
+#[test]
+fn refuses_with_truncated_when_the_answer_hides_behind_a_read_more_control() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Collapse = json!("Read more");
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::Truncated);
+	assert!(Error.Detail().contains("Read more"));
+}
+
+#[test]
+fn reports_not_ready_when_the_page_cannot_be_opened() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.FailOpen = Some("connection refused".to_string());
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert_eq!(Error.Detail(), "connection refused");
+	assert_eq!(Page.Releases.load(Ordering::SeqCst), 0, "nothing to release");
+}
+
+#[test]
+fn reports_not_ready_when_the_page_fails_while_it_is_being_read() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.FailEvaluate = Some("the socket closed".to_string());
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert_eq!(Error.Detail(), "the socket closed");
+	assert_eq!(Page.Releases.load(Ordering::SeqCst), 1, "the page was released");
+}
+
+#[test]
+fn refuses_to_press_a_send_control_that_never_enables() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Submit = json!("disabled");
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("disabled"));
+}
+
+#[test]
+fn reports_not_ready_before_opening_anything_when_the_signal_already_fired() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "answer"));
+	let Driver = Built(&Page, &Pace);
+	let Signal = Signal::New();
+	Signal.Fire();
+	let Call = Call { Deadline:Pace.Now() + Span(5_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("signal"));
+	assert_eq!(Page.Opens.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn reports_not_ready_when_the_caller_gives_up_while_the_answer_is_arriving() {
+	let Signal = Signal::New();
+	let Pace = TestPace::New().Firing(Signal.clone());
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Thread = Answers::Changing;
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Call = Call { Deadline:Pace.Now() + Span(30_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("signal"));
+	assert!(Page.Reads.load(Ordering::SeqCst) < 5, "it stopped early");
+}
+
+#[test]
+fn reports_a_release_that_hangs_instead_of_waiting_for_it() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Release = Release::Hang;
+	let Page = FakePage::New(Script);
+	let Reported:Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+	let Collected = Reported.clone();
+	let Driver = Built(&Page, &Pace).Reporting(Arc::new(move |_Target, Error| {
+		Collected.lock().unwrap().push(Error.Message().to_string());
+	}));
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(30_000));
+	assert!(Answer.is_ok(), "the caller keeps its answer");
+	let Reported = Reported.lock().unwrap();
+	assert_eq!(Reported.len(), 1);
+	assert!(Reported[0].contains("dispose"));
+}
+
+#[test]
+fn a_reporter_that_panics_does_not_turn_a_release_into_a_failure() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Release = Release::Hang;
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace).Reporting(Arc::new(|_Target, _Error| {
+		panic!("the reporter is broken");
+	}));
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(30_000));
+	assert!(Answer.is_ok(), "the caller keeps its answer");
+}
+
+#[test]
+fn refuses_a_mode_that_is_not_text_with_wrong_mode_and_sends_nothing() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Mode = json!(42);
+	Script.ModeAfterPress = json!(42);
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::WrongMode);
+	assert!(Error.Detail().contains("42"));
+	assert!(!Page.Typed());
+}
+
+#[test]
+fn refuses_a_thread_read_that_is_not_a_thread() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Thread = Answers::Fixed(vec![json!(42)]);
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("instead of a thread"));
+}
+
+#[test]
+fn refuses_a_trace_that_is_not_a_list_of_steps() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Trace = json!("not a list");
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("instead of a list of steps"));
+}
+
+#[test]
+fn refuses_sources_that_are_not_a_list() {
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Sources = json!(42);
+	let Page = FakePage::New(Script);
+	let Driver = Built(&Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("instead of a list of sources"));
+}
+
+#[test]
+fn the_settlement_state_settles_on_the_third_agreement_and_not_before() {
+	use AgenticChatDriver::Settlement;
+	let mut Progress = Settlement::Empty;
+	assert!(!Progress.Observe(Some("answer")), "first read");
+	assert!(!Progress.Observe(Some("answer")), "first agreement");
+	assert!(!Progress.Observe(Some("answer")), "second agreement");
+	assert!(Progress.Observe(Some("answer")), "third agreement");
+	assert_eq!(Progress.Text(), Some("answer"));
+}
+
+#[test]
+fn the_settlement_state_resets_when_the_thread_stops_growing() {
+	use AgenticChatDriver::Settlement;
+	let mut Progress = Settlement::Empty;
+	Progress.Observe(Some("answer"));
+	Progress.Observe(Some("answer"));
+	assert!(!Progress.Observe(None), "an unchanged thread confirms nothing");
+	assert!(!Progress.Observe(Some("answer")), "the count started again");
+}
+
+--- FILE: rust/Crate/ChatDriver/Test/Fake.rs ---
+//! A page that answers the driver's own expressions, with no browser in sight.
+//!
+//! The TypeScript fake evaluates the expressions against a page-shaped object.
+//! Rust has no JavaScript engine in a std-only test, so this fake answers by
+//! recognising the expression it was handed - and it recognises it by calling
+//! the same function the driver calls, so a change to the protocol breaks the
+//! fake rather than passing silently.
+
+use std::{
+	sync::{
+		Arc,
+		Mutex,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::{Duration, Instant},
+};
+
+use AgenticChatDriver::{DefaultSelectors, Expressions, Failure, Page, Selectors, Target};
+use AgenticRuntime::{Call, Clock, FutureBox, Pace, Signal};
+use serde_json::{Value, json};
+
+/// What the fake answers for a thread read.
+pub enum Answers {
+	/// Successive reads; the last value repeats.
+	Fixed(Vec<Value>),
+	/// A thread whose newest answer never stops changing.
+	Changing,
+}
+
+/// What the fake's release does.
+pub enum Release {
+	/// Finishes at once, the way a healthy release does.
+	Quick,
+	/// Never finishes, the way a hung one does.
+	Hang,
+}
+
+/// Everything the fake answers with.
+pub struct Script {
+	/// The mode the composer reports before anything is pressed.
+	pub Mode:Value,
+	/// The mode it reports after the toggle is pressed.
+	pub ModeAfterPress:Value,
+	/// What pressing the toggle answers.
+	pub Press:Value,
+	/// The model label.
+	pub Model:Value,
+	/// The thread, read by read.
+	pub Thread:Answers,
+	/// The collapse control's label.
+	pub Collapse:Value,
+	/// The trace.
+	pub Trace:Value,
+	/// The sources.
+	pub Sources:Value,
+	/// What typing the question answers.
+	pub Typed:Value,
+	/// What pressing the send control answers.
+	pub Submit:Value,
+	/// The question the fake expects to be typed, so it can build the same
+	/// expression the driver builds.
+	pub Question:String,
+	/// A failure for every open, instead of a page.
+	pub FailOpen:Option<String>,
+	/// A failure for every evaluate, instead of an answer.
+	pub FailEvaluate:Option<String>,
+	/// What the release does.
+	pub Release:Release,
+}
+
+impl Script {
+	/// A page that is in search mode, set to `Model`, and answers `Text`.
+	pub fn New(Question:&str, Model:&str, Text:&str) -> Self {
+		Self {
+			Mode:json!("Search"),
+			ModeAfterPress:json!("Search"),
+			Press:json!(true),
+			Model:json!(Model),
+			Thread:Answers::Fixed(vec![json!({ "count": 0, "text": "" }), json!({ "count": 1, "text": Text })]),
+			Collapse:Value::Null,
+			Trace:json!([]),
+			Sources:json!([]),
+			Typed:json!(true),
+			Submit:json!("sent"),
+			Question:Question.to_string(),
+			FailOpen:None,
+			FailEvaluate:None,
+			Release:Release::Quick,
+		}
+	}
+}
+
+/// Which of the driver's expressions the fake was handed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+	Mode,
+	Press,
+	Model,
+	Composer,
+	Submit,
+	Answers,
+	Collapse,
+	Trace,
+	Sources,
+	Unknown,
+}
+
+/// The expression's identity, decided by the driver's own functions.
+pub fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
+	if Expression == Expressions::ReadMode(Selectors) {
+		Kind::Mode
+	} else if Expression == Expressions::PressMode(Selectors) {
+		Kind::Press
+	} else if Expression == Expressions::ReadModel(Selectors) {
+		Kind::Model
+	} else if Expression == Expressions::TypeQuestion(Selectors, Question) {
+		Kind::Composer
+	} else if Expression == Expressions::PressSubmit(Selectors) {
+		Kind::Submit
+	} else if Expression == Expressions::ReadAnswers(Selectors) {
+		Kind::Answers
+	} else if Expression == Expressions::ReadCollapse(Selectors) {
+		Kind::Collapse
+	} else if Expression == Expressions::ReadTrace(Selectors) {
+		Kind::Trace
+	} else if Expression == Expressions::ReadSources(Selectors) {
+		Kind::Sources
+	} else {
+		Kind::Unknown
+	}
+}
+
+/// A page, scripted.
+pub struct FakePage {
+	Script:Mutex<Script>,
+	Selectors:Selectors,
+	/// Every expression kind the driver asked for, in order.
+	pub Asked:Mutex<Vec<Kind>>,
+	/// How many times the page was opened.
+	pub Opens:AtomicU64,
+	/// How many times it was released.
+	pub Releases:AtomicU64,
+	/// How many times the toggle was pressed.
+	pub Presses:AtomicU64,
+	/// How many times an answer was read.
+	pub Reads:AtomicU64,
+	/// The last deadline a call handed the page.
+	pub Deadline:Mutex<Option<Instant>>,
+}
+
+impl FakePage {
+	/// A fake with the default selectors.
+	pub fn New(Script:Script) -> Arc<Self> { Self::With(DefaultSelectors(), Script) }
+
+	/// A fake with the caller's selectors.
+	pub fn With(Selectors:Selectors, Script:Script) -> Arc<Self> {
+		Arc::new(Self {
+			Script:Mutex::new(Script),
+			Selectors,
+			Asked:Mutex::new(Vec::new()),
+			Opens:AtomicU64::new(0),
+			Releases:AtomicU64::new(0),
+			Presses:AtomicU64::new(0),
+			Reads:AtomicU64::new(0),
+			Deadline:Mutex::new(None),
+		})
+	}
+
+	/// The kinds asked for so far.
+	pub fn Asked(&self) -> Vec<Kind> { self.Asked.lock().unwrap().clone() }
+
+	/// Whether the driver ever asked the page to type anything.
+	pub fn Typed(&self) -> bool { self.Asked().contains(&Kind::Composer) }
+
+	/// Whether the driver ever asked the page to send.
+	pub fn Sent(&self) -> bool { self.Asked().contains(&Kind::Submit) }
+}
+
+impl Page for FakePage {
+	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
+		*self.Deadline.lock().unwrap() = Some(Call.Deadline);
+		let Fail = self.Script.lock().unwrap().FailOpen.clone();
+		Box::pin(async move {
+			if let Some(Message) = Fail {
+				return Err(Failure::Of(Message));
+			}
+			self.Opens.fetch_add(1, Ordering::SeqCst);
+			Ok(Target { Url:Url.to_string() })
+		})
+	}
+
+	fn Evaluate<'a>(
+		&'a self,
+		_Target:&'a Target,
+		Expression:&'a str,
+		Call:Call,
+	) -> FutureBox<'a, Result<Value, Failure>> {
+		*self.Deadline.lock().unwrap() = Some(Call.Deadline);
+		let Script = self.Script.lock().unwrap();
+		let Kind = KindOf(&self.Selectors, &Script.Question, Expression);
+		self.Asked.lock().unwrap().push(Kind);
+		if let Some(Message) = Script.FailEvaluate.clone() {
+			return Box::pin(async move { Err(Failure::Of(Message)) });
+		}
+		let Answer = match Kind {
+			Kind::Mode => {
+				if self.Presses.load(Ordering::SeqCst) == 0 {
+					Script.Mode.clone()
+				} else {
+					Script.ModeAfterPress.clone()
+				}
+			},
+			Kind::Press => {
+				self.Presses.fetch_add(1, Ordering::SeqCst);
+				Script.Press.clone()
+			},
+			Kind::Model => Script.Model.clone(),
+			Kind::Composer => Script.Typed.clone(),
+			Kind::Submit => Script.Submit.clone(),
+			Kind::Answers => {
+				let Read = self.Reads.fetch_add(1, Ordering::SeqCst);
+				match &Script.Thread {
+					Answers::Changing => json!({ "count": 1, "text": format!("read {Read}") }),
+					Answers::Fixed(Values) => {
+						let At = (Read as usize).min(Values.len().saturating_sub(1));
+						Values.get(At).cloned().unwrap_or_else(|| json!({ "count": 0, "text": "" }))
+					},
+				}
+			},
+			Kind::Collapse => Script.Collapse.clone(),
+			Kind::Trace => Script.Trace.clone(),
+			Kind::Sources => Script.Sources.clone(),
+			Kind::Unknown => Value::Null,
+		};
+		Box::pin(async move { Ok(Answer) })
+	}
+
+	fn Dispose<'a>(&'a self, _Target:Target) -> FutureBox<'a, ()> {
+		self.Releases.fetch_add(1, Ordering::SeqCst);
+		let Hang = matches!(self.Script.lock().unwrap().Release, Release::Hang);
+		Box::pin(async move {
+			if Hang {
+				std::future::pending::<()>().await;
+			}
+		})
+	}
+}
+
+/// A clock the test owns, and a wait that advances it.
+///
+/// The wait moves the clock by at least a millisecond, so a poll loop with a
+/// zero interval still terminates: time passing is the test's decision, not the
+/// scheduler's.
+pub struct TestPace {
+	Now:Mutex<Instant>,
+	Fire:Mutex<Option<Arc<Signal>>>,
+}
+
+impl TestPace {
+	/// A pace that starts now.
+	pub fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()), Fire:Mutex::new(None) }) }
+
+	/// The same pace, which fires `Signal` on its first wait.
+	pub fn Firing(self: &Arc<Self>, Signal:Arc<Signal>) -> Arc<Self> {
+		*self.Fire.lock().unwrap() = Some(Signal);
+		self.clone()
+	}
+}
+
+impl Clock for TestPace {
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
+}
+
+impl Pace for TestPace {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> {
+		*self.Now.lock().unwrap() += Span.max(Duration::from_millis(1));
+		if let Some(Signal) = self.Fire.lock().unwrap().take() {
+			Signal.Fire();
+		}
+		Box::pin(std::future::ready(()))
+	}
+}
+
+--- FILE: rust/Crate/DesignVerification/Source/Fn.rs ---
+//! Functions: reconciling what a transport answered, and judging it.
+
+pub mod Judge;
+pub mod Measure;
+
+--- FILE: rust/Crate/DesignVerification/Source/Fn/Judge.rs ---
+//! Judging measurements against invariants. Pure, and it never fails.
+//!
+//! The absent list is built first and independently of the invariants, because
+//! a selector that matched nothing fails the run even when every row that reads
+//! through it happened to hold: the design named an element, and the page does
+//! not have it.
+
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
+use serde_json::Value;
+
+use crate::Struct::Port::{Evidence, Invariant, Measurement, Outcome, Verdict, Want};
+
+/// Whether one invariant held, without letting any part of it escape.
+///
+/// A reading that fails, a derivation that fails and a comparator that panics
+/// are each recorded as a row that did not hold, because a page defect must not
+/// be able to end a run as an exception.
+pub fn Judge(Invariant:&Invariant, Measurements:&[Measurement]) -> Evidence {
+	let Want = match &Invariant.Want {
+		Want::Value(Value) => Outcome::Value(Value.clone()),
+		Want::Derive(Derive) => {
+			match Derive(Measurements) {
+				Ok(Value) => Outcome::Value(Value),
+				Err(Why) => Outcome::Threw(Why),
+			}
+		},
+	};
+	let Got = match (Invariant.Read)(Measurements) {
+		Ok(Value) => Outcome::Value(Value),
+		Err(Why) => Outcome::Threw(Why),
+	};
+	let Held = match (&Got, &Want) {
+		(Outcome::Value(Got), Outcome::Value(Want)) => {
+			match &Invariant.Test {
+				Some(Test) => catch_unwind(AssertUnwindSafe(|| Test(Got, Want))).unwrap_or(false),
+				None => Got == Want,
+			}
+		},
+		// A comparison that could not be made has not been satisfied. The row still
+		// carries what was read, which is what a reader needs.
+		_ => false,
+	};
+	Evidence { Label:Invariant.Label.clone(), Got, Want, Held }
+}
+
+/// Judge a set of measurements.
+pub fn Check(Invariants:&[Invariant], Measurements:&[Measurement]) -> Verdict {
+	let mut Absent:Vec<String> = Vec::new();
+	for Measurement in Measurements {
+		if Measurement.Present {
+			continue;
+		}
+		if !Absent.iter().any(|Selector| Selector == &Measurement.Selector) {
+			Absent.push(Measurement.Selector.clone());
+		}
+	}
+	let Evidence:Vec<Evidence> = Invariants.iter().map(|Invariant| Judge(Invariant, Measurements)).collect();
+	Verdict { Held:Absent.is_empty() && Evidence.iter().all(|Row| Row.Held), Evidence, Absent }
+}
+
+/// The measurements a selector names, for a caller writing a reading.
+pub fn Measured<'a>(Measurements:&'a [Measurement], Selector:&str) -> Option<&'a Measurement> {
+	Measurements.iter().find(|Measurement| Measurement.Selector == Selector)
+}
+
+/// A measurement's value as a number, for a caller writing a reading.
+pub fn Number(Measurements:&[Measurement], Selector:&str) -> Result<Value, String> {
+	let Measurement = Measured(Measurements, Selector).ok_or_else(|| format!("nothing was measured for {Selector}"))?;
+	if !Measurement.Present {
+		return Err(format!("{Selector} is not in the page"));
+	}
+	match &Measurement.Value {
+		Value::Number(Number) => Ok(Value::Number(Number.clone())),
+		Other => Err(format!("{Selector} read {Other}, which is not a number")),
+	}
+}
+
+--- FILE: rust/Crate/DesignVerification/Source/Fn/Measure.rs ---
+//! Reconciling what a transport answered with what the caller asked for.
+//!
+//! The answer is matched by selector rather than by position, so a provider
+//! that batches or reorders cannot hand an invariant another element's number.
+//! A selector the transport did not answer for is a broken transport, not an
+//! absent element: absence is something the page was observed to have, and an
+//! answer that never arrived was not observed at all. Reporting it as absent
+//! would invent a page defect out of a provider's omission.
+
+use serde_json::Value;
+
+use crate::Struct::{Error::Error, Port::Measurement};
+
+/// A value as a detail line.
+///
+/// A provider that answered with the wrong shape is reported by what it sent,
+/// not by `[object Object]`, because the detail is the only thing that says
+/// which part of the contract it broke.
+pub fn Describe(Value:&Value) -> String {
+	match Value {
+		Value::Null => "null".to_string(),
+		Value::String(Text) => serde_json::to_string(Text).unwrap_or_else(|_| format!("{Text:?}")),
+		Value::Number(_) | Value::Bool(_) => Value.to_string(),
+		Value::Array(Items) => format!("an array of {}", Items.len()),
+		Value::Object(_) => "an object".to_string(),
+	}
+}
+
+/// What a measurement's value may be.
+///
+/// A provider that answers an object has not finished serialising what it read,
+/// and flattening that to `Null` would report "nothing to report" about an
+/// element that did report something. The port refuses it instead, naming the
+/// selector, so the provider is fixed rather than silently trusted.
+fn AsValue(Value:&Value, Selector:&str) -> Result<Value, Error> {
+	match Value {
+		Value::Null | Value::Number(_) | Value::String(_) => Ok(Value.clone()),
+		Other => {
+			Err(Error::NotReady(
+				"the transport answered with a value the port does not carry",
+				format!(
+					"{:?} read {}; a measurement is a number, a string or null",
+					Selector,
+					Describe(Other)
+				),
+			))
+		},
+	}
+}
+
+/// One entry of a transport's answer, as the port defines a measurement.
+fn AsMeasurement(Value:&Value) -> Result<Measurement, Error> {
+	let Some(Object) = Value.as_object() else {
+		return Err(Error::NotReady(
+			"the transport answered with a measurement that is not an object",
+			format!("it answered {}", Describe(Value)),
+		));
+	};
+	let Selector = match Object.get("selector") {
+		Some(Value::String(Selector)) if !Selector.is_empty() => Selector.clone(),
+		_ => {
+			return Err(Error::NotReady(
+				"the transport answered with a measurement for no selector",
+				format!("it answered {}", Describe(Value)),
+			));
+		},
+	};
+	let Present = match Object.get("present") {
+		Some(Value::Bool(Present)) => *Present,
+		Other => {
+			return Err(Error::NotReady(
+				"the transport answered without saying whether the element was there",
+				format!(
+					"{:?} carried {} as present",
+					Selector,
+					Other.map(Describe).unwrap_or_else(|| "nothing".to_string())
+				),
+			));
+		},
+	};
+	// An absent element cannot carry a value: a stale number travelling with
+	// `present: false` is what an invariant that forgot to check would read.
+	let Value = if Present {
+		AsValue(Object.get("value").unwrap_or(&Value::Null), &Selector)?
+	} else {
+		Value::Null
+	};
+	Ok(Measurement { Selector, Present, Value })
+}
+
+/// One measurement per asked selector, in the order it was asked for.
+pub fn Reconcile(Asked:&[String], Answered:&[Value]) -> Result<Vec<Measurement>, Error> {
+	let mut BySelector:Vec<Measurement> = Vec::new();
+	for Entry in Answered {
+		let Measurement = AsMeasurement(Entry)?;
+		BySelector.push(Measurement);
+	}
+	let mut Ordered = Vec::new();
+	for Selector in Asked {
+		let Some(Found) = BySelector.iter().find(|Measurement| &Measurement.Selector == Selector) else {
+			return Err(Error::NotReady(
+				"the transport did not answer for a selector it was asked about",
+				format!("nothing was measured for {Selector:?}"),
+			));
+		};
+		// A copy per position: two entries naming one selector must not be one
+		// mutable object, or a caller editing one edits the other.
+		Ordered.push(Found.clone());
+	}
+	Ok(Ordered)
+}
+
+--- FILE: rust/Crate/DesignVerification/Source/Library.rs ---
+//! `agentic.verify.design`: measure a built page and judge the measurements
+//! against invariants the caller supplies.
+//!
+//! This crate holds no design. No selector, no pixel value, no colour: a caller
+//! supplies the selectors and the invariants, and a test supplies a fixture. A
+//! port that knew one site's rail width could not measure another site at all.
+//!
+//! It declares the port it needs - [`Struct::Port::Browse`], whose TypeScript
+//! counterpart is the `Transport` seam - so a measurement can come from a tab,
+//! a saved document or a fixture without this crate knowing which. The two
+//! verbs split cleanly: `Measure` asks a page and is bounded, `Check` is pure
+//! and cannot fail.
+
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+
+pub use crate::Struct::{
+	Error::{Code, Error},
+	Port::{Browse, Evidence, Failure, Invariant, Measurement, Outcome, Verdict, Verify, Want},
+	Verify::{Create, Verifier},
+};
+
+--- FILE: rust/Crate/DesignVerification/Source/Struct.rs ---
+//! Types: the port, its three codes, and the capability that applies them.
+
+pub mod Error;
+pub mod Port;
+pub mod Verify;
+
+--- FILE: rust/Crate/DesignVerification/Source/Struct/Error.rs ---
+//! The three failure modes `module.json` declares, and no others.
+//!
+//! One enum, one variant per code, `detail` kept apart from the message in
+//! every one of them.
+
+use std::fmt;
+
+use crate::Struct::Port::Verdict;
+
+/// The codes, in the order the manifest names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Code {
+	/// An element the design names is not in the page.
+	Absent,
+	/// An invariant did not hold.
+	Broke,
+	/// The page was never read.
+	NotReady,
+}
+
+impl Code {
+	/// The string the manifest uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			Code::Absent => "absent-element",
+			Code::Broke => "invariant-broke",
+			Code::NotReady => "not-ready",
+		}
+	}
+
+	/// Every code, so a harness can compare the manifest against the type.
+	pub const fn All() -> [Code; 3] { [Code::Absent, Code::Broke, Code::NotReady] }
+
+	/// The code a manifest string names, if it names one of the three.
+	pub fn Parse(Value:&str) -> Option<Code> { Code::All().into_iter().find(|Code| Code.Name() == Value) }
+}
+
+/// The one error type this capability has.
+///
+/// `NotReady` is the only code `Measure` fails with, because the manifest has
+/// no fourth code and "the page was never read" is what a dead transport, a
+/// failure mid-measurement, a passed deadline and a cancellation all mean to
+/// this capability. `detail` says which one happened.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+	/// An element the design names is not in the page.
+	Absent {
+		/// The sentence a human reads.
+		Message:String,
+		/// The selectors, kept apart from the sentence.
+		Detail:String,
+	},
+	/// An invariant did not hold.
+	Broke {
+		/// The sentence a human reads.
+		Message:String,
+		/// The invariants that broke.
+		Detail:String,
+	},
+	/// The page was never read.
+	NotReady {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+}
+
+impl Error {
+	/// A page that was never read.
+	pub fn NotReady(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::NotReady { Message:Message.into(), Detail:Detail.into() }
+	}
+
+	/// A verdict as the error the manifest names, or `None` when it held.
+	///
+	/// `Check` never fails, because a verdict is a result. A caller that must
+	/// fail loudly - a command that exits non-zero - asks for the error
+	/// here. Absence is reported before a broken invariant, because a page
+	/// that lost a part is the more actionable failure and the rows that
+	/// read through it are consequences of it.
+	pub fn From(Verdict:&Verdict) -> Option<Error> {
+		if !Verdict.Absent.is_empty() {
+			return Some(Error::Absent {
+				Message:format!("{} element(s) the design names are absent", Verdict.Absent.len()),
+				Detail:Verdict.Absent.join(", "),
+			});
+		}
+		let Broken:Vec<&str> = Verdict
+			.Evidence
+			.iter()
+			.filter(|Row| !Row.Held)
+			.map(|Row| Row.Label.as_str())
+			.collect();
+		if !Broken.is_empty() {
+			return Some(Error::Broke {
+				Message:format!("{} invariant(s) broke", Broken.len()),
+				Detail:Broken.join(", "),
+			});
+		}
+		None
+	}
+
+	/// The code this failure carries.
+	pub const fn Code(&self) -> Code {
+		match self {
+			Error::Absent { .. } => Code::Absent,
+			Error::Broke { .. } => Code::Broke,
+			Error::NotReady { .. } => Code::NotReady,
+		}
+	}
+
+	/// The sentence a human reads.
+	pub fn Message(&self) -> &str {
+		match self {
+			Error::Absent { Message, .. } | Error::Broke { Message, .. } | Error::NotReady { Message, .. } => Message,
+		}
+	}
+
+	/// What was observed, which may be empty.
+	pub fn Detail(&self) -> &str {
+		match self {
+			Error::Absent { Detail, .. } | Error::Broke { Detail, .. } | Error::NotReady { Detail, .. } => Detail,
+		}
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(Formatter, "{}: {}", self.Code().Name(), self.Message())
+	}
+}
+
+impl std::error::Error for Error {}
+
+--- FILE: rust/Crate/DesignVerification/Source/Struct/Port.rs ---
+//! The port `agentic.verify.design` promises, written the way its consumer asks
+//! for it.
+//!
+//! `module.json` names three errors - `absent-element`, `invariant-broke` and
+//! `not-ready` - and [`crate::Struct::Error`] is where they live. A caller
+//! narrows on the variant; anything a provider does that is not one of the
+//! three is mapped onto one of them at the boundary.
+//!
+//! The port states more than data shapes, because two implementations that
+//! agreed on the shapes alone would still disagree about what a failure is:
+//!
+//! - **An absent element is a failure, never a precondition.** `Check` reports
+//!   the selector in `Absent` and answers `Held: false`. It never fails, and it
+//!   never reports "could not run": the run happened, and the page was wrong.
+//! - **This package holds no design.** No selector, no pixel value, no colour.
+//! - **`Measure` never fails for a missing element.** A selector that matches
+//!   nothing is a measurement with `Present: false`, because "there is nothing
+//!   there" is an observation. A dead transport is the only failure, and it is
+//!   `not-ready`, so the two answers cannot be confused.
+//! - **Evidence is per invariant.** One entry per invariant, in the order the
+//!   caller gave them, so a failure names which invariant broke and what it
+//!   read.
+
+use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
+
+/// One element, as the page answered for it.
+///
+/// The type exists to keep "not observed" apart from a real zero, `false` or
+/// empty string: a measurement engine that cannot say "there is nothing there"
+/// produces evidence that reads as a measurement.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Measurement {
+	/// The selector this was asked about, as the caller wrote it.
+	pub Selector:String,
+	/// Whether the element was there. `false` is an observation, not an error.
+	pub Present:bool,
+	/// What was read from it - a width, a count, a label - or `Null`.
+	///
+	/// An absent element always carries `Null`, so a stale number cannot travel
+	/// with `Present: false` and be read by an invariant that forgot to check.
+	/// A present element that read `Null` is a value, not an absence: the
+	/// element was there and had nothing to report.
+	pub Value:Value,
+}
+
+impl Measurement {
+	/// A measurement of an element that was there.
+	pub fn Present(Selector:impl Into<String>, Value:Value) -> Self {
+		Self { Selector:Selector.into(), Present:true, Value }
+	}
+
+	/// A measurement of an element that was not there. It cannot carry a value.
+	pub fn Absent(Selector:impl Into<String>) -> Self {
+		Self { Selector:Selector.into(), Present:false, Value:Value::Null }
+	}
+}
+
+/// A reading of the measurements, or why it could not be read.
+///
+/// A reading that fails - because it dereferenced a measurement it assumed was
+/// there - is a failed invariant, not a blocked run.
+pub type Read = Box<dyn Fn(&[Measurement]) -> Result<Value, String> + Send + Sync>;
+
+/// A derivation of an expectation from the measurements themselves.
+pub type Derive = Box<dyn Fn(&[Measurement]) -> Result<Value, String> + Send + Sync>;
+
+/// A comparison of a reading against an expectation.
+pub type Test = Box<dyn Fn(&Value, &Value) -> bool + Send + Sync>;
+
+/// What an invariant's expectation is.
+///
+/// Either a value, compared for equality, or a function of the measurements
+/// when the expectation is derived from the page itself - "the rail sits level
+/// with the drawer" wants the drawer's own top, and no constant states it.
+pub enum Want {
+	/// A value the reading must equal.
+	Value(Value),
+	/// A reading derived from the measurements. A derivation that fails counts
+	/// as not held, and the row records why.
+	Derive(Derive),
+}
+
+impl std::fmt::Debug for Want {
+	fn fmt(&self, Formatter:&mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Want::Value(Value) => Formatter.debug_tuple("Value").field(Value).finish(),
+			Want::Derive(_) => Formatter.write_str("Derive(..)"),
+		}
+	}
+}
+
+/// One thing the design says must be true of the page.
+pub struct Invariant {
+	/// What the invariant is about, as a reader of a failure should hear it.
+	pub Label:String,
+	/// What to read out of the measurements.
+	pub Read:Read,
+	/// What the reading must equal, or how it is derived.
+	pub Want:Want,
+	/// How to compare, for an invariant that is a relation rather than an
+	/// equality. Absent means equality; a comparator that panics counts as
+	/// not held, because a comparison that could not be made has not been
+	/// satisfied.
+	pub Test:Option<Test>,
+}
+
+impl std::fmt::Debug for Invariant {
+	fn fmt(&self, Formatter:&mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		Formatter
+			.debug_struct("Invariant")
+			.field("Label", &self.Label)
+			.field("Want", &self.Want)
+			.finish_non_exhaustive()
+	}
+}
+
+impl Invariant {
+	/// An invariant that reads one value and requires it to equal another.
+	pub fn Equal(
+		Label:impl Into<String>,
+		Read:impl Fn(&[Measurement]) -> Result<Value, String> + Send + Sync + 'static,
+		Want:Value,
+	) -> Self {
+		Self { Label:Label.into(), Read:Box::new(Read), Want:Want::Value(Want), Test:None }
+	}
+
+	/// An invariant whose expectation is derived from the measurements.
+	pub fn Derived(
+		Label:impl Into<String>,
+		Read:impl Fn(&[Measurement]) -> Result<Value, String> + Send + Sync + 'static,
+		Derive:impl Fn(&[Measurement]) -> Result<Value, String> + Send + Sync + 'static,
+	) -> Self {
+		Self {
+			Label:Label.into(),
+			Read:Box::new(Read),
+			Want:Want::Derive(Box::new(Derive)),
+			Test:None,
+		}
+	}
+
+	/// The same invariant, compared by the caller's own relation.
+	pub fn Tested(mut self, Test:impl Fn(&Value, &Value) -> bool + Send + Sync + 'static) -> Self {
+		self.Test = Some(Box::new(Test));
+		self
+	}
+}
+
+/// One side of a comparison: what was read, or why it could not be.
+///
+/// A reading that failed is recorded as `Threw`, which cannot be mistaken for a
+/// value it read - the Rust port's version of the TypeScript `{ threw: message
+/// }`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Outcome {
+	/// A value that was read, or an expectation that was derived.
+	Value(Value),
+	/// Why it could not be read or derived.
+	Threw(String),
+}
+
+impl Outcome {
+	/// Whether this side produced a value.
+	pub fn Held(&self) -> bool { matches!(self, Outcome::Value(_)) }
+}
+
+/// One invariant's row in a verdict: what it read, what it wanted, and whether.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Evidence {
+	/// The invariant's own label, copied unchanged.
+	pub Label:String,
+	/// What the invariant read.
+	pub Got:Outcome,
+	/// What it was compared against.
+	pub Want:Outcome,
+	/// Whether the comparison held.
+	pub Held:bool,
+}
+
+/// The whole answer to one run.
+///
+/// `Held` is true only when nothing was absent and every invariant held, so a
+/// caller can branch on one field and still read the reason from the others.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Verdict {
+	/// Every invariant held and every selector matched something.
+	pub Held:bool,
+	/// One row per invariant, in the order the caller gave them.
+	pub Evidence:Vec<Evidence>,
+	/// Every selector that was observed to match nothing, once each.
+	pub Absent:Vec<String>,
+}
+
+/// What a transport reports when it fails.
+///
+/// A transport is not this capability, so it does not speak this capability's
+/// three codes. It says what it observed, and the capability maps that onto
+/// `not-ready` with the observation in `detail`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Failure {
+	/// The sentence a human reads.
+	pub Message:String,
+	/// What was observed.
+	pub Detail:String,
+}
+
+impl Failure {
+	/// A failure with a sentence and nothing observed.
+	pub fn Of(Message:impl Into<String>) -> Self { Self { Message:Message.into(), Detail:String::new() } }
+}
+
+/// The browser as this capability needs it: read every named element.
+///
+/// The transport answers the *wire* shape - one JSON object per selector,
+/// carrying `selector`, `present` and `value` - and the capability validates
+/// it. That is the TypeScript port's arrangement, kept because it is what makes
+/// the classification checkable: a provider is not this crate, so a provider
+/// that answers a list of numbers, an object where a number belongs, or no
+/// answer for a selector it was asked about is refused with `not-ready` rather
+/// than trusted.
+///
+/// What the port demands of an implementation:
+///
+/// - one entry per selector it was asked about, carrying that selector, so the
+///   capability can match by `Selector` rather than by position;
+/// - a selector that matches nothing is `present: false` - an observation, not
+///   a failure. A provider that fails because an element is missing turns a
+///   page defect into a failure of the observer;
+/// - `value` is a number, a string or `null`. Anything else is a provider that
+///   has not finished serialising what it read, and it is refused rather than
+///   flattened, because flattening it to `null` would read as "nothing to
+///   report";
+/// - a failure means the page was never read, and it is reported as
+///   `not-ready`.
+pub trait Browse: Send + Sync {
+	/// Read every named element, or report that it is not in the page.
+	fn Measure<'a>(&'a self, Selectors:&'a [String], Call:Call) -> FutureBox<'a, Result<Vec<Value>, Failure>>;
+}
+
+/// The one port this capability offers.
+pub trait Verify: Send + Sync {
+	/// Read the named elements from the page, one measurement per selector.
+	fn Measure<'a>(
+		&'a self,
+		Selectors:&'a [String],
+		Call:Call,
+	) -> FutureBox<'a, Result<Vec<Measurement>, crate::Struct::Error::Error>>;
+	/// Judge a set of measurements against a set of invariants. Pure, and it
+	/// never fails: a verdict is a result, not an exception.
+	fn Check(&self, Invariants:&[Invariant], Measurements:&[Measurement]) -> Verdict;
+}
+
+--- FILE: rust/Crate/DesignVerification/Source/Struct/Verify.rs ---
+//! `agentic.verify.design` over a transport the composition root supplies.
+//!
+//! Two verbs, and only the first touches a page:
+//!
+//! 1. **`Measure` asks and bounds.** The selectors go to the transport as they
+//!    were given, the answer is matched back by selector, and the deadline is
+//!    enforced on this side as well as the provider's - a transport that
+//!    ignores its budget must not be able to hang a caller. The one failure is
+//!    `not-ready`: the page was never read. An element that is not in the page
+//!    is a measurement, never a failure.
+//! 2. **`Check` is pure.** It reads no page and keeps no state, so the same
+//!    measurements answer the same verdict twice. It cannot fail either: a
+//!    reading that fails, an expectation that fails and a comparator that
+//!    panics are each recorded as a row that did not hold, because a page
+//!    defect must not be able to end a run as an exception.
+//!
+//! Nothing here names a selector, a length or a colour. The transport supplies
+//! what a page says; the caller supplies what the design expects.
+
+use std::sync::Arc;
+
+use AgenticRuntime::{Bound, Call, Expired, FutureBox, Pace};
+
+use crate::{
+	Fn::{Judge::Check, Measure::Reconcile},
+	Struct::{
+		Error::Error,
+		Port::{Browse, Invariant, Measurement, Verdict, Verify},
+	},
+};
+
+/// A `Verify` over one transport.
+///
+/// Nothing here opens a browser or reads an environment variable: the transport
+/// is the composition root's to supply, and the fake in `Test/` is the proof
+/// that the rules hold without one.
+pub struct Verifier {
+	Browse:Arc<dyn Browse>,
+	Pace:Arc<dyn Pace>,
+}
+
+/// Build a `Verify` over one transport, on the pace the caller supplied.
+pub fn Create(Browse:Arc<dyn Browse>, Pace:Arc<dyn Pace>) -> Verifier { Verifier { Browse, Pace } }
+
+impl Verify for Verifier {
+	fn Measure<'a>(&'a self, Selectors:&'a [String], Call:Call) -> FutureBox<'a, Result<Vec<Measurement>, Error>> {
+		Box::pin(async move {
+			// Nothing asked is nothing read: a no-op request must not touch a
+			// page.
+			if Selectors.is_empty() {
+				return Ok(Vec::new());
+			}
+			if Call.Cancelled() {
+				return Err(Error::NotReady(
+					"measure was cancelled before it started",
+					"the caller's signal had already fired",
+				));
+			}
+			if Call.Expired(self.Pace.as_ref()) {
+				return Err(Error::NotReady(
+					"measure exceeded its deadline",
+					"the transport was still working when the budget ran out",
+				));
+			}
+			let Work = self.Browse.Measure(Selectors, Call.clone());
+			let Answered = match Bound(Work, &Call, self.Pace.as_ref()).await {
+				Ok(Ok(Answered)) => Answered,
+				Ok(Err(Failure)) => {
+					return Err(Error::NotReady(
+						"the transport failed while measuring the page",
+						Failure.Message,
+					));
+				},
+				Err(Expired::Timeout) => {
+					return Err(Error::NotReady("measure exceeded its deadline", "the transport never answered"));
+				},
+				Err(Expired::Cancelled) => {
+					return Err(Error::NotReady(
+						"measure was cancelled by the caller",
+						"the signal fired while the page was being read",
+					));
+				},
+			};
+			Reconcile(Selectors, &Answered)
+		})
+	}
+
+	fn Check(&self, Invariants:&[Invariant], Measurements:&[Measurement]) -> Verdict { Check(Invariants, Measurements) }
+}
+
+--- FILE: rust/Crate/DesignVerification/Test/Verification.rs ---
+//! `agentic.verify.design`, exercised against a scripted transport.
+//!
+//! No browser and no network: the transport answers what the test told it to,
+//! and a deadline passes because the test advanced its own clock.
+
+use std::{
+	sync::{Arc, Mutex},
+	time::{Duration, Instant},
+};
+
+use AgenticDesignVerification::{
+	Browse,
+	Code,
+	Create,
+	Error,
+	Failure,
+	Invariant,
+	Measurement,
+	Outcome,
+	Verdict,
+	Verifier,
+	Verify,
+	Want,
+};
+use AgenticRuntime::{BlockOn, Call, Clock, FutureBox, Never, Pace, Signal};
+use serde_json::{Value, json};
+
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
+
+/// A clock the test owns, and a wait that advances it.
+struct TestPace {
+	Now:Mutex<Instant>,
+	Fire:Mutex<Option<Arc<Signal>>>,
+}
+
+impl TestPace {
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()), Fire:Mutex::new(None) }) }
+
+	fn Firing(self: &Arc<Self>, Signal:Arc<Signal>) -> Arc<Self> {
+		*self.Fire.lock().unwrap() = Some(Signal);
+		self.clone()
+	}
+}
+
+impl Clock for TestPace {
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
+}
+
+impl Pace for TestPace {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> {
+		// A pace that is about to fire a signal models a caller giving up, not
+		// time passing: it advances a millisecond, fires, and never
+		// finishes its wait - so the cancellation and not the deadline
+		// is what stops the call.
+		if let Some(Signal) = self.Fire.lock().unwrap().take() {
+			*self.Now.lock().unwrap() += Duration::from_millis(1);
+			Signal.Fire();
+			return Box::pin(std::future::pending());
+		}
+		*self.Now.lock().unwrap() += Span.max(Duration::from_millis(1));
+		Box::pin(std::future::ready(()))
+	}
+}
+
+/// A transport that answers what the test scripted.
+struct Script {
+	/// The wire answer: one object per selector.
+	Answer:Vec<Value>,
+	/// A failure instead of an answer.
+	Fail:Option<String>,
+	/// Never answer at all.
+	Hang:bool,
+}
+
+struct FakeTransport {
+	Script:Mutex<Script>,
+	Asked:Mutex<Vec<Vec<String>>>,
+}
+
+impl FakeTransport {
+	fn New(Answer:Vec<Value>) -> Arc<Self> {
+		Arc::new(Self {
+			Script:Mutex::new(Script { Answer, Fail:None, Hang:false }),
+			Asked:Mutex::new(Vec::new()),
+		})
+	}
+
+	fn Failing(Message:&str) -> Arc<Self> {
+		let Fake = Self::New(vec![]);
+		Fake.Script.lock().unwrap().Fail = Some(Message.to_string());
+		Fake
+	}
+
+	fn Hanging() -> Arc<Self> {
+		let Fake = Self::New(vec![]);
+		Fake.Script.lock().unwrap().Hang = true;
+		Fake
+	}
+
+	fn Asked(&self) -> Vec<Vec<String>> { self.Asked.lock().unwrap().clone() }
+}
+
+impl Browse for FakeTransport {
+	fn Measure<'a>(&'a self, Selectors:&'a [String], _Call:Call) -> FutureBox<'a, Result<Vec<Value>, Failure>> {
+		self.Asked.lock().unwrap().push(Selectors.to_vec());
+		let Script = self.Script.lock().unwrap();
+		let Fail = Script.Fail.clone();
+		let Answer = Script.Answer.clone();
+		let Hang = Script.Hang;
+		Box::pin(async move {
+			if Hang {
+				std::future::pending::<()>().await;
+			}
+			if let Some(Message) = Fail {
+				return Err(Failure::Of(Message));
+			}
+			Ok(Answer)
+		})
+	}
+}
+
+fn Built(Transport:&Arc<FakeTransport>, Pace:&Arc<TestPace>) -> Verifier { Create(Transport.clone(), Pace.clone()) }
+
+fn Measured(
+	Verifier:&impl Verify,
+	Pace:&TestPace,
+	Selectors:&[String],
+	Budget:Duration,
+) -> Result<Vec<Measurement>, Error> {
+	let Call = Call::Within(Budget, Pace, Arc::new(Never));
+	BlockOn(Verifier.Measure(Selectors, Call))
+}
+
+fn Selectors(Names:&[&str]) -> Vec<String> { Names.iter().map(|Name| Name.to_string()).collect() }
+
+/// The selectors a test asks about, none of them a design of this package.
+fn Asked() -> Vec<String> { Selectors(&["[data-rail]", "[data-drawer]"]) }
+
+fn Present(Selector:&str, Value:Value) -> Value { json!({ "selector": Selector, "present": true, "value": Value }) }
+
+fn Absent(Selector:&str) -> Value { json!({ "selector": Selector, "present": false, "value": null }) }
+
+fn Readings() -> Vec<Measurement> {
+	vec![
+		Measurement::Present("[data-rail]", json!(320)),
+		Measurement::Present("[data-drawer]", json!(320)),
+	]
+}
+
+#[test]
+fn the_error_codes_are_the_manifests_errors_and_there_are_no_others() {
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["absent-element", "invariant-broke", "not-ready"]);
+	let Manifest = include_str!("../module.json");
+	for Name in Declared {
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
+	}
+}
+
+#[test]
+fn measure_asks_for_every_selector_once_and_answers_in_the_order_it_was_given() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![Absent("[data-drawer]"), Present("[data-rail]", json!(320))]);
+	let Verifier = Built(&Transport, &Pace);
+	let Measurements = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect("measured");
+	assert_eq!(Transport.Asked(), vec![Asked()], "one request, once");
+	assert_eq!(Measurements.len(), 2);
+	assert_eq!(Measurements[0].Selector, "[data-rail]");
+	assert_eq!(Measurements[1].Selector, "[data-drawer]");
+}
+
+#[test]
+fn an_answer_that_arrives_in_another_order_is_matched_by_selector_not_by_position() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![Present("[data-drawer]", json!(200)), Present("[data-rail]", json!(320))]);
+	let Verifier = Built(&Transport, &Pace);
+	let Measurements = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect("measured");
+	assert_eq!(Measurements[0].Value, json!(320));
+	assert_eq!(Measurements[1].Value, json!(200));
+}
+
+#[test]
+fn an_element_the_page_does_not_have_is_a_measurement_never_a_failure() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![Absent("[data-rail]"), Absent("[data-drawer]")]);
+	let Verifier = Built(&Transport, &Pace);
+	let Measurements = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect("measured");
+	assert_eq!(Measurements.len(), 2);
+	assert!(Measurements.iter().all(|Measurement| !Measurement.Present));
+	assert_eq!(Measurements[0].Value, Value::Null);
+}
+
+#[test]
+fn an_absent_element_cannot_carry_a_value_out_of_the_transport() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![
+		json!({ "selector": "[data-rail]", "present": false, "value": 320 }),
+		Absent("[data-drawer]"),
+	]);
+	let Verifier = Built(&Transport, &Pace);
+	let Measurements = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect("measured");
+	assert_eq!(Measurements[0].Value, Value::Null, "the stale number was dropped");
+}
+
+#[test]
+fn a_dead_transport_is_not_ready_which_is_not_the_answer_an_absent_element_gives() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Failing("the socket closed");
+	let Verifier = Built(&Transport, &Pace);
+	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert_eq!(Error.Detail(), "the socket closed");
+}
+
+#[test]
+fn a_transport_that_never_answers_is_not_ready_at_the_deadline_not_a_hang() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::Hanging();
+	let Verifier = Built(&Transport, &Pace);
+	let Error = Measured(&Verifier, &Pace, &Asked(), Span(1_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("never answered"));
+}
+
+#[test]
+fn a_signal_that_had_already_fired_refuses_before_the_page_is_asked() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![Absent("[data-rail]")]);
+	let Verifier = Built(&Transport, &Pace);
+	let Signal = Signal::New();
+	Signal.Fire();
+	let Call = Call { Deadline:Pace.Now() + Span(5_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Verifier.Measure(&Asked(), Call)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("signal"));
+	assert!(Transport.Asked().is_empty(), "the page was never asked");
+}
+
+#[test]
+fn a_signal_that_fires_while_the_page_is_being_read_is_not_ready_named_as_a_cancellation() {
+	let Signal = Signal::New();
+	let Pace = TestPace::New().Firing(Signal.clone());
+	let Transport = FakeTransport::Hanging();
+	let Verifier = Built(&Transport, &Pace);
+	let Call = Call { Deadline:Pace.Now() + Span(30_000), Cancellation:Signal.clone() };
+	let Error = BlockOn(Verifier.Measure(&Asked(), Call)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("signal"));
+}
+
+#[test]
+fn a_selector_the_transport_did_not_answer_for_is_a_broken_transport_not_an_absent_element() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![Present("[data-rail]", json!(320))]);
+	let Verifier = Built(&Transport, &Pace);
+	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("nothing was measured for \"[data-drawer]\""));
+}
+
+#[test]
+fn a_measurement_that_does_not_say_whether_the_element_was_there_is_refused() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![
+		json!({ "selector": "[data-rail]", "value": 320 }),
+		Absent("[data-drawer]"),
+	]);
+	let Verifier = Built(&Transport, &Pace);
+	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Message().contains("whether the element was there"));
+}
+
+#[test]
+fn a_value_that_is_not_a_number_a_string_or_null_is_refused_rather_than_flattened() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![Present("[data-rail]", json!({ "width": 320 })), Absent("[data-drawer]")]);
+	let Verifier = Built(&Transport, &Pace);
+	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Detail().contains("a measurement is a number, a string or null"));
+}
+
+#[test]
+fn a_transport_that_answers_with_something_other_than_a_list_is_refused() {
+	let Pace = TestPace::New();
+	// A list of one number: the entry is not an object, which is the wire-shape
+	// version of "the transport answered with something that is not a
+	// measurement".
+	let Transport = FakeTransport::New(vec![json!(42)]);
+	let Verifier = Built(&Transport, &Pace);
+	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(Error.Message().contains("not an object"));
+}
+
+#[test]
+fn a_measurement_of_nothing_asks_the_transport_for_nothing() {
+	let Pace = TestPace::New();
+	let Transport = FakeTransport::New(vec![]);
+	let Verifier = Built(&Transport, &Pace);
+	let Measurements = Measured(&Verifier, &Pace, &[], Span(2_000)).expect("measured");
+	assert_eq!(Measurements, vec![]);
+	assert!(Transport.Asked().is_empty(), "a no-op must not touch a page");
+}
+
+#[test]
+fn a_verdict_holds_when_nothing_is_absent_and_every_invariant_holds() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![Invariant::Equal(
+		"the rail is 320 wide",
+		|Measurements| Ok(Measurements[0].Value.clone()),
+		json!(320),
+	)];
+	let Verdict = Verifier.Check(&Invariants, &Readings());
+	assert!(Verdict.Held);
+	assert_eq!(Verdict.Absent, Vec::<String>::new());
+	assert_eq!(Verdict.Evidence.len(), 1);
+	assert_eq!(Verdict.Evidence[0].Got, Outcome::Value(json!(320)));
+	assert_eq!(Verdict.Evidence[0].Want, Outcome::Value(json!(320)));
+	assert_eq!(Error::From(&Verdict), None);
+}
+
+#[test]
+fn an_absent_element_fails_the_verdict_even_when_every_invariant_reads_a_number() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Measurements = vec![
+		Measurement::Absent("[data-rail]"),
+		Measurement::Present("[data-drawer]", json!(320)),
+	];
+	let Invariants = vec![Invariant::Equal(
+		"the drawer is 320 wide",
+		|Measurements| Ok(Measurements[1].Value.clone()),
+		json!(320),
+	)];
+	let Verdict = Verifier.Check(&Invariants, &Measurements);
+	assert!(!Verdict.Held);
+	assert_eq!(Verdict.Absent, vec!["[data-rail]".to_string()]);
+	assert!(Verdict.Evidence[0].Held, "the row that held still held");
+}
+
+#[test]
+fn a_broken_invariant_names_itself_and_only_itself_among_the_failures() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![
+		Invariant::Equal("holds", |Measurements| Ok(Measurements[0].Value.clone()), json!(320)),
+		Invariant::Equal("breaks", |Measurements| Ok(Measurements[1].Value.clone()), json!(200)),
+	];
+	let Verdict = Verifier.Check(&Invariants, &Readings());
+	assert!(!Verdict.Held);
+	let Error = Error::From(&Verdict).expect("a failure");
+	assert_eq!(Error.Code(), Code::Broke);
+	assert_eq!(Error.Detail(), "breaks");
+}
+
+#[test]
+fn a_read_that_fails_is_a_failed_invariant_not_an_exception_out_of_check() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![Invariant::Equal(
+		"reads a missing element",
+		|_| Err("nothing was measured for [data-rail]".to_string()),
+		json!(320),
+	)];
+	let Verdict = Verifier.Check(&Invariants, &Readings());
+	assert!(!Verdict.Held);
+	assert_eq!(
+		Verdict.Evidence[0].Got,
+		Outcome::Threw("nothing was measured for [data-rail]".to_string())
+	);
+	assert_eq!(Verdict.Evidence[0].Want, Outcome::Value(json!(320)));
+}
+
+#[test]
+fn an_expectation_that_is_a_function_of_the_measurements_is_derived_not_hard_coded() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![Invariant::Derived(
+		"the rail sits level with the drawer",
+		|Measurements| Ok(Measurements[0].Value.clone()),
+		|Measurements| Ok(Measurements[1].Value.clone()),
+	)];
+	let Verdict = Verifier.Check(&Invariants, &Readings());
+	assert!(Verdict.Held);
+	assert_eq!(Verdict.Evidence[0].Want, Outcome::Value(json!(320)));
+}
+
+#[test]
+fn a_comparator_makes_a_relational_invariant_expressible() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![
+		Invariant::Equal(
+			"the rail is wider than the drawer",
+			|Measurements| Ok(Measurements[0].Value.clone()),
+			json!(200),
+		)
+		.Tested(|Got, Want| Got.as_f64().unwrap_or_default() > Want.as_f64().unwrap_or_default()),
+	];
+	let Verdict = Verifier.Check(&Invariants, &Readings());
+	assert!(Verdict.Held, "320 is wider than 200");
+}
+
+#[test]
+fn a_comparator_that_panics_counts_as_not_held() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![
+		Invariant::Equal(
+			"a comparison that cannot be made",
+			|Measurements| Ok(Measurements[0].Value.clone()),
+			json!(320),
+		)
+		.Tested(|_, _| panic!("the comparator is broken")),
+	];
+	let Verdict = Verifier.Check(&Invariants, &Readings());
+	assert!(!Verdict.Held);
+	assert_eq!(Verdict.Evidence[0].Got, Outcome::Value(json!(320)));
+}
+
+#[test]
+fn a_present_element_that_read_null_is_a_value_not_an_absence() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Measurements = vec![
+		Measurement::Present("[data-rail]", Value::Null),
+		Measurement::Present("[data-drawer]", json!(320)),
+	];
+	let Invariants = vec![Invariant::Equal(
+		"the rail reported nothing",
+		|Measurements| Ok(Measurements[0].Value.clone()),
+		Value::Null,
+	)];
+	let Verdict = Verifier.Check(&Invariants, &Measurements);
+	assert!(Verdict.Held, "null is a value the element reported");
+	assert!(Verdict.Absent.is_empty());
+}
+
+#[test]
+fn the_absent_list_names_each_selector_once_in_the_order_it_was_measured() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Measurements = vec![
+		Measurement::Absent("[data-second]"),
+		Measurement::Absent("[data-first]"),
+		Measurement::Absent("[data-second]"),
+	];
+	let Verdict = Verifier.Check(&[], &Measurements);
+	assert_eq!(Verdict.Absent, vec!["[data-second]".to_string(), "[data-first]".to_string()]);
+}
+
+#[test]
+fn a_run_with_no_invariants_holds_when_nothing_is_absent_and_fails_when_something_is() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	assert!(Verifier.Check(&[], &Readings()).Held);
+	let WithAbsence = vec![
+		Measurement::Absent("[data-rail]"),
+		Measurement::Present("[data-drawer]", json!(320)),
+	];
+	assert!(!Verifier.Check(&[], &WithAbsence).Held);
+}
+
+#[test]
+fn check_is_a_pure_function_of_its_arguments() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Invariants = vec![Invariant::Equal(
+		"the rail is 320 wide",
+		|Measurements| Ok(Measurements[0].Value.clone()),
+		json!(320),
+	)];
+	let First = Verifier.Check(&Invariants, &Readings());
+	let Second = Verifier.Check(&Invariants, &Readings());
+	assert_eq!(First, Second);
+}
+
+#[test]
+fn a_verdict_becomes_the_error_the_manifest_names_absence_before_a_broken_invariant() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Measurements = vec![
+		Measurement::Absent("[data-rail]"),
+		Measurement::Present("[data-drawer]", json!(200)),
+	];
+	let Invariants = vec![Invariant::Equal(
+		"the drawer is 320 wide",
+		|Measurements| Ok(Measurements[1].Value.clone()),
+		json!(320),
+	)];
+	let Verdict = Verifier.Check(&Invariants, &Measurements);
+	assert!(!Verdict.Held);
+	assert_eq!(Verdict.Absent.len(), 1, "there is a broken invariant too");
+	let Error = Error::From(&Verdict).expect("a failure");
+	assert_eq!(Error.Code(), Code::Absent, "absence is reported first");
+	assert_eq!(Error.Detail(), "[data-rail]");
+}
+
+#[test]
+fn the_package_carries_no_selector_length_or_colour_of_any_design() {
+	// The rule this crate exists to keep, checked against its own source: a
+	// port that knew one site's rail width could not measure another site
+	// at all.
+	let Sources = [
+		include_str!("../Source/Struct/Port.rs"),
+		include_str!("../Source/Struct/Verify.rs"),
+		include_str!("../Source/Struct/Error.rs"),
+		include_str!("../Source/Fn/Judge.rs"),
+		include_str!("../Source/Fn/Measure.rs"),
+	];
+	for Source in Sources {
+		for Forbidden in ["data-testid", "aria-label", "#ffffff", "#fff", " px"] {
+			assert!(!Source.contains(Forbidden), "the package names {Forbidden}, which is a design");
+		}
+	}
+}
+
+#[test]
+fn a_verdict_with_nothing_wrong_becomes_no_error_at_all() {
+	let Pace = TestPace::New();
+	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
+	let Verdict:Verdict = Verifier.Check(&[], &Readings());
+	assert!(Verdict.Held);
+	assert_eq!(Error::From(&Verdict), None);
+	let _ = Want::Value(Value::Null);
+}
+
+--- FILE: rust/Crate/Runtime/Source/Fn.rs ---
+//! Functions: the combinators, and the one implementation that needs a feature.
+//!
+//! `Bound` and `Race` are the whole of the bounding machinery: a deadline is
+//! not enforced by a global timer, it is enforced by racing the work against a
+//! wait the caller's `Pace` supplies. That is why a capability can be bounded
+//! without knowing which executor is running it.
+
+pub mod BlockOn;
+pub mod Bound;
+pub mod Race;
+#[cfg(feature = "tokio")]
+pub mod Tokio;
+
+--- FILE: rust/Crate/Runtime/Source/Fn/BlockOn.rs ---
+//! Drive a future to completion on this thread.
+//!
+//! A capability's port is a boxed future, and a test that exercises one has no
+//! executor - that is the point of the port being runtime-neutral. This is the
+//! smallest honest answer: poll until ready, yielding between polls.
+//!
+//! It is not an executor and does not pretend to be one: nothing here parks or
+//! schedules, so it is correct for futures that are driven by something else
+//! (a signal fired on another thread, a fake clock advanced by a fake wait) and
+//! wrong for a future that only ever resolves from a real timer. A test that
+//! wants time to pass advances a clock instead of waiting for one.
+
+use std::{
+	future::Future,
+	pin::pin,
+	task::{Context, Waker},
+};
+
+/// Poll `Work` until it produces a value.
+pub fn BlockOn<Work:Future>(Work:Work) -> Work::Output {
+	let mut Work = pin!(Work);
+	let Waker = Waker::noop();
+	let mut Context = Context::from_waker(Waker);
+	loop {
+		if let std::task::Poll::Ready(Value) = Work.as_mut().poll(&mut Context) {
+			return Value;
+		}
+		std::thread::yield_now();
+	}
+}
+
+--- FILE: rust/Crate/Runtime/Source/Fn/Bound.rs ---
+//! Bound one operation by a deadline and the caller's cancellation.
+//!
+//! This is the combinator every port's guarantee rests on, and it is written
+//! against three traits - a boxed future, a `Pace` and a `Cancellation` - so no
+//! capability has to know which executor is running it.
+//!
+//! The two bounds are separate on purpose. A caller's cancellation and a passed
+//! deadline are both "no answer", but they are not the same fact: one is the
+//! caller giving up and the other is the page not finishing, and a consumer
+//! that collapsed them without keeping `detail` could not tell a slow page from
+//! its own impatience.
+
+use crate::{
+	Fn::Race::{Either, Race},
+	Struct::Call::{Call, Expired, FutureBox, Pace},
+};
+
+/// Resolve with `Work`'s value, or with why it was cut short.
+///
+/// A signal that has already fired rejects before `Work` is polled at all: a
+/// caller that has given up must not cause one more page operation to start.
+pub fn Bound<'a, T:'a>(Work:FutureBox<'a, T>, Call:&'a Call, Pace:&'a dyn Pace) -> FutureBox<'a, Result<T, Expired>> {
+	Box::pin(async move {
+		if Call.Cancellation.IsCancelled() {
+			return Err(Expired::Cancelled);
+		}
+		let Guard = async {
+			let Wait = Pace.Sleep(Call.Remaining(Pace));
+			let Stop = Call.Cancellation.Cancelled();
+			match Race(Wait, Stop).await {
+				Either::Left(()) => Expired::Timeout,
+				Either::Right(()) => Expired::Cancelled,
+			}
+		};
+		match Race(Work, Guard).await {
+			Either::Left(Value) => Ok(Value),
+			Either::Right(Why) => Err(Why),
+		}
+	})
+}
+
+--- FILE: rust/Crate/Runtime/Source/Fn/Race.rs ---
+//! Race two futures, first one to finish wins.
+//!
+//! The primitive the deadline is built from. It is written here rather than
+//! taken from a combinator crate because the runtime core is std-only: a
+//! `select` is thirty lines of `poll`, and a dependency that exists to save
+//! thirty lines is a dependency every capability inherits.
+
+use std::{future::Future, pin::pin};
+
+/// Whichever side finished first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Either<Left, Right> {
+	/// The left side.
+	Left(Left),
+	/// The right side.
+	Right(Right),
+}
+
+impl<Left, Right> Either<Left, Right> {
+	/// Whether the left side won.
+	pub const fn IsLeft(&self) -> bool { matches!(self, Either::Left(_)) }
+}
+
+/// Resolve with whichever of `Left` and `Right` resolves first.
+///
+/// Both sides are polled in order on every wake, so a side that is already
+/// ready wins without the other being polled at all. The loser is dropped,
+/// which is the only cancellation Rust gives a future for free - and the reason
+/// the port says a caller's cancellation stops *its wait* rather than closing a
+/// page.
+pub async fn Race<Left, Right>(Left:Left, Right:Right) -> Either<Left::Output, Right::Output>
+where
+	Left: Future,
+	Right: Future, {
+	let mut Left = pin!(Left);
+	let mut Right = pin!(Right);
+	std::future::poll_fn(|Context| {
+		if let std::task::Poll::Ready(Value) = Left.as_mut().poll(Context) {
+			return std::task::Poll::Ready(Either::Left(Value));
+		}
+		if let std::task::Poll::Ready(Value) = Right.as_mut().poll(Context) {
+			return std::task::Poll::Ready(Either::Right(Value));
+		}
+		std::task::Poll::Pending
+	})
+	.await
+}
+
+--- FILE: rust/Crate/Runtime/Source/Fn/Tokio.rs ---
+//! The tokio implementation of `Pace`, behind a feature nothing enables by
+//! default.
+//!
+//! This module exists so that "the runtime owns the executor" is a statement
+//! with code behind it, and is not enabled by any crate in this workspace: the
+//! composition root starts one tokio runtime itself and supplies this `Pace` to
+//! the capabilities it composes. A capability that depended on the feature
+//! would have an executor in its dependency list, which is the thing the port
+//! shape is there to prevent.
+
+use std::time::{Duration, Instant};
+
+use crate::Struct::Call::{Clock, FutureBox, Pace};
+
+/// The clock and the wait, on tokio.
+#[derive(Debug, Default)]
+pub struct Tokio;
+
+impl Clock for Tokio {
+	fn Now(&self) -> Instant { Instant::now() }
+}
+
+impl Pace for Tokio {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> { Box::pin(tokio::time::sleep(Span)) }
+}
+
+--- FILE: rust/Crate/Runtime/Source/Library.rs ---
+//! `agentic.runtime`: execution policy and resource ownership.
+//!
+//! The runtime is a policy engine, not a scheduler of capabilities. It is
+//! handed one generation and the capabilities registered against it, and
+//! everything it answers afterwards is derived from that binding. It imports no
+//! capability, so the manifest it reports is the manifest it enforces.
+//!
+//! This crate is also the workspace's execution core. It holds the shapes every
+//! other crate needs in order to be bounded without naming an executor:
+//!
+//! - [`Struct::Call::FutureBox`] - one boxed future, the return type of every
+//!   port method, so a capability never mentions a runtime;
+//! - [`Struct::Call::Cancellation`] - the caller's signal, read as a flag and
+//!   awaited as a future;
+//! - [`Struct::Call::Clock`] and [`Struct::Call::Pace`] - the time a deadline
+//!   is compared against and the wait between two reads, both supplied rather
+//!   than reached for;
+//! - [`Fn::Bound`] and [`Fn::Race`] - the combinator that turns "one operation"
+//!   plus "one deadline" into "an answer or an expiry", written against those
+//!   traits and nothing else.
+//!
+//! Nothing here is `async`-runtime-specific. The `tokio` feature adds a
+//! `Pace` implementation and is off by default, so a capability crate that
+//! depends on this one does not inherit an executor.
+
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+
+pub use crate::{
+	Fn::{
+		BlockOn::BlockOn,
+		Bound::Bound,
+		Race::{Either, Race},
+	},
+	Struct::{
+		Call::{Call, Cancellation, Clock, Expired, FutureBox, Never, Pace, Signal, Wall},
+		Error::{Code, Error},
+		Port::{Admission, Binding, Budget, Lease, Registration, Request, Runtime, StateClass, States},
+		Runtime::{Create, Options, Policy},
+	},
+};
+
+--- FILE: rust/Crate/Runtime/Source/Struct.rs ---
+//! Types: the port, its error, the engine that enforces it, and the call shapes
+//! every other crate is written against.
+
+pub mod Call;
+pub mod Error;
+pub mod Port;
+pub mod Runtime;
+
+--- FILE: rust/Crate/Runtime/Source/Struct/Call.rs ---
+//! What every operation is bounded by, and the facilities needed to apply a
+//! bound without naming an executor.
+//!
+//! A deadline is an explicit parameter, not a global: [`Call`] carries it,
+//! every port method takes one, and a provider that wants a different bound is
+//! handed a different `Call` rather than reading a process-wide setting. The
+//! caller's cancellation rides beside it, so "I gave up" and "the deadline
+//! passed" stay two facts even where a port collapses them into one code.
+
+use std::{
+	future::Future,
+	pin::Pin,
+	sync::{
+		Arc,
+		Mutex,
+		MutexGuard,
+		atomic::{AtomicBool, Ordering},
+	},
+	task::{Poll, Waker},
+	time::{Duration, Instant},
+};
+
+/// One boxed future.
+///
+/// Every port method returns one, which is what keeps `Arc<dyn Port>` possible:
+/// a port with an `async fn` in it is not object-safe, and a port that is not
+/// object-safe cannot be substituted by a fake in a test.
+pub type FutureBox<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// The caller's cancellation.
+///
+/// Two readings of one fact: a flag, for a provider that checks before it
+/// starts work, and a future, for one that must stop in the middle. An
+/// implementation must be race-safe and must resolve immediately when already
+/// cancelled - a future that only resolves on the *next* fire would make an
+/// already-abandoned call wait for an event that has happened.
+pub trait Cancellation: Send + Sync {
+	/// Whether the signal has fired.
+	fn IsCancelled(&self) -> bool;
+	/// Resolves once the signal has fired, or at once if it already has.
+	fn Cancelled(&self) -> FutureBox<'_, ()>;
+}
+
+/// The only clock a deadline is compared against.
+///
+/// Supplied rather than reached for, so a test can expire a lease without
+/// sleeping and a caller can express a deadline on the same authority the
+/// runtime compares it against.
+pub trait Clock: Send + Sync {
+	/// The current instant, in whatever epoch the caller and the runtime
+	/// agreed.
+	fn Now(&self) -> Instant;
+}
+
+/// The clock, plus the ability to wait.
+///
+/// A capability paces itself between reads; the wait is supplied so that the
+/// pacing does not decide which executor is running. A test supplies a wait
+/// that advances its own clock, which is how a poll loop becomes deterministic
+/// instead of slow.
+pub trait Pace: Clock {
+	/// Resolve after `Span`, or at once when it is zero.
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()>;
+}
+
+/// What one operation is bounded by.
+#[derive(Clone)]
+pub struct Call {
+	/// The instant the operation may no longer continue.
+	pub Deadline:Instant,
+	/// The caller's cancellation.
+	pub Cancellation:Arc<dyn Cancellation>,
+}
+
+impl Call {
+	/// A call whose deadline is `Span` from `Clock`'s reading now.
+	pub fn Within(Span:Duration, Clock:&dyn Clock, Cancellation:Arc<dyn Cancellation>) -> Self {
+		Self { Deadline:Clock.Now() + Span, Cancellation }
+	}
+
+	/// How long is left, saturating at zero rather than panicking on a clock
+	/// that has already passed the deadline.
+	pub fn Remaining(&self, Clock:&dyn Clock) -> Duration { self.Deadline.saturating_duration_since(Clock.Now()) }
+
+	/// Whether the deadline has passed. The interval is half-open, so the
+	/// instant itself is already outside it.
+	pub fn Expired(&self, Clock:&dyn Clock) -> bool { Clock.Now() >= self.Deadline }
+
+	/// Whether the caller has given up.
+	pub fn Cancelled(&self) -> bool { self.Cancellation.IsCancelled() }
+}
+
+impl std::fmt::Debug for Call {
+	fn fmt(&self, Formatter:&mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		Formatter
+			.debug_struct("Call")
+			.field("Deadline", &self.Deadline)
+			.field("Cancelled", &self.Cancellation.IsCancelled())
+			.finish()
+	}
+}
+
+/// Why a bounded operation stopped before it produced a value.
+///
+/// Two reasons and not one: a consumer that maps both onto its own single code
+/// still needs `detail` to say which happened, and a provider that reported
+/// "timeout" for its own cancellation would be blaming the page for the caller.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Expired {
+	/// The deadline passed.
+	Timeout,
+	/// The caller's signal fired.
+	Cancelled,
+}
+
+impl Expired {
+	/// The phrase a failure detail uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			Expired::Timeout => "the deadline passed",
+			Expired::Cancelled => "the caller cancelled",
+		}
+	}
+}
+
+/// A cancellation that never fires.
+///
+/// The default for a call nobody can cancel, and the honest way to say "this
+/// operation has a deadline and no signal" instead of inventing one.
+#[derive(Debug, Default)]
+pub struct Never;
+
+impl Cancellation for Never {
+	fn IsCancelled(&self) -> bool { false }
+
+	fn Cancelled(&self) -> FutureBox<'_, ()> { Box::pin(std::future::pending()) }
+}
+
+/// A cancellation a caller fires when it gives up.
+///
+/// The waiters are woken rather than polled, so a cancelled call resolves on
+/// the thread that fired the signal instead of on the next tick of a loop. A
+/// waker that arrives after the fire is answered by the second flag read, which
+/// is why the read happens on both sides of the registration.
+#[derive(Debug, Default)]
+pub struct Signal {
+	Fired:AtomicBool,
+	Waiters:Mutex<Vec<Waker>>,
+}
+
+impl Signal {
+	/// A signal nobody has fired.
+	pub fn New() -> Arc<Self> { Arc::new(Self::default()) }
+
+	/// Fire it, waking everyone waiting. Firing twice is a no-op.
+	pub fn Fire(&self) {
+		self.Fired.store(true, Ordering::SeqCst);
+		let Waiters = std::mem::take(&mut *Self::Lock(&self.Waiters));
+		for Waker in Waiters {
+			Waker.wake();
+		}
+	}
+
+	/// A lock whose poisoning is not a failure: a panicked waiter must not make
+	/// cancellation itself unavailable.
+	fn Lock<T>(Guard:&Mutex<T>) -> MutexGuard<'_, T> { Guard.lock().unwrap_or_else(|Poison| Poison.into_inner()) }
+}
+
+impl Cancellation for Signal {
+	fn IsCancelled(&self) -> bool { self.Fired.load(Ordering::SeqCst) }
+
+	fn Cancelled(&self) -> FutureBox<'_, ()> {
+		Box::pin(std::future::poll_fn(move |Context| {
+			if self.Fired.load(Ordering::SeqCst) {
+				return Poll::Ready(());
+			}
+			Self::Lock(&self.Waiters).push(Context.waker().clone());
+			if self.Fired.load(Ordering::SeqCst) {
+				return Poll::Ready(());
+			}
+			Poll::Pending
+		}))
+	}
+}
+
+/// The wall clock, for a caller that has nothing better to supply.
+#[derive(Debug, Default)]
+pub struct Wall;
+
+impl Clock for Wall {
+	fn Now(&self) -> Instant { Instant::now() }
+}
+
+--- FILE: rust/Crate/Runtime/Source/Struct/Error.rs ---
+//! The three failure modes `module.json` declares, and no others.
+//!
+//! One enum, one variant per code, and `detail` kept apart from the message in
+//! every one of them: a consumer narrows on the variant, a human reads the
+//! message, and a caller that needs to know what was actually observed reads
+//! `detail` instead of parsing a sentence.
+
+use std::fmt;
+
+/// The codes, in the order the manifest names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Code {
+	/// The request may not proceed: it is malformed, or its authority ended.
+	AdmissionRefused,
+	/// The resource is held under a newer fence, or an effect is still in it.
+	LeaseHeld,
+	/// The run's own allowance is spent: its deadline passed or its count ran
+	/// out.
+	BudgetExhausted,
+}
+
+impl Code {
+	/// The string the manifest uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			Code::AdmissionRefused => "admission-refused",
+			Code::LeaseHeld => "lease-held",
+			Code::BudgetExhausted => "budget-exhausted",
+		}
+	}
+
+	/// Every code, so a harness can compare the manifest against the type.
+	pub const fn All() -> [Code; 3] { [Code::AdmissionRefused, Code::LeaseHeld, Code::BudgetExhausted] }
+
+	/// The code a manifest string names, if it names one of the three.
+	pub fn Parse(Value:&str) -> Option<Code> { Code::All().into_iter().find(|Code| Code.Name() == Value) }
+}
+
+/// The one error type `claim`, `renew` and `withLease` reject with.
+///
+/// `admit` does not return one - its port answers a refusal - so a caller has
+/// two shapes to handle and only one of them is an error. That asymmetry is the
+/// port's: admission answers a question, while a claim or a write either
+/// happened or did not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+	/// The request may not proceed.
+	AdmissionRefused {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed, kept apart from the sentence.
+		Detail:String,
+	},
+	/// The resource is held, or an effect is still in it.
+	LeaseHeld {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+	/// The run's allowance is spent.
+	BudgetExhausted {
+		/// The sentence a human reads.
+		Message:String,
+		/// What was observed.
+		Detail:String,
+	},
+}
+
+impl Error {
+	/// A refusal with nothing observed to add.
+	pub fn Refused(Message:impl Into<String>) -> Self {
+		Error::AdmissionRefused { Message:Message.into(), Detail:String::new() }
+	}
+
+	/// A held resource with nothing observed to add.
+	pub fn Held(Message:impl Into<String>) -> Self { Error::LeaseHeld { Message:Message.into(), Detail:String::new() } }
+
+	/// A spent allowance with nothing observed to add.
+	pub fn Spent(Message:impl Into<String>) -> Self {
+		Error::BudgetExhausted { Message:Message.into(), Detail:String::new() }
+	}
+
+	/// The same failure, with what was observed attached.
+	pub fn WithDetail(self, Detail:impl Into<String>) -> Self {
+		let Detail = Detail.into();
+		match self {
+			Error::AdmissionRefused { Message, .. } => Error::AdmissionRefused { Message, Detail },
+			Error::LeaseHeld { Message, .. } => Error::LeaseHeld { Message, Detail },
+			Error::BudgetExhausted { Message, .. } => Error::BudgetExhausted { Message, Detail },
+		}
+	}
+
+	/// The code this failure carries.
+	pub const fn Code(&self) -> Code {
+		match self {
+			Error::AdmissionRefused { .. } => Code::AdmissionRefused,
+			Error::LeaseHeld { .. } => Code::LeaseHeld,
+			Error::BudgetExhausted { .. } => Code::BudgetExhausted,
+		}
+	}
+
+	/// The sentence a human reads.
+	pub fn Message(&self) -> &str {
+		match self {
+			Error::AdmissionRefused { Message, .. }
+			| Error::LeaseHeld { Message, .. }
+			| Error::BudgetExhausted { Message, .. } => Message,
+		}
+	}
+
+	/// What was observed, which may be empty.
+	pub fn Detail(&self) -> &str {
+		match self {
+			Error::AdmissionRefused { Detail, .. }
+			| Error::LeaseHeld { Detail, .. }
+			| Error::BudgetExhausted { Detail, .. } => Detail,
+		}
+	}
+}
+
+impl fmt::Display for Error {
+	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(Formatter, "{}: {}", self.Code().Name(), self.Message())
+	}
+}
+
+impl std::error::Error for Error {}
+
+--- FILE: rust/Crate/Runtime/Source/Struct/Port.rs ---
+//! The port `agentic.runtime` promises, written the way a consumer asks for it.
+//!
+//! The port states more than data shapes, because two runtimes that agreed on
+//! the shapes alone would still disagree about when authority ends:
+//!
+//! - **Admission is per effect, not per run.** `WithLease` re-checks the fence
+//!   before every write. A lease that expired while its worker was still
+//!   running refuses the next write instead of letting it land late: the worker
+//!   keeps existing, and stops having authority.
+//! - **A fence is a number, and expiry is a clock.** A monotonically increasing
+//!   fence alone does not prove a lease is live - an expired worker can arrive
+//!   before any newer token has reached the resource - so every check compares
+//!   the presented fence against the record *and* the record's expiry against
+//!   the clock. Either one failing is a refusal.
+//! - **A held resource is refused, not queued.** A second claim while the first
+//!   is live is `lease-held`. A queue would turn a scheduling decision into a
+//!   promise the runtime cannot keep.
+//! - **A budget belongs to one run.** The deadline and the operation count are
+//!   the caller's, supplied when the run claims its resource. Nothing is
+//!   pooled.
+//! - **Release never throws, and is safe twice.** Cleanup runs on the failure
+//!   path by definition, so it cannot be the step that turns a handled failure
+//!   into an unhandled one.
+//!
+//! One port shape changed in the port: `claim(resource, ttl, budget?)` and
+//! `now()`/`reflect()` are on this one trait instead of a `Policy` extension,
+//! because Rust has no method overloading and an extension trait that repeats
+//! `claim` with a different arity cannot exist.
+
+use std::time::{Duration, Instant};
+
+use crate::Struct::{
+	Call::{Clock, FutureBox},
+	Error::Error,
+};
+
+/// The four state classes, in the order the manifest names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum StateClass {
+	/// Nothing is retained between runs.
+	Stateless,
+	/// A transport or session is retained.
+	HoldsTransport,
+	/// An identity is retained.
+	HoldsIdentity,
+	/// Workspace-scoped state is retained.
+	HoldsWorkspace,
+}
+
+impl StateClass {
+	/// The string the manifest uses.
+	pub const fn Name(self) -> &'static str {
+		match self {
+			StateClass::Stateless => "stateless",
+			StateClass::HoldsTransport => "holds-transport",
+			StateClass::HoldsIdentity => "holds-identity",
+			StateClass::HoldsWorkspace => "holds-workspace",
+		}
+	}
+
+	/// Every class, so a harness can compare the manifest against the type.
+	pub const fn All() -> [StateClass; 4] {
+		[
+			StateClass::Stateless,
+			StateClass::HoldsTransport,
+			StateClass::HoldsIdentity,
+			StateClass::HoldsWorkspace,
+		]
+	}
+
+	/// The class a manifest string names, if it names one of the four.
+	pub fn Parse(Value:&str) -> Option<StateClass> { StateClass::All().into_iter().find(|State| State.Name() == Value) }
+}
+
+/// The four state classes, in the order the manifest names them.
+pub const States:[StateClass; 4] = StateClass::All();
+
+/// One authority over one resource, granted for a bounded time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Lease {
+	/// This grant's identity. Unique within the process that issued it.
+	pub Id:String,
+	/// What it grants: a name the composition root chose, never a capability's.
+	pub Resource:String,
+	/// Monotonic per resource, never reused, never reset by a release.
+	pub Fence:u64,
+	/// When authority ends, on the runtime's clock. Half-open: the instant
+	/// itself is already outside it.
+	pub ExpiresAt:Instant,
+}
+
+/// One run's allowance: a deadline and a count of effects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Budget {
+	/// Absolute, on the same clock as `Lease::ExpiresAt`. `None` is a run with
+	/// no time bound, which is a decision the caller makes explicitly
+	/// rather than a default the runtime invents.
+	pub Deadline:Option<Instant>,
+	/// How many effects the run may still perform. `0` means none: the run was
+	/// admitted to hold the resource and do nothing with it, which is a
+	/// legitimate probe and not an error.
+	pub Operations:u64,
+}
+
+/// What the composition root registers: a capability's name and its retention.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Registration {
+	/// The name `Admit` will be asked about.
+	pub Name:String,
+	/// The strongest state class the capability retains between runs.
+	pub State:StateClass,
+}
+
+/// What the runtime reports about itself: the binding it enforces.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Binding {
+	/// The generation this runtime was bound to at construction.
+	pub Generation:u64,
+	/// The capabilities it will admit, sorted by name.
+	pub Capabilities:Vec<Registration>,
+}
+
+/// One run asking to be admitted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Request {
+	/// The capability asking.
+	pub Capability:String,
+	/// The state class it claims to need.
+	pub State:StateClass,
+	/// The generation it believes it is running under.
+	pub Generation:u64,
+}
+
+/// The answer `Admit` gives. A refusal is a value, not an error: admission
+/// answers a question, while a claim or a write either happened or did not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Admission {
+	/// The run may proceed.
+	Admitted,
+	/// It may not, for this reason. Prefixed with the code, so the string is
+	/// already in the vocabulary the manifest promises.
+	Refused(String),
+}
+
+impl Admission {
+	/// Whether the run was admitted.
+	pub fn Ok(&self) -> bool { matches!(self, Admission::Admitted) }
+
+	/// The refusal's reason, or an empty string when it was admitted.
+	pub fn Reason(&self) -> &str {
+		match self {
+			Admission::Admitted => "",
+			Admission::Refused(Reason) => Reason,
+		}
+	}
+}
+
+/// The port this crate offers.
+///
+/// `WithLease` is generic over the write's return type, which is why this trait
+/// is not object-safe: a boxed `dyn Runtime` would have to erase `T`, and
+/// erasing it is what a caller writing `withLease::<Row>` is asking not to
+/// happen. The composition root holds the concrete engine instead.
+pub trait Runtime: Send + Sync {
+	/// Admit a run, or refuse it with the reason.
+	fn Admit<'a>(&'a self, Request:Request) -> FutureBox<'a, Admission>;
+	/// Claim a resource for one run, with that run's budget, or fail because
+	/// one is held. Omitting the budget means the run is unbounded.
+	fn Claim<'a>(
+		&'a self,
+		Resource:&'a str,
+		Ttl:Duration,
+		Budget:Option<Budget>,
+	) -> FutureBox<'a, Result<Lease, Error>>;
+	/// Extend a lease, only for the holder of the current fence, and only
+	/// forwards.
+	fn Renew<'a>(&'a self, Lease:Lease, Ttl:Duration) -> FutureBox<'a, Result<Lease, Error>>;
+	/// Write under a lease; refuse when the fence is stale, released or
+	/// expired.
+	fn WithLease<'a, T, Write>(&'a self, Lease:Lease, Write:Write) -> FutureBox<'a, Result<T, Error>>
+	where
+		T: Send + 'a,
+		Write: FnOnce() -> FutureBox<'a, T> + Send + 'a;
+	/// Release, always. Never fails.
+	fn Release<'a>(&'a self, Lease:Lease) -> FutureBox<'a, ()>;
+	/// The runtime's clock, so a deadline can be expressed on it.
+	fn Now(&self) -> Instant;
+	/// The manifest this runtime enforces, and the generation it is bound to.
+	fn Reflect(&self) -> Binding;
+	/// The clock itself, for a caller that must express a deadline on it.
+	fn Clock(&self) -> &dyn Clock;
+}
+
+--- FILE: rust/Crate/Runtime/Source/Struct/Runtime.rs ---
+//! The implementation of the port in `Port.rs`: admit a run, lease a resource
+//! with a fence, bound it with a budget, and clean up without throwing.
+//!
+//! Everything here is process-local policy. There is no transport, no
+//! capability and no import from another crate: the runtime is handed a
+//! generation and a registration list and answers from that binding alone,
+//! which is what makes "the manifest it reports is the manifest it enforces"
+//! checkable rather than asserted.
+//!
+//! Three mechanisms carry the rules the port states:
+//!
+//! 1. **A record per resource, and a fence counter that outlives it.** The
+//!    record is what is live now; the counter is what was ever issued. Deleting
+//!    the record on release therefore cannot make an old number current again.
+//! 2. **One locked step per verb.** Claim, renew, release and the admission
+//!    step of a write all mutate the same two maps, and each does so under one
+//!    lock. A check that is not atomic with the mutation it authorises is the
+//!    race the fence exists to close: two claims that both read "free" both
+//!    win. The write itself is the caller's and is not under the lock - holding
+//!    it across the write would deadlock a write that renews its own lease, and
+//!    a slow write would stall every other resource.
+//! 3. **Effects in flight are counted, and a takeover waits for them.** A fence
+//!    proves ordering, not liveness: an expired worker can arrive before any
+//!    newer token reaches the resource. Counting admitted-but-unsettled effects
+//!    means a claim cannot take a resource out from under an effect that is
+//!    still running, and a release cannot free one either. The count is
+//!    decremented by a guard's `Drop`, so an abandoned future settles exactly
+//!    as a completed one does.
+
+use std::{
+	collections::{BTreeMap, HashMap},
+	sync::{
+		Arc,
+		Mutex,
+		MutexGuard,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::{Duration, Instant},
+};
+
+use crate::Struct::{
+	Call::{Clock, FutureBox, Wall},
+	Error::Error,
+	Port::{Admission, Binding, Budget, Lease, Registration, Request, Runtime, StateClass},
+};
+
+/// What the composition root hands the engine.
+pub struct Options {
+	/// The generation the composition root bound this runtime to.
+	pub Generation:u64,
+	/// What it may admit, by name, with the state class each declares.
+	pub Capabilities:Vec<Registration>,
+	/// The clock leases and budgets are read on.
+	pub Clock:Arc<dyn Clock>,
+}
+
+impl Options {
+	/// A runtime with no capabilities and the wall clock.
+	pub fn New(Generation:u64) -> Self { Self { Generation, Capabilities:Vec::new(), Clock:Arc::new(Wall) } }
+
+	/// The same options, with one more registration.
+	pub fn With(mut self, Name:impl Into<String>, State:StateClass) -> Self {
+		self.Capabilities.push(Registration { Name:Name.into(), State });
+		self
+	}
+
+	/// The same options, on another clock.
+	pub fn On(mut self, Clock:Arc<dyn Clock>) -> Self {
+		self.Clock = Clock;
+		self
+	}
+}
+
+/// Distinguishes one runtime's leases from another's in the same process.
+///
+/// Lease ids are built from this token, so a lease issued by one runtime is not
+/// accepted by a second one that happens to have issued the same fence number
+/// for the same resource name. Two runtimes are two authorities, and a fence
+/// number is only meaningful inside the authority that counted it.
+static Instances:AtomicU64 = AtomicU64::new(0);
+
+/// What the runtime knows about one live grant.
+struct Run {
+	/// The id the lease was issued with; a presented lease must carry it.
+	Id:String,
+	/// The fence the resource is at while this record is the live one.
+	Fence:u64,
+	/// The record's own expiry. A presented lease's copy is never trusted.
+	ExpiresAt:Instant,
+	/// This run's allowance, owned by the runtime once the claim is admitted.
+	Budget:Option<Budget>,
+	/// Effects admitted under this record that have not settled yet.
+	InFlight:u64,
+	/// Set when the holder released while an effect was still in flight.
+	Released:bool,
+}
+
+/// The two maps every verb mutates, behind one lock.
+#[derive(Default)]
+struct Inner {
+	/// What is live now, by resource name.
+	Runs:HashMap<String, Run>,
+	/// The highest fence ever issued, by resource name. Never reset.
+	Fences:HashMap<String, u64>,
+}
+
+/// Accounts for one admitted effect, however it ends.
+///
+/// A record released while it had an effect in flight survives until that
+/// effect settles, and is deleted then. `Drop` is what makes that true for an
+/// abandoned future as well as a completed one: there is no `finally` in Rust,
+/// and a cancellation that leaked the count would hold a resource until the
+/// process ended.
+struct Settle<'a> {
+	Inner:&'a Mutex<Inner>,
+	Resource:String,
+	Fence:u64,
+}
+
+impl Drop for Settle<'_> {
+	fn drop(&mut self) {
+		let mut Inner = Policy::Lock(self.Inner);
+		let Remove = match Inner.Runs.get_mut(&self.Resource) {
+			Some(Run) if Run.Fence == self.Fence => {
+				Run.InFlight = Run.InFlight.saturating_sub(1);
+				Run.Released && Run.InFlight == 0
+			},
+			_ => false,
+		};
+		if Remove {
+			Inner.Runs.remove(&self.Resource);
+		}
+	}
+}
+
+/// The engine: one generation, one registration list, one clock, one authority.
+pub struct Policy {
+	Generation:u64,
+	Capabilities:BTreeMap<String, Registration>,
+	Clock:Arc<dyn Clock>,
+	Token:String,
+	Inner:Mutex<Inner>,
+}
+
+/// Bind a runtime to one generation and one registration list.
+///
+/// A duplicate registration is refused here rather than resolved, because two
+/// declarations of one name is a composition root disagreeing with itself and
+/// picking one silently is how a pre-warm harness prepares the wrong thing.
+pub fn Create(Options:Options) -> Result<Policy, String> {
+	let mut Capabilities = BTreeMap::new();
+	for Registration in Options.Capabilities {
+		if Capabilities.contains_key(&Registration.Name) {
+			return Err(format!("{} is registered twice", Registration.Name));
+		}
+		Capabilities.insert(Registration.Name.clone(), Registration);
+	}
+	let Instance = Instances.fetch_add(1, Ordering::SeqCst) + 1;
+	Ok(Policy {
+		Generation:Options.Generation,
+		Capabilities,
+		Clock:Options.Clock,
+		Token:format!("r{Instance}"),
+		Inner:Mutex::new(Inner::default()),
+	})
+}
+
+impl Policy {
+	/// A lock whose poisoning is not a failure: a panicked caller must not make
+	/// the whole runtime unusable.
+	fn Lock(Guard:&Mutex<Inner>) -> MutexGuard<'_, Inner> { Guard.lock().unwrap_or_else(|Poison| Poison.into_inner()) }
+
+	/// The admission predicate, evaluated at the effect.
+	///
+	/// Five checks, ordered so the reason is the true one:
+	///
+	/// 1. **No record** - nothing is held under that name any more.
+	/// 2. **Fence mismatch** - the caller's authority was superseded.
+	///    `lease-held`: somebody else holds it, and the caller's copy is
+	///    history.
+	/// 3. **Id mismatch** - the fence is current but the lease was not the one
+	///    issued for it, which happens when a lease is carried between two
+	///    runtimes or hand-built.
+	/// 4. **Released** - the holder gave the authority back while an effect was
+	///    still running.
+	/// 5. **Expired** - the fence matches, the lease is the issued one, and
+	///    authority ended anyway. This is the check that makes a worker's late
+	///    write fail rather than land.
+	fn Admit<'a>(Inner:&'a mut Inner, Lease:&Lease, Now:Instant) -> Result<&'a mut Run, Error> {
+		let Some(Run) = Inner.Runs.get_mut(&Lease.Resource) else {
+			return Err(Error::Refused(format!("no lease is live for {}", Lease.Resource)));
+		};
+		if Run.Fence != Lease.Fence {
+			return Err(Error::Held(format!(
+				"{} is held under fence {}, not fence {}",
+				Lease.Resource, Run.Fence, Lease.Fence
+			)));
+		}
+		if Run.Id != Lease.Id {
+			return Err(Error::Refused(format!(
+				"the lease presented for fence {} of {} was not the one issued",
+				Run.Fence, Lease.Resource
+			)));
+		}
+		if Run.Released {
+			return Err(Error::Refused(format!("the lease on {} was released", Lease.Resource)));
+		}
+		if Now >= Run.ExpiresAt {
+			return Err(Error::Refused(format!(
+				"the lease on {} expired at {:?}, and the clock reads {:?}",
+				Lease.Resource, Run.ExpiresAt, Now
+			)));
+		}
+		Ok(Run)
+	}
+
+	/// Spend one operation of the run's allowance.
+	///
+	/// Charged before the effect, not after: an effect that fails was still
+	/// attempted, and a count that only moved on success would let a run that
+	/// fails in a loop spend nothing. The charge happens under the same lock as
+	/// the fence check, so two effects cannot both read the last operation.
+	fn Charge(Run:&mut Run, Now:Instant) -> Result<(), Error> {
+		let Some(Budget) = Run.Budget.as_mut() else {
+			return Ok(());
+		};
+		if let Some(Deadline) = Budget.Deadline
+			&& Now >= Deadline
+		{
+			return Err(Error::Spent(format!(
+				"the run's deadline passed at {Deadline:?}, and the clock reads {Now:?}"
+			)));
+		}
+		if Budget.Operations == 0 {
+			return Err(Error::Spent("the run has spent every operation it was granted"));
+		}
+		Budget.Operations -= 1;
+		Ok(())
+	}
+}
+
+impl Runtime for Policy {
+	fn Admit<'a>(&'a self, Request:Request) -> FutureBox<'a, Admission> {
+		Box::pin(async move {
+			if Request.Generation != self.Generation {
+				return Admission::Refused(format!(
+					"admission-refused: generation {} is not bound; this runtime enforces generation {}",
+					Request.Generation, self.Generation
+				));
+			}
+			let Some(Registered) = self.Capabilities.get(&Request.Capability) else {
+				return Admission::Refused(format!(
+					"admission-refused: {} is not registered with this runtime",
+					Request.Capability
+				));
+			};
+			if Registered.State != Request.State {
+				return Admission::Refused(format!(
+					"admission-refused: {} declares {}, not {}",
+					Registered.Name,
+					Registered.State.Name(),
+					Request.State.Name()
+				));
+			}
+			Admission::Admitted
+		})
+	}
+
+	fn Claim<'a>(
+		&'a self,
+		Resource:&'a str,
+		Ttl:Duration,
+		Budget:Option<Budget>,
+	) -> FutureBox<'a, Result<Lease, Error>> {
+		Box::pin(async move {
+			if Resource.is_empty() {
+				return Err(Error::Refused("a claim names the resource it wants"));
+			}
+			if Ttl.is_zero() {
+				return Err(Error::Refused(format!(
+					"a lease ttl must be a positive, finite number of milliseconds; got {}",
+					Ttl.as_millis()
+				)));
+			}
+			let Now = self.Clock.Now();
+			let ExpiresAt = Now.checked_add(Ttl).ok_or_else(|| {
+				Error::Refused(format!("a lease ttl of {}ms has no instant to expire at", Ttl.as_millis()))
+			})?;
+			let mut Inner = Self::Lock(&self.Inner);
+			if let Some(Current) = Inner.Runs.get(Resource) {
+				if Current.InFlight > 0 {
+					return Err(Error::Held(format!(
+						"{Resource} has an effect in flight under fence {}; a takeover waits for it to settle",
+						Current.Fence
+					)));
+				}
+				if Now < Current.ExpiresAt {
+					return Err(Error::Held(format!(
+						"{Resource} is held under fence {} until {:?}",
+						Current.Fence, Current.ExpiresAt
+					)));
+				}
+			}
+			let Fence = Inner.Fences.get(Resource).copied().unwrap_or(0) + 1;
+			Inner.Fences.insert(Resource.to_string(), Fence);
+			let Lease = Lease {
+				Id:format!("{}#{}#{}", self.Token, Resource, Fence),
+				Resource:Resource.to_string(),
+				Fence,
+				ExpiresAt,
+			};
+			Inner.Runs.insert(
+				Resource.to_string(),
+				Run { Id:Lease.Id.clone(), Fence, ExpiresAt, Budget, InFlight:0, Released:false },
+			);
+			Ok(Lease)
+		})
+	}
+
+	fn Renew<'a>(&'a self, Lease:Lease, Ttl:Duration) -> FutureBox<'a, Result<Lease, Error>> {
+		Box::pin(async move {
+			if Ttl.is_zero() {
+				return Err(Error::Refused(format!(
+					"a renewal ttl must be a positive, finite number of milliseconds; got {}",
+					Ttl.as_millis()
+				)));
+			}
+			let Now = self.Clock.Now();
+			let mut Inner = Self::Lock(&self.Inner);
+			let Run = Self::Admit(&mut Inner, &Lease, Now)?;
+			let ExpiresAt = Now.checked_add(Ttl).ok_or_else(|| {
+				Error::Refused(format!("a renewal ttl of {}ms has no instant to expire at", Ttl.as_millis()))
+			})?;
+			if ExpiresAt <= Run.ExpiresAt {
+				return Err(Error::Refused(format!(
+					"a renewal must extend the lease: {ExpiresAt:?} is not later than {:?}. Release it instead.",
+					Run.ExpiresAt
+				)));
+			}
+			Run.ExpiresAt = ExpiresAt;
+			Ok(Lease { ExpiresAt, ..Lease })
+		})
+	}
+
+	fn WithLease<'a, T, Write>(&'a self, Lease:Lease, Write:Write) -> FutureBox<'a, Result<T, Error>>
+	where
+		T: Send + 'a,
+		Write: FnOnce() -> FutureBox<'a, T> + Send + 'a, {
+		Box::pin(async move {
+			{
+				let Now = self.Clock.Now();
+				let mut Inner = Self::Lock(&self.Inner);
+				let Run = Self::Admit(&mut Inner, &Lease, Now)?;
+				Self::Charge(Run, Now)?;
+				Run.InFlight += 1;
+			}
+			let Guard = Settle { Inner:&self.Inner, Resource:Lease.Resource.clone(), Fence:Lease.Fence };
+			let Value = Write().await;
+			drop(Guard);
+			Ok(Value)
+		})
+	}
+
+	fn Release<'a>(&'a self, Lease:Lease) -> FutureBox<'a, ()> {
+		Box::pin(async move {
+			let mut Inner = Self::Lock(&self.Inner);
+			// A superseded lease is not this caller's to end: the resource now
+			// belongs to the fence that took it over, and releasing here would
+			// hand a stranger's authority back.
+			let Remove = match Inner.Runs.get_mut(&Lease.Resource) {
+				Some(Run) if Run.Fence == Lease.Fence => {
+					Run.Released = true;
+					Run.InFlight == 0
+				},
+				_ => false,
+			};
+			if Remove {
+				Inner.Runs.remove(&Lease.Resource);
+			}
+		})
+	}
+
+	fn Now(&self) -> Instant { self.Clock.Now() }
+
+	fn Reflect(&self) -> Binding {
+		Binding {
+			Generation:self.Generation,
+			Capabilities:self.Capabilities.values().cloned().collect(),
+		}
+	}
+
+	fn Clock(&self) -> &dyn Clock { self.Clock.as_ref() }
+}
+
+--- FILE: rust/Crate/Runtime/Test/Runtime.rs ---
+//! `agentic.runtime`, exercised against a clock the test owns.
+//!
+//! No tokio, no browser, no network and no sleeping: a lease expires because
+//! the test advances a clock, which is the whole reason the clock is a
+//! parameter of the port rather than a call to the system's.
+
+use std::{
+	sync::{
+		Arc,
+		Mutex,
+		atomic::{AtomicBool, Ordering},
+	},
+	time::{Duration, Instant},
+};
+
+use AgenticRuntime::{
+	Admission,
+	BlockOn,
+	Budget,
+	Call,
+	Cancellation,
+	Clock,
+	Code,
+	Create,
+	Error,
+	Lease,
+	Options,
+	Policy,
+	Request,
+	Runtime,
+	StateClass,
+	States,
+};
+
+/// A clock that only moves when the test moves it.
+#[derive(Debug)]
+struct TestClock {
+	Now:Mutex<Instant>,
+}
+
+impl TestClock {
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()) }) }
+
+	fn Advance(&self, Span:Duration) {
+		let mut Now = self.Now.lock().unwrap();
+		*Now += Span;
+	}
+}
+
+impl Clock for TestClock {
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
+}
+
+/// A runtime bound to generation 7 with two registrations.
+fn Engine(Clock:Arc<TestClock>) -> Policy {
+	Create(
+		Options::New(7)
+			.With("chat", StateClass::HoldsTransport)
+			.With("verify", StateClass::Stateless)
+			.On(Clock),
+	)
+	.expect("the runtime binds")
+}
+
+fn Claim(Policy:&Policy, Resource:&str, Ttl:Duration) -> Result<Lease, Error> {
+	BlockOn(Policy.Claim(Resource, Ttl, None))
+}
+
+fn Claimed(Policy:&Policy, Resource:&str, Ttl:Duration) -> Lease {
+	Claim(Policy, Resource, Ttl).expect("the claim is admitted")
+}
+
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
+
+/// Poll a future once, without an executor, so a test can observe the state
+/// between "admitted" and "settled" instead of only after it finishes.
+fn PollOnce<Work:std::future::Future + ?Sized>(Work:std::pin::Pin<&mut Work>) -> bool {
+	let Waker = std::task::Waker::noop();
+	let mut Context = std::task::Context::from_waker(Waker);
+	matches!(Work.poll(&mut Context), std::task::Poll::Ready(_))
+}
+
+#[test]
+fn the_port_declares_exactly_the_errors_the_manifest_promises() {
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["admission-refused", "lease-held", "budget-exhausted"]);
+	let Manifest = include_str!("../module.json");
+	for Name in Declared {
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
+	}
+}
+
+#[test]
+fn the_port_declares_exactly_the_state_classes_the_manifest_promises() {
+	let Declared:Vec<&str> = States.into_iter().map(StateClass::Name).collect();
+	assert_eq!(
+		Declared,
+		vec!["stateless", "holds-transport", "holds-identity", "holds-workspace"]
+	);
+	assert_eq!(StateClass::Parse("holds-identity"), Some(StateClass::HoldsIdentity));
+	assert_eq!(StateClass::Parse("resident"), None);
+}
+
+#[test]
+fn reads_the_clock_it_was_given_not_the_wall_clock() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Before = Engine.Now();
+	Clock.Advance(Span(1_000));
+	assert_eq!(Engine.Now(), Before + Span(1_000));
+}
+
+#[test]
+fn admits_a_registered_capability_at_the_generation_it_is_bound_to() {
+	let Engine = Engine(TestClock::New());
+	let Answer = BlockOn(Engine.Admit(Request {
+		Capability:"chat".to_string(),
+		State:StateClass::HoldsTransport,
+		Generation:7,
+	}));
+	assert_eq!(Answer, Admission::Admitted);
+	assert!(Answer.Ok());
+}
+
+#[test]
+fn refuses_a_generation_it_was_not_bound_to() {
+	let Engine = Engine(TestClock::New());
+	let Answer = BlockOn(Engine.Admit(Request {
+		Capability:"chat".to_string(),
+		State:StateClass::HoldsTransport,
+		Generation:8,
+	}));
+	assert!(!Answer.Ok());
+	assert!(Answer.Reason().starts_with("admission-refused: generation 8"));
+}
+
+#[test]
+fn refuses_a_capability_it_does_not_register() {
+	let Engine = Engine(TestClock::New());
+	let Answer = BlockOn(Engine.Admit(Request {
+		Capability:"browse".to_string(),
+		State:StateClass::HoldsTransport,
+		Generation:7,
+	}));
+	assert!(!Answer.Ok());
+	assert!(Answer.Reason().contains("browse is not registered"));
+}
+
+#[test]
+fn refuses_a_state_class_the_registration_does_not_declare() {
+	let Engine = Engine(TestClock::New());
+	let Answer = BlockOn(Engine.Admit(Request {
+		Capability:"verify".to_string(),
+		State:StateClass::HoldsWorkspace,
+		Generation:7,
+	}));
+	assert!(!Answer.Ok());
+	assert!(Answer.Reason().contains("verify declares stateless"));
+}
+
+#[test]
+fn the_manifest_it_reports_is_the_manifest_it_enforces() {
+	let Engine = Engine(TestClock::New());
+	let Binding = Engine.Reflect();
+	assert_eq!(Binding.Generation, 7);
+	let Names:Vec<&str> = Binding
+		.Capabilities
+		.iter()
+		.map(|Registration| Registration.Name.as_str())
+		.collect();
+	assert_eq!(Names, vec!["chat", "verify"], "sorted by name");
+}
+
+#[test]
+fn a_second_claim_is_refused_while_the_first_is_live() {
+	let Engine = Engine(TestClock::New());
+	let First = Claimed(&Engine, "page", Span(1_000));
+	let Second = Claim(&Engine, "page", Span(1_000));
+	assert_eq!(Second.unwrap_err().Code(), Code::LeaseHeld);
+	assert_eq!(First.Fence, 1);
+}
+
+#[test]
+fn a_claim_takes_over_an_expired_lease_and_the_fence_advances() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let First = Claimed(&Engine, "page", Span(100));
+	Clock.Advance(Span(101));
+	let Second = Claimed(&Engine, "page", Span(100));
+	assert_eq!(Second.Fence, First.Fence + 1);
+	assert_ne!(Second.Id, First.Id);
+}
+
+#[test]
+fn a_stale_fence_is_refused_and_the_write_never_lands() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Stale = Claimed(&Engine, "page", Span(100));
+	Clock.Advance(Span(200));
+	let _Current = Claimed(&Engine, "page", Span(100));
+	let Landed = AtomicBool::new(false);
+	let Outcome = BlockOn(Engine.WithLease(Stale, || {
+		Box::pin(async {
+			Landed.store(true, Ordering::SeqCst);
+			1
+		})
+	}));
+	assert_eq!(Outcome.unwrap_err().Code(), Code::LeaseHeld);
+	assert!(!Landed.load(Ordering::SeqCst), "the late write landed");
+}
+
+#[test]
+fn a_lease_that_expires_mid_run_refuses_the_next_write() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Lease = Claimed(&Engine, "page", Span(100));
+	let First = BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { 1 })));
+	assert_eq!(First.unwrap(), 1);
+	Clock.Advance(Span(101));
+	let Second = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 2 })));
+	let Error = Second.unwrap_err();
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("expired"));
+}
+
+#[test]
+fn a_renewal_extends_the_lease_for_the_current_holder() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Lease = Claimed(&Engine, "page", Span(100));
+	Clock.Advance(Span(50));
+	let Renewed = BlockOn(Engine.Renew(Lease.clone(), Span(500))).expect("the renewal holds");
+	assert_eq!(Renewed.Fence, Lease.Fence);
+	assert_eq!(Renewed.Id, Lease.Id);
+	assert_eq!(Renewed.ExpiresAt, Lease.ExpiresAt + Span(450));
+	Clock.Advance(Span(400));
+	let Write = BlockOn(Engine.WithLease(Renewed, || Box::pin(async { 1 })));
+	assert_eq!(Write.unwrap(), 1, "the extension is what kept it live");
+}
+
+#[test]
+fn a_renewal_that_does_not_extend_the_lease_is_refused() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	Clock.Advance(Span(500));
+	let Outcome = BlockOn(Engine.Renew(Lease, Span(100)));
+	let Error = Outcome.unwrap_err();
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("must extend"));
+}
+
+#[test]
+fn a_renewal_after_expiry_is_refused_rather_than_resurrected() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Lease = Claimed(&Engine, "page", Span(100));
+	Clock.Advance(Span(101));
+	let Outcome = BlockOn(Engine.Renew(Lease, Span(1_000)));
+	assert_eq!(Outcome.unwrap_err().Code(), Code::AdmissionRefused);
+}
+
+#[test]
+fn a_renewal_from_a_superseded_lease_is_refused() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let First = Claimed(&Engine, "page", Span(100));
+	Clock.Advance(Span(101));
+	let Second = Claimed(&Engine, "page", Span(1_000));
+	let Outcome = BlockOn(Engine.Renew(First, Span(2_000)));
+	assert_eq!(Outcome.unwrap_err().Code(), Code::LeaseHeld);
+	assert_eq!(Second.Fence, 2);
+}
+
+#[test]
+fn a_lease_from_another_runtime_is_not_this_runtimes_lease() {
+	let Clock = TestClock::New();
+	let One = Engine(Clock.clone());
+	let Two = Engine(Clock.clone());
+	let Foreign = Claimed(&One, "page", Span(1_000));
+	// The second runtime issues its own first fence for the same resource name.
+	let Own = Claimed(&Two, "page", Span(1_000));
+	assert_eq!(Foreign.Fence, Own.Fence, "both are fence 1");
+	let Outcome = BlockOn(Two.WithLease(Foreign, || Box::pin(async { 1 })));
+	let Error = Outcome.unwrap_err();
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("was not the one issued"));
+}
+
+#[test]
+fn a_claim_during_an_effect_on_an_expired_lease_is_refused() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Lease = Claimed(&Engine, "page", Span(100));
+	// The effect is admitted, and the lease expires while it is still running.
+	let mut Write = Engine.WithLease(Lease.clone(), || Box::pin(std::future::pending::<i32>()));
+	assert!(!PollOnce(Write.as_mut()), "the effect is admitted and waiting");
+	Clock.Advance(Span(200));
+	let Running = Engine.Claim("page", Span(1_000), None);
+	let Error = BlockOn(Running).unwrap_err();
+	assert_eq!(Error.Code(), Code::LeaseHeld);
+	assert!(Error.Message().contains("effect in flight"));
+	// Dropping the abandoned effect settles it, which is what frees the
+	// resource.
+	drop(Write);
+	assert_eq!(Claimed(&Engine, "page", Span(1_000)).Fence, 2);
+}
+
+#[test]
+fn a_malformed_claim_is_refused_not_panicked() {
+	let Engine = Engine(TestClock::New());
+	let Empty = Claim(&Engine, "", Span(1_000)).unwrap_err();
+	assert_eq!(Empty.Code(), Code::AdmissionRefused);
+	let Zero = Claim(&Engine, "page", Duration::ZERO).unwrap_err();
+	assert_eq!(Zero.Code(), Code::AdmissionRefused);
+	let Huge = Claim(&Engine, "page", Duration::MAX).unwrap_err();
+	assert_eq!(Huge.Code(), Code::AdmissionRefused);
+}
+
+#[test]
+fn release_is_safe_twice_and_the_next_claim_takes_a_new_fence() {
+	let Engine = Engine(TestClock::New());
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	BlockOn(Engine.Release(Lease.clone()));
+	BlockOn(Engine.Release(Lease.clone()));
+	let Next = Claimed(&Engine, "page", Span(1_000));
+	assert_eq!(Next.Fence, 2);
+}
+
+#[test]
+fn releasing_a_superseded_lease_does_not_free_the_new_holders_resource() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let First = Claimed(&Engine, "page", Span(100));
+	Clock.Advance(Span(101));
+	let Second = Claimed(&Engine, "page", Span(1_000));
+	BlockOn(Engine.Release(First));
+	let Write = BlockOn(Engine.WithLease(Second, || Box::pin(async { 1 })));
+	assert_eq!(Write.unwrap(), 1, "the new holder still holds it");
+}
+
+#[test]
+fn release_during_an_effect_frees_the_resource_once_it_settles() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	let mut Write = Engine.WithLease(Lease.clone(), || Box::pin(std::future::pending::<i32>()));
+	assert!(!PollOnce(Write.as_mut()), "the effect is admitted and waiting");
+	// Released while the write is admitted but not yet settled.
+	BlockOn(Engine.Release(Lease));
+	// The record survives only to account for the effect, so nothing may take
+	// it.
+	assert_eq!(Claim(&Engine, "page", Span(1_000)).unwrap_err().Code(), Code::LeaseHeld);
+	drop(Write);
+	let Next = Claimed(&Engine, "page", Span(1_000));
+	assert_eq!(Next.Fence, 2, "the resource came back");
+}
+
+#[test]
+fn release_never_fails_whatever_it_is_handed() {
+	let Engine = Engine(TestClock::New());
+	let Foreign = Lease {
+		Id:"r999#page#1".to_string(),
+		Resource:"page".to_string(),
+		Fence:1,
+		ExpiresAt:Instant::now(),
+	};
+	BlockOn(Engine.Release(Foreign.clone()));
+	BlockOn(Engine.Release(Foreign));
+}
+
+#[test]
+fn a_budget_is_not_inherited_a_new_run_starts_from_the_callers_count() {
+	let Engine = Engine(TestClock::New());
+	let First = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the first claim is admitted");
+	assert!(BlockOn(Engine.WithLease(First.clone(), || Box::pin(async { 1 }))).is_ok());
+	assert_eq!(
+		BlockOn(Engine.WithLease(First.clone(), || Box::pin(async { 2 })))
+			.unwrap_err()
+			.Code(),
+		Code::BudgetExhausted
+	);
+	BlockOn(Engine.Release(First));
+	let Second = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the second claim is admitted");
+	assert!(
+		BlockOn(Engine.WithLease(Second, || Box::pin(async { 3 }))).is_ok(),
+		"a retry never inherits a spent count"
+	);
+}
+
+#[test]
+fn a_budgets_deadline_refuses_effects_past_it() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Deadline = Clock.Now() + Span(100);
+	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:Some(Deadline), Operations:10 })))
+		.expect("the claim is admitted");
+	Clock.Advance(Span(101));
+	let Error = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 1 }))).unwrap_err();
+	assert_eq!(Error.Code(), Code::BudgetExhausted);
+	assert!(Error.Message().contains("deadline passed"));
+}
+
+#[test]
+fn an_effect_that_fails_still_spends_an_operation() {
+	let Engine = Engine(TestClock::New());
+	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the claim is admitted");
+	// The runtime never interprets the write: a write that failed is a value,
+	// and the charge happened before it ran.
+	let Failed = BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { Err::<(), ()>(()) })));
+	assert_eq!(Failed.expect("the effect was admitted"), Err(()));
+	let Spent = BlockOn(Engine.WithLease(Lease, || Box::pin(async { Ok::<(), ()>(()) })));
+	assert_eq!(Spent.unwrap_err().Code(), Code::BudgetExhausted);
+}
+
+#[test]
+fn a_run_with_no_budget_is_unbounded() {
+	let Engine = Engine(TestClock::New());
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	for _ in 0..25 {
+		assert!(BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { 1 }))).is_ok());
+	}
+}
+
+#[test]
+fn a_budget_of_no_operations_refuses_every_effect() {
+	let Engine = Engine(TestClock::New());
+	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:0 })))
+		.expect("a probe is admitted");
+	let Error = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 1 }))).unwrap_err();
+	assert_eq!(Error.Code(), Code::BudgetExhausted);
+}
+
+#[test]
+fn one_runs_budget_is_not_another_resources() {
+	let Engine = Engine(TestClock::New());
+	let Page = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the page claim is admitted");
+	let Tab = BlockOn(Engine.Claim("tab", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the tab claim is admitted");
+	assert!(BlockOn(Engine.WithLease(Page.clone(), || Box::pin(async { 1 }))).is_ok());
+	assert!(
+		BlockOn(Engine.WithLease(Tab, || Box::pin(async { 1 }))).is_ok(),
+		"the tab has its own count"
+	);
+	assert!(BlockOn(Engine.WithLease(Page, || Box::pin(async { 1 }))).is_err());
+}
+
+#[test]
+fn a_bound_call_stops_its_wait_when_the_caller_cancels() {
+	// The one place the combinator itself is exercised: a page that never
+	// answers is cut short by the caller, and the answer is a cancellation
+	// rather than a timeout, so a consumer can tell its own impatience from
+	// a slow page.
+	struct Fixed(Instant);
+	impl Clock for Fixed {
+		fn Now(&self) -> Instant { self.0 }
+	}
+	struct Waiting;
+	impl AgenticRuntime::Pace for Waiting {
+		fn Sleep(&self, Span:Duration) -> AgenticRuntime::FutureBox<'_, ()> {
+			// A wait that never ends: only the signal can stop this call.
+			let _ = Span;
+			Box::pin(std::future::pending())
+		}
+	}
+	impl Clock for Waiting {
+		fn Now(&self) -> Instant { Instant::now() }
+	}
+
+	let Signal = AgenticRuntime::Signal::New();
+	let Call = Call::Within(Span(60_000), &Fixed(Instant::now()), Signal.clone());
+	let Pace = Waiting;
+	let Silent = Box::pin(std::future::pending::<u8>());
+	let Bounded = AgenticRuntime::Bound(Silent, &Call, &Pace);
+	Signal.Fire();
+	assert_eq!(BlockOn(Bounded), Err(AgenticRuntime::Expired::Cancelled));
+	assert!(Call.Cancelled());
+	assert!(Signal.IsCancelled());
+}
+
+--- FILE: rust/Crate/SkillContract/Source/Fn.rs ---
+//! Functions: the filesystem reads, the frontmatter reader and the digest.
+
+pub mod Digest;
+pub mod Discover;
+pub mod Entries;
+pub mod Frontmatter;
+pub mod Names;
+pub mod Validate;
+
+--- FILE: rust/Crate/SkillContract/Source/Fn/Digest.rs ---
+//! The corpus digest.
+//!
+//! A pure function of the records it is handed: no file is read, so a
+//! modification time cannot enter it, and `Directory` is excluded, so the same
+//! corpus digests the same in two checkouts. The canonical form is the JSON the
+//! TypeScript implementation hashes, `[[name, description, references], ...]`,
+//! which is why the digest of a given corpus is the same value across the two
+//! trees and the contract test can assert a recorded constant.
+
+use sha2::{Digest as _, Sha256};
+
+use crate::Struct::Skill::Skill;
+
+/// The corpus digest, prefixed with the algorithm that produced it.
+pub fn Digest(Skills:&[Skill]) -> String {
+	let Canonical:Vec<serde_json::Value> = Skills
+		.iter()
+		.map(|Skill| serde_json::json!([Skill.Name, Skill.Description, Skill.References]))
+		.collect();
+	let Bytes = serde_json::to_string(&Canonical).unwrap_or_else(|_| "[]".to_string());
+	let Sum = Sha256::digest(Bytes.as_bytes());
+	// Hex by hand: the digest type's own `LowerHex` is behind a feature this
+	// crate does not need, and a format string is not a reason to take one.
+	let Hex:String = Sum.iter().map(|Byte| format!("{Byte:02x}")).collect();
+	format!("sha256:{Hex}")
+}
+
+--- FILE: rust/Crate/SkillContract/Source/Fn/Discover.rs ---
+//! Finding the skills under a corpus root, and reading one of them.
+//!
+//! Code-unit order, not a locale-aware collation: a sweep must not change
+//! meaning with the machine's locale, and `String`'s `Ord` is exactly the byte
+//! order the TypeScript implementation compares with.
+
+use std::path::Path;
+
+use crate::{
+	Fn::{
+		Entries::{BodyFile, CorpusIndexes, Entries, IndexFile, IsDirectory, IsFile, ReferenceDirectory, Text},
+		Frontmatter::Split,
+	},
+	Struct::Skill::Skill,
+};
+
+/// Every skill directory under `Root`, sorted by name.
+pub fn Discover(Root:&Path) -> Vec<Skill> {
+	let mut Skills = Vec::new();
+	for Entry in Entries(Root) {
+		if !IsDirectory(&Entry, &Root.join(&Entry.Name)) {
+			continue;
+		}
+		Skills.push(Read(Root, &Entry.Name));
+	}
+	Skills.sort_by(|Left, Right| Left.Name.cmp(&Right.Name));
+	Skills
+}
+
+/// One skill's record: the directory name is the skill's name, because that is
+/// the address a reader types and an index cites.
+pub fn Read(Root:&Path, Name:&str) -> Skill {
+	let Directory = Root.join(Name);
+	let Body = Text(&Directory.join(BodyFile)).unwrap_or_default();
+	let Description = Split(&Body)
+		.ok()
+		.and_then(|Data| Data.get("description").map(|Value| Value.trim().to_string()))
+		.unwrap_or_default();
+	Skill {
+		Name:Name.to_string(),
+		Directory:Directory.to_string_lossy().into_owned(),
+		Description,
+		References:References(&Directory),
+	}
+}
+
+/// The file names directly under `Reference/`, excluding the index itself.
+pub fn References(Directory:&Path) -> Vec<String> {
+	let mut Names:Vec<String> = Entries(&Directory.join(ReferenceDirectory))
+		.iter()
+		.filter(|Entry| IsFile(Entry))
+		.map(|Entry| Entry.Name.clone())
+		.filter(|Name| Name != IndexFile)
+		.collect();
+	Names.sort();
+	Names
+}
+
+/// The first index a corpus root carries, and the name it was found under.
+pub fn CorpusIndex(Directory:&Path) -> Option<(String, String)> {
+	for Name in CorpusIndexes {
+		if let Some(Text) = Text(&Directory.join(Name)) {
+			return Some((Name.to_string(), Text));
+		}
+	}
+	None
+}
+
+--- FILE: rust/Crate/SkillContract/Source/Fn/Entries.rs ---
+//! Reading a directory, and the names this contract gives the files it reads.
+//!
+//! A root that cannot be read is an empty corpus rather than an error, because
+//! a sweep that dies on one bad path cannot report the rest. A caller that must
+//! tell a typo from an empty corpus stats the root itself - the port does not
+//! pretend to know which of the two a missing directory was.
+
+use std::{fs, path::Path};
+
+/// The file a skill's frontmatter lives in.
+pub const BodyFile:&str = "SKILL.md";
+
+/// The index a skill's `Reference/` carries.
+pub const IndexFile:&str = "Index.md";
+
+/// The directory a skill's worked instances live in.
+pub const ReferenceDirectory:&str = "Reference";
+
+/// The corpus root's index, by the two names a corpus actually gives it.
+///
+/// `Index.md` is the port's own name, and the one it prefers when both exist.
+/// `AGENTS.md` is the name a repository already gives the file its tools
+/// discover, and a corpus that grows inside such a repository should not have
+/// to rename it to be read - one file with two accepted names is cheaper than a
+/// corpus that is uncited in its entirety. A skill's own `Reference/Index.md`
+/// has one name only: there the card names the file.
+pub const CorpusIndexes:[&str; 2] = [IndexFile, "AGENTS.md"];
+
+/// One entry of a directory, as much of it as this contract reads.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Entry {
+	/// The entry's name, without its directory.
+	pub Name:String,
+	/// Whether the entry is a directory without following a link.
+	pub Directory:bool,
+	/// Whether the entry is a symbolic link.
+	pub Symlink:bool,
+	/// Whether the entry is a regular file without following a link.
+	pub File:bool,
+}
+
+/// The entries of a directory, or none.
+pub fn Entries(Path:&Path) -> Vec<Entry> {
+	let Ok(Read) = fs::read_dir(Path) else {
+		return Vec::new();
+	};
+	let mut Entries = Vec::new();
+	for Entry in Read.flatten() {
+		let Ok(Kind) = Entry.file_type() else {
+			continue;
+		};
+		let Name = Entry.file_name().to_string_lossy().into_owned();
+		Entries.push(Entry { Name, Directory:Kind.is_dir(), Symlink:Kind.is_symlink(), File:Kind.is_file() });
+	}
+	Entries.sort_by(|Left, Right| Left.Name.cmp(&Right.Name));
+	Entries
+}
+
+/// A file's text, or none. An unreadable file reads as absent for the reason
+/// above.
+pub fn Text(Path:&Path) -> Option<String> { fs::read_to_string(Path).ok() }
+
+/// Whether an entry is a directory, following a symlink one level.
+pub fn IsDirectory(Entry:&Entry, Path:&Path) -> bool {
+	if Entry.Directory {
+		return true;
+	}
+	if !Entry.Symlink {
+		return false;
+	}
+	fs::metadata(Path).map(|Meta| Meta.is_dir()).unwrap_or(false)
+}
+
+/// Whether an entry is a file or a link to one.
+pub fn IsFile(Entry:&Entry) -> bool { Entry.File || Entry.Symlink }
+
+--- FILE: rust/Crate/SkillContract/Source/Fn/Frontmatter.rs ---
+//! The frontmatter block and the fields this port promises from it.
+//!
+//! A YAML parser would be a dependency, and the two fields a loader reads do
+//! not justify one. What is read: top-level `key: value` pairs, a value quoted
+//! or plain, and a `|` or `>` block scalar, which is how a long description is
+//! usually written. What is not read: nested mappings and sequences. Those are
+//! skipped rather than refused, because a skill may carry metadata this port
+//! does not promise and a validator that rejects unfamiliar keys is a validator
+//! people turn off.
+
+use std::collections::BTreeMap;
+
+/// The frontmatter block and the fields this port promises from it.
+///
+/// `Ok` is the mapping the block described, and may be empty. `Err` is the
+/// reason the block did not describe one, worded so `validate` can paste it
+/// into a finding without rewriting it.
+pub type Frontmatter = Result<BTreeMap<String, String>, String>;
+
+/// The YAML block at the top of a file. A file without one has nothing to read.
+pub fn Split(Text:&str) -> Frontmatter {
+	let Normalised = Text.replace("\r\n", "\n");
+	let Lines:Vec<&str> = Normalised.split('\n').collect();
+	if Lines.first().map(|Line| Line.trim()) != Some("---") {
+		return Err("there is no frontmatter block".to_string());
+	}
+	let Some(End) = Lines.iter().skip(1).position(|Line| *Line == "---") else {
+		return Err("the frontmatter block is never closed".to_string());
+	};
+	Parse(&Lines[1..End + 1])
+}
+
+/// A `key: value` pair, or why the line is not one.
+fn Pair(Line:&str) -> Option<(&str, &str)> {
+	let Colon = Line.find(':')?;
+	let Key = &Line[..Colon];
+	if Key.is_empty() {
+		return None;
+	}
+	if !Key
+		.chars()
+		.all(|Character| Character.is_ascii_alphanumeric() || matches!(Character, '_' | '.' | '-'))
+	{
+		return None;
+	}
+	Some((Key, &Line[Colon + 1..]))
+}
+
+/// Whether a value opens a block scalar, and whether it keeps its line breaks.
+fn Block(Value:&str) -> Option<bool> {
+	let First = Value.chars().next()?;
+	if First != '|' && First != '>' {
+		return None;
+	}
+	let Rest = &Value[First.len_utf8()..];
+	if !Rest.is_empty() && Rest != "+" && Rest != "-" {
+		return None;
+	}
+	Some(First == '|')
+}
+
+/// The number of leading whitespace bytes, which is the block's own
+/// indentation.
+fn Indent(Line:&str) -> usize { Line.len() - Line.trim_start().len() }
+
+/// A `|` or `>` block scalar with the block's own indentation removed.
+///
+/// A folded scalar joins its lines into one, a literal one keeps the breaks.
+/// Both drop blank lines, because a description is a sentence rather than a
+/// document and the port reads exactly one field this way.
+fn Scalar(Lines:&[&str], Literal:bool) -> String {
+	let Indented:Vec<&str> = Lines.iter().copied().filter(|Line| !Line.trim().is_empty()).collect();
+	let Some(Indent) = Indented.iter().map(|Line| Indent(Line)).min() else {
+		return String::new();
+	};
+	let Stripped:Vec<&str> = Lines.iter().map(|Line| &Line[Indent.min(Line.len())..]).collect();
+	if Literal {
+		Stripped.join("\n").trim().to_string()
+	} else {
+		Stripped
+			.iter()
+			.filter(|Line| !Line.trim().is_empty())
+			.copied()
+			.collect::<Vec<&str>>()
+			.join(" ")
+			.trim()
+			.to_string()
+	}
+}
+
+/// A value with one matching pair of surrounding quotes removed.
+fn Unquote(Value:&str) -> String {
+	let Bytes = Value.as_bytes();
+	if Bytes.len() >= 2 {
+		let First = Bytes[0];
+		if (First == b'"' || First == b'\'') && Bytes[Bytes.len() - 1] == First {
+			return Value[1..Value.len() - 1].to_string();
+		}
+	}
+	Value.to_string()
+}
+
+/// The pairs of a frontmatter block.
+fn Parse(Lines:&[&str]) -> Frontmatter {
+	let mut Data = BTreeMap::new();
+	let mut Index = 0;
+	while Index < Lines.len() {
+		let Line = Lines[Index];
+		Index += 1;
+		let Trimmed = Line.trim();
+		if Trimmed.is_empty() || Trimmed.starts_with('#') {
+			continue;
+		}
+		let Some((Key, Value)) = Pair(Line) else {
+			if Line.starts_with(char::is_whitespace) {
+				continue;
+			}
+			return Err(format!(
+				"{} is not a key: value pair",
+				serde_json::to_string(Line).unwrap_or_else(|_| format!("{Line:?}"))
+			));
+		};
+		let Value = Value.trim();
+		if let Some(Literal) = Block(Value) {
+			let mut Collected:Vec<&str> = Vec::new();
+			while Index < Lines.len() {
+				let Next = Lines[Index];
+				if !Next.trim().is_empty() && !Next.starts_with(char::is_whitespace) {
+					break;
+				}
+				Collected.push(Next);
+				Index += 1;
+			}
+			Data.insert(Key.to_string(), Scalar(&Collected, Literal));
+			continue;
+		}
+		Data.insert(Key.to_string(), Unquote(Value));
+	}
+	Ok(Data)
+}

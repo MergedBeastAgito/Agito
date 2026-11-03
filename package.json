@@ -7,7 +7,8 @@
 		"packages/*"
 	],
 	"scripts": {
-		"check": "node Scripts/Boundaries.mjs",
-		"test": "pnpm -r test"
+		"check": "node Scripts/Boundaries.mjs && node Scripts/Feed.mjs",
+		"test": "pnpm -r test",
+		"Test:Feed": "node Scripts/Feed.mjs"
 	}
 }

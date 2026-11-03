@@ -1,0 +1,14 @@
+--- FILE: rust/Target/tmp/valid/Index.md ---
+- [Alpha](Alpha/SKILL.md)
+
+--- FILE: rust/Target/tmp/vocabulary/Mu/SKILL.md ---
+---
+
+---
+
+# Mu
+
+--- FILE: rust/Target/tmp/workflow-corpus/Broken/SKILL.md ---
+---
+name: broken
+---
