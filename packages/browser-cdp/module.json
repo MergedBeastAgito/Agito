@@ -4,11 +4,7 @@
 	"version": "0.1.0",
 	"provides": {
 		"port": "agentic.browse",
-		"errors": [
-			"browser-unavailable",
-			"navigation-failed",
-			"timeout"
-		]
+		"errors": ["browser-unavailable", "navigation-failed", "timeout"]
 	},
 	"requires": {
 		"endpoint": "env:CDP_URL"
@@ -23,9 +19,7 @@
 		"coldMs": 900,
 		"warmMs": 5,
 		"network": true,
-		"processes": [
-			"chromium"
-		]
+		"processes": ["chromium"]
 	},
 	"verify": "node --test Test/*.test.ts"
 }

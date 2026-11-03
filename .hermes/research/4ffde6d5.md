@@ -1,5 +1,33 @@
+---
+title: "Converting the capability system to Rust"
+thread: 4ffde6d5-a7d3-404f-96b5-e24f8009a76b
+project: DELO
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b
+captured: 2026-11-03T20:28:32
+segments: 1
+collapsed: false
+steps: 3
+sources: 6
+---
+# Converting the capability system to Rust
+
+| Field | Value |
+| --- | --- |
+| Thread | `4ffde6d5-a7d3-404f-96b5-e24f8009a76b` |
+| Project | DELO |
+| Source | https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b |
+| Captured | 2026-11-03T20:28:32 |
+| Segments | 1 |
+| Trace steps | 3 |
+| Cited sources | 6 |
+| Characters | 29311 |
+
+## Transcript
+
 DELO
-Share
 7:02 PM
 
 I am converting a TypeScript capability system into Rust and I need a workspace design, not a survey. Here is the system and the house style it must fit.
@@ -30,9 +58,37 @@ QUESTIONS, in the order I need them answered:
 5. How do I express "the arrows point inward" as something a compiler or CI can enforce in a Cargo workspace, given that Cargo itself permits any dependency direction?
 6. Map the TypeScript manifest fields (name, kind, version, provides, requires, artefact with a hash, state, cost with cold/warm ms, verify command) onto Rust idioms without losing the harness's ability to decide what to pre-warm. Be concrete: give crate names, module paths in the house style, trait signatures, and the CI check. Say where you are unsure, and flag anything in the house style that fights the design.
 
-Read more
-Finished
-13s
+chromiumoxide handler poll browser connect launch rust
+headless_chrome rust browser synchronous thread websocket
+cargo metadata forbid dependencies workspace architecture
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html)
+
+Browser in headless_chrome - Rust - Docs.rs
+docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-lang/cargo/issues/10636)
+
+default features always resolved for dependency in workspace mode
+github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/mattsse/chromiumoxide/issues/49)
+
+Chrome stays idle infinitely #49 - mattsse/chromiumoxide - GitHub
+github
+https://github.com/PlayForm/Run/tree/Current
+https://docs.rs/chromiumoxide/latest/chromiumoxide/
+https://doc.rust-lang.org/cargo/commands/cargo-metadata.html
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/chromiumoxide/latest/chromiumoxide/)
+
+chromiumoxide - Rust
+docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://doc.rust-lang.org/cargo/commands/cargo-metadata.html)
+
+cargo metadata - The Cargo Book
+doc.rust-lang
 
 Keep **all five** as separate crates. Add a composition-root crate and, when you have an actual reusable composition, a workflow crate. Keep consumer-owned browse traits inside the two capabilities—not in a shared `ports` crate—and put the concrete adapter-to-port bindings in the composition root.
 
@@ -370,7 +426,7 @@ Cancellation is cooperative, not a guarantee of rollback. Cleanup must be an exp
 
 ## 5. Enforce inward arrows with Cargo boundaries plus CI
 
-Cargo metadata exposes declared dependencies, their kinds, optional status, target conditions and renames. Use the declared package dependency lists for the architecture policy, not only the currently enabled resolved graph. That catches dormant optional edges as well.doc.rust-lang
+Cargo metadata exposes declared dependencies, their kinds, optional status, target conditions and renames. Use the declared package dependency lists for the architecture policy, not only the currently enabled resolved graph. That catches dormant optional edges as well.[doc.rust-lang](https://doc.rust-lang.org/cargo/commands/cargo-metadata.html)
 
 ## Concrete architecture check
 
@@ -572,3 +628,24 @@ Show how a capability crate implements a port
 Explain how module.json fits into this design
 Show the file layout for the composition root
 Ask a follow-up
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step inside a step is one level in.
+
+| Depth | Step | Duration | Icon | Expanded |
+| --- | --- | --- | --- | --- |
+| 0 | Finished | 13s | chevron-down | true |
+| 1 | Researching Rust browser integration patterns for the workspace design | - | world | true |
+| 1 | Checking Rust browser integration and Cargo metadata patterns | - | book | true |
+
+## Cited sources
+
+| Source | Label |
+| --- | --- |
+| https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html | Browser in headless_chrome - Rust - Docs.rs |
+| https://github.com/rust-lang/cargo/issues/10636 | default features always resolved for dependency in workspace mode |
+| https://github.com/mattsse/chromiumoxide/issues/49 | Chrome stays idle infinitely #49 - mattsse/chromiumoxide - GitHub |
+| https://docs.rs/chromiumoxide/latest/chromiumoxide/ | chromiumoxide - Rust |
+| https://doc.rust-lang.org/cargo/commands/cargo-metadata.html | cargo metadata - The Cargo Book |
+| https://doc.rust-lang.org/cargo/commands/cargo-metadata.html | doc.rust-lang |

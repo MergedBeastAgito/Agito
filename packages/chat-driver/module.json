@@ -4,17 +4,10 @@
 	"version": "0.1.0",
 	"provides": {
 		"port": "agentic.chat.ask",
-		"errors": [
-			"not-ready",
-			"wrong-mode",
-			"wrong-model",
-			"truncated"
-		]
+		"errors": ["not-ready", "wrong-mode", "wrong-model", "truncated"]
 	},
 	"requires": {
-		"ports": [
-			"agentic.browse"
-		]
+		"ports": ["agentic.browse"]
 	},
 	"artefact": {
 		"entry": "Target/index.js",

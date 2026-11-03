@@ -5,4 +5,6 @@
  * import another package's adapter; the composition root supplies one.
  */
 
-export {};
+export type { Finding, Rule, Skill, SkillContract } from "./Port.ts";
+export { Create } from "./SkillContract.ts";
+export { Rules } from "./Port.ts";
