@@ -1,17 +1,20 @@
-//! `agentic.skill.validate`, exercised against corpora this test builds on disk.
+//! `agentic.skill.validate`, exercised against corpora this test builds on
+//! disk.
 //!
-//! No network, no browser and no fixture files checked in: a corpus is a temporary
-//! directory the test writes, so a test can add a file between two calls and prove
-//! that nothing was cached.
+//! No network, no browser and no fixture files checked in: a corpus is a
+//! temporary directory the test writes, so a test can add a file between two
+//! calls and prove that nothing was cached.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{
+	fs,
+	path::{Path, PathBuf},
+};
 
-use AgenticSkillContract::{Create, Finding, Rule, Rules, Skill, SkillContract};
 use AgenticRuntime::BlockOn;
+use AgenticSkillContract::{Create, Finding, Rule, Rules, Skill, SkillContract};
 
 /// A fresh, empty corpus root.
-fn Root(Tag: &str) -> PathBuf {
+fn Root(Tag:&str) -> PathBuf {
 	let Base = Path::new(env!("CARGO_TARGET_TMPDIR")).join(Tag);
 	let _ = fs::remove_dir_all(&Base);
 	fs::create_dir_all(&Base).expect("the corpus root is writable");
@@ -19,35 +22,30 @@ fn Root(Tag: &str) -> PathBuf {
 }
 
 /// A skill directory carrying one `SKILL.md`.
-fn SkillAt(Root: &Path, Name: &str, Frontmatter: &str) -> PathBuf {
+fn SkillAt(Root:&Path, Name:&str, Frontmatter:&str) -> PathBuf {
 	let Directory = Root.join(Name);
 	fs::create_dir_all(&Directory).expect("the skill directory is writable");
-	fs::write(
-		Directory.join("SKILL.md"),
-		format!("---\n{Frontmatter}\n---\n\n# {Name}\n"),
-	)
-	.expect("SKILL.md is writable");
+	fs::write(Directory.join("SKILL.md"), format!("---\n{Frontmatter}\n---\n\n# {Name}\n"))
+		.expect("SKILL.md is writable");
 	Directory
 }
 
 /// One file under a skill's `Reference/`.
-fn ReferenceAt(Directory: &Path, Name: &str, Body: &str) {
+fn ReferenceAt(Directory:&Path, Name:&str, Body:&str) {
 	let References = Directory.join("Reference");
 	fs::create_dir_all(&References).expect("Reference/ is writable");
 	fs::write(References.join(Name), Body).expect("the reference is writable");
 }
 
 /// A skill's `Reference/Index.md`.
-fn ReferenceIndexAt(Directory: &Path, Body: &str) {
-	ReferenceAt(Directory, "Index.md", Body);
-}
+fn ReferenceIndexAt(Directory:&Path, Body:&str) { ReferenceAt(Directory, "Index.md", Body); }
 
 /// The corpus root's index.
-fn CorpusIndexAt(Root: &Path, Name: &str, Body: &str) {
+fn CorpusIndexAt(Root:&Path, Name:&str, Body:&str) {
 	fs::write(Root.join(Name), Body).expect("the corpus index is writable");
 }
 
-fn Discovered(Root: &Path, Name: &str) -> Skill {
+fn Discovered(Root:&Path, Name:&str) -> Skill {
 	let Skills = BlockOn(Create().Discover(&Root.to_string_lossy()));
 	Skills
 		.into_iter()
@@ -55,16 +53,12 @@ fn Discovered(Root: &Path, Name: &str) -> Skill {
 		.unwrap_or_else(|| panic!("no skill named {Name} was discovered"))
 }
 
-fn Findings(Skill: &Skill) -> Vec<Finding> {
-	BlockOn(Create().Validate(Skill))
-}
+fn Findings(Skill:&Skill) -> Vec<Finding> { BlockOn(Create().Validate(Skill)) }
 
-fn RulesOf(Findings: &[Finding]) -> Vec<&str> {
-	Findings.iter().map(|Finding| Finding.Rule.as_str()).collect()
-}
+fn RulesOf(Findings:&[Finding]) -> Vec<&str> { Findings.iter().map(|Finding| Finding.Rule.as_str()).collect() }
 
 /// The fixture the recorded digest belongs to.
-fn Valid(Root: &Path) -> Skill {
+fn Valid(Root:&Path) -> Skill {
 	let Directory = SkillAt(
 		Root,
 		"Alpha",
@@ -78,17 +72,11 @@ fn Valid(Root: &Path) -> Skill {
 
 #[test]
 fn the_port_declares_exactly_the_errors_the_manifest_promises() {
-	let Declared: Vec<&str> = Rules.into_iter().map(Rule::Name).collect();
-	assert_eq!(
-		Declared,
-		vec!["unparsable", "unlisted-reference", "uncited"]
-	);
+	let Declared:Vec<&str> = Rules.into_iter().map(Rule::Name).collect();
+	assert_eq!(Declared, vec!["unparsable", "unlisted-reference", "uncited"]);
 	let Manifest = include_str!("../module.json");
 	for Name in Declared {
-		assert!(
-			Manifest.contains(&format!("\"{Name}\"")),
-			"{Name} is not in module.json"
-		);
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
 	}
 }
 
@@ -97,7 +85,7 @@ fn discover_returns_every_skill_directory_ordered_by_name() {
 	let Root = Root("order");
 	SkillAt(&Root, "Zulu", "description: Created first, sorted last.");
 	SkillAt(&Root, "Alpha", "description: Created second, sorted first.");
-	let Names: Vec<String> = BlockOn(Create().Discover(&Root.to_string_lossy()))
+	let Names:Vec<String> = BlockOn(Create().Discover(&Root.to_string_lossy()))
 		.into_iter()
 		.map(|Skill| Skill.Name)
 		.collect();
@@ -121,9 +109,8 @@ fn a_symlinked_skill_directory_is_discovered_like_a_real_one() {
 	let Elsewhere = Root("symlink-real");
 	SkillAt(&Elsewhere, "Linked", "description: Reached through a link.");
 	let Corpus = Root("symlink");
-	std::os::unix::fs::symlink(Elsewhere.join("Linked"), Corpus.join("Linked"))
-		.expect("the link is created");
-	let Names: Vec<String> = BlockOn(Create().Discover(&Corpus.to_string_lossy()))
+	std::os::unix::fs::symlink(Elsewhere.join("Linked"), Corpus.join("Linked")).expect("the link is created");
+	let Names:Vec<String> = BlockOn(Create().Discover(&Corpus.to_string_lossy()))
 		.into_iter()
 		.map(|Skill| Skill.Name)
 		.collect();
@@ -161,10 +148,7 @@ fn a_reference_tree_without_an_index_reports_each_file_as_unlisted() {
 	ReferenceAt(&Directory, "Two.md", "# Two\n");
 	CorpusIndexAt(&Root, "Index.md", "- [Gamma](Gamma/SKILL.md)\n");
 	let Found = Findings(&Discovered(&Root, "Gamma"));
-	assert_eq!(
-		RulesOf(&Found),
-		vec!["unlisted-reference", "unlisted-reference"]
-	);
+	assert_eq!(RulesOf(&Found), vec!["unlisted-reference", "unlisted-reference"]);
 	assert!(Found[0].Detail.contains("there is no Reference/Index.md"));
 }
 
@@ -194,11 +178,7 @@ fn a_skill_directory_without_a_body_is_unparsable_and_uncited() {
 #[test]
 fn unparsable_frontmatter_is_a_finding_not_a_rejection() {
 	let Root = Root("unparsable");
-	SkillAt(
-		&Root,
-		"Epsilon",
-		"name: epsilon\nthis line is neither a key nor a value",
-	);
+	SkillAt(&Root, "Epsilon", "name: epsilon\nthis line is neither a key nor a value");
 	CorpusIndexAt(&Root, "Index.md", "- [Epsilon](Epsilon/SKILL.md)\n");
 	let Found = Findings(&Discovered(&Root, "Epsilon"));
 	assert_eq!(RulesOf(&Found), vec!["unparsable"]);
@@ -259,11 +239,7 @@ fn every_finding_uses_one_of_the_three_rules_the_manifest_declares() {
 	let Found = Findings(&Discovered(&Root, "Mu"));
 	assert!(!Found.is_empty());
 	for Finding in &Found {
-		assert!(
-			Finding.Code().is_some(),
-			"{} is not one of the three rules",
-			Finding.Rule
-		);
+		assert!(Finding.Code().is_some(), "{} is not one of the three rules", Finding.Rule);
 	}
 }
 
@@ -327,10 +303,7 @@ fn the_digest_ignores_modification_times_and_directories() {
 	let Root = Root("digest-times");
 	let Skill = Valid(&Root);
 	let Before = Create().Digest(std::slice::from_ref(&Skill));
-	let Moved = Skill {
-		Directory: "/somewhere/else".to_string(),
-		..Skill.clone()
-	};
+	let Moved = Skill { Directory:"/somewhere/else".to_string(), ..Skill.clone() };
 	let After = Create().Digest(std::slice::from_ref(&Moved));
 	assert_eq!(Before, After);
 }
@@ -340,25 +313,13 @@ fn the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes
 	let Root = Root("digest-changes");
 	let Skill = Valid(&Root);
 	let Base = Create().Digest(std::slice::from_ref(&Skill));
-	let Renamed = Skill {
-		Name: "Alpha2".to_string(),
-		..Skill.clone()
-	};
+	let Renamed = Skill { Name:"Alpha2".to_string(), ..Skill.clone() };
 	assert_ne!(Base, Create().Digest(std::slice::from_ref(&Renamed)));
-	let Described = Skill {
-		Description: "Another sentence.".to_string(),
-		..Skill.clone()
-	};
+	let Described = Skill { Description:"Another sentence.".to_string(), ..Skill.clone() };
 	assert_ne!(Base, Create().Digest(std::slice::from_ref(&Described)));
-	let Referenced = Skill {
-		References: vec!["Notes.md".to_string(), "Other.md".to_string()],
-		..Skill.clone()
-	};
+	let Referenced = Skill { References:vec!["Notes.md".to_string(), "Other.md".to_string()], ..Skill.clone() };
 	assert_ne!(Base, Create().Digest(std::slice::from_ref(&Referenced)));
-	let Other = Skill {
-		Name: "Zulu".to_string(),
-		..Skill.clone()
-	};
+	let Other = Skill { Name:"Zulu".to_string(), ..Skill.clone() };
 	assert_ne!(
 		Create().Digest(&[Skill.clone(), Other.clone()]),
 		Create().Digest(&[Other, Skill])

@@ -1,23 +1,22 @@
 //! Reconciling what a transport answered with what the caller asked for.
 //!
-//! The answer is matched by selector rather than by position, so a provider that
-//! batches or reorders cannot hand an invariant another element's number. A
-//! selector the transport did not answer for is a broken transport, not an absent
-//! element: absence is something the page was observed to have, and an answer that
-//! never arrived was not observed at all. Reporting it as absent would invent a page
-//! defect out of a provider's omission.
+//! The answer is matched by selector rather than by position, so a provider
+//! that batches or reorders cannot hand an invariant another element's number.
+//! A selector the transport did not answer for is a broken transport, not an
+//! absent element: absence is something the page was observed to have, and an
+//! answer that never arrived was not observed at all. Reporting it as absent
+//! would invent a page defect out of a provider's omission.
 
 use serde_json::Value;
 
-use crate::Struct::Error::Error;
-use crate::Struct::Port::Measurement;
+use crate::Struct::{Error::Error, Port::Measurement};
 
 /// A value as a detail line.
 ///
-/// A provider that answered with the wrong shape is reported by what it sent, not
-/// by `[object Object]`, because the detail is the only thing that says which part
-/// of the contract it broke.
-pub fn Describe(Value: &Value) -> String {
+/// A provider that answered with the wrong shape is reported by what it sent,
+/// not by `[object Object]`, because the detail is the only thing that says
+/// which part of the contract it broke.
+pub fn Describe(Value:&Value) -> String {
 	match Value {
 		Value::Null => "null".to_string(),
 		Value::String(Text) => serde_json::to_string(Text).unwrap_or_else(|_| format!("{Text:?}")),
@@ -29,26 +28,28 @@ pub fn Describe(Value: &Value) -> String {
 
 /// What a measurement's value may be.
 ///
-/// A provider that answers an object has not finished serialising what it read, and
-/// flattening that to `Null` would report "nothing to report" about an element that
-/// did report something. The port refuses it instead, naming the selector, so the
-/// provider is fixed rather than silently trusted.
-fn AsValue(Value: &Value, Selector: &str) -> Result<Value, Error> {
+/// A provider that answers an object has not finished serialising what it read,
+/// and flattening that to `Null` would report "nothing to report" about an
+/// element that did report something. The port refuses it instead, naming the
+/// selector, so the provider is fixed rather than silently trusted.
+fn AsValue(Value:&Value, Selector:&str) -> Result<Value, Error> {
 	match Value {
 		Value::Null | Value::Number(_) | Value::String(_) => Ok(Value.clone()),
-		Other => Err(Error::NotReady(
-			"the transport answered with a value the port does not carry",
-			format!(
-				"{:?} read {}; a measurement is a number, a string or null",
-				Selector,
-				Describe(Other)
-			),
-		)),
+		Other => {
+			Err(Error::NotReady(
+				"the transport answered with a value the port does not carry",
+				format!(
+					"{:?} read {}; a measurement is a number, a string or null",
+					Selector,
+					Describe(Other)
+				),
+			))
+		},
 	}
 }
 
 /// One entry of a transport's answer, as the port defines a measurement.
-fn AsMeasurement(Value: &Value) -> Result<Measurement, Error> {
+fn AsMeasurement(Value:&Value) -> Result<Measurement, Error> {
 	let Some(Object) = Value.as_object() else {
 		return Err(Error::NotReady(
 			"the transport answered with a measurement that is not an object",
@@ -62,7 +63,7 @@ fn AsMeasurement(Value: &Value) -> Result<Measurement, Error> {
 				"the transport answered with a measurement for no selector",
 				format!("it answered {}", Describe(Value)),
 			));
-		}
+		},
 	};
 	let Present = match Object.get("present") {
 		Some(Value::Bool(Present)) => *Present,
@@ -75,7 +76,7 @@ fn AsMeasurement(Value: &Value) -> Result<Measurement, Error> {
 					Other.map(Describe).unwrap_or_else(|| "nothing".to_string())
 				),
 			));
-		}
+		},
 	};
 	// An absent element cannot carry a value: a stale number travelling with
 	// `present: false` is what an invariant that forgot to check would read.
@@ -84,26 +85,19 @@ fn AsMeasurement(Value: &Value) -> Result<Measurement, Error> {
 	} else {
 		Value::Null
 	};
-	Ok(Measurement {
-		Selector,
-		Present,
-		Value,
-	})
+	Ok(Measurement { Selector, Present, Value })
 }
 
 /// One measurement per asked selector, in the order it was asked for.
-pub fn Reconcile(Asked: &[String], Answered: &[Value]) -> Result<Vec<Measurement>, Error> {
-	let mut BySelector: Vec<Measurement> = Vec::new();
+pub fn Reconcile(Asked:&[String], Answered:&[Value]) -> Result<Vec<Measurement>, Error> {
+	let mut BySelector:Vec<Measurement> = Vec::new();
 	for Entry in Answered {
 		let Measurement = AsMeasurement(Entry)?;
 		BySelector.push(Measurement);
 	}
 	let mut Ordered = Vec::new();
 	for Selector in Asked {
-		let Some(Found) = BySelector
-			.iter()
-			.find(|Measurement| &Measurement.Selector == Selector)
-		else {
+		let Some(Found) = BySelector.iter().find(|Measurement| &Measurement.Selector == Selector) else {
 			return Err(Error::NotReady(
 				"the transport did not answer for a selector it was asked about",
 				format!("nothing was measured for {Selector:?}"),

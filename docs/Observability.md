@@ -4,6 +4,27 @@ An earlier pass argued that SpacetimeDB is a poor fit for control flow and that
 orchestration belongs in Rust. That was too broad, and this document records the
 correction because it changes the architecture.
 
+## The rule, as a decision procedure
+
+For any new piece of behaviour, ask one question: **does it touch the outside world?**
+
+- Pushing JavaScript into a page, opening a socket, spawning a process, reading a
+  file, waiting on a network reply - that is an effect, and it lives in Rust, in a
+  crate that owns the transport.
+- Everything that is a decision, a counter, a phase, a retry, a budget, a lease, a
+  claim, a cancellation request, an operator command, or a record of any of those -
+  that is an internality, and it lives in a table, changed by a reducer.
+
+The test is not "is it important" or "is it fast". It is whether the thing has an
+observable effect outside the database. A retry count is internal. The HTTP call it
+guards is external. A "we are now on phase three" is internal. The DOM evaluation
+that phase three performs is external.
+
+When a piece of work straddles the line - a scrape is a decision plus a page read plus
+a write - split it: the reducer moves the phase and grants the lease, the Rust effect
+runner performs the read, and a second reducer records the result. Two transactions,
+one truth, and the gap between them is visible as a lease that is held.
+
 ## The corrected boundary
 
 The line is not control flow versus data. It is **effects versus state**.

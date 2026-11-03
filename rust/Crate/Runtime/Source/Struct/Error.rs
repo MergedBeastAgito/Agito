@@ -14,7 +14,8 @@ pub enum Code {
 	AdmissionRefused,
 	/// The resource is held under a newer fence, or an effect is still in it.
 	LeaseHeld,
-	/// The run's own allowance is spent: its deadline passed or its count ran out.
+	/// The run's own allowance is spent: its deadline passed or its count ran
+	/// out.
 	BudgetExhausted,
 }
 
@@ -29,18 +30,10 @@ impl Code {
 	}
 
 	/// Every code, so a harness can compare the manifest against the type.
-	pub const fn All() -> [Code; 3] {
-		[
-			Code::AdmissionRefused,
-			Code::LeaseHeld,
-			Code::BudgetExhausted,
-		]
-	}
+	pub const fn All() -> [Code; 3] { [Code::AdmissionRefused, Code::LeaseHeld, Code::BudgetExhausted] }
 
 	/// The code a manifest string names, if it names one of the three.
-	pub fn Parse(Value: &str) -> Option<Code> {
-		Code::All().into_iter().find(|Code| Code.Name() == Value)
-	}
+	pub fn Parse(Value:&str) -> Option<Code> { Code::All().into_iter().find(|Code| Code.Name() == Value) }
 }
 
 /// The one error type `claim`, `renew` and `withLease` reject with.
@@ -54,53 +47,42 @@ pub enum Error {
 	/// The request may not proceed.
 	AdmissionRefused {
 		/// The sentence a human reads.
-		Message: String,
+		Message:String,
 		/// What was observed, kept apart from the sentence.
-		Detail: String,
+		Detail:String,
 	},
 	/// The resource is held, or an effect is still in it.
 	LeaseHeld {
 		/// The sentence a human reads.
-		Message: String,
+		Message:String,
 		/// What was observed.
-		Detail: String,
+		Detail:String,
 	},
 	/// The run's allowance is spent.
 	BudgetExhausted {
 		/// The sentence a human reads.
-		Message: String,
+		Message:String,
 		/// What was observed.
-		Detail: String,
+		Detail:String,
 	},
 }
 
 impl Error {
 	/// A refusal with nothing observed to add.
-	pub fn Refused(Message: impl Into<String>) -> Self {
-		Error::AdmissionRefused {
-			Message: Message.into(),
-			Detail: String::new(),
-		}
+	pub fn Refused(Message:impl Into<String>) -> Self {
+		Error::AdmissionRefused { Message:Message.into(), Detail:String::new() }
 	}
 
 	/// A held resource with nothing observed to add.
-	pub fn Held(Message: impl Into<String>) -> Self {
-		Error::LeaseHeld {
-			Message: Message.into(),
-			Detail: String::new(),
-		}
-	}
+	pub fn Held(Message:impl Into<String>) -> Self { Error::LeaseHeld { Message:Message.into(), Detail:String::new() } }
 
 	/// A spent allowance with nothing observed to add.
-	pub fn Spent(Message: impl Into<String>) -> Self {
-		Error::BudgetExhausted {
-			Message: Message.into(),
-			Detail: String::new(),
-		}
+	pub fn Spent(Message:impl Into<String>) -> Self {
+		Error::BudgetExhausted { Message:Message.into(), Detail:String::new() }
 	}
 
 	/// The same failure, with what was observed attached.
-	pub fn WithDetail(self, Detail: impl Into<String>) -> Self {
+	pub fn WithDetail(self, Detail:impl Into<String>) -> Self {
 		let Detail = Detail.into();
 		match self {
 			Error::AdmissionRefused { Message, .. } => Error::AdmissionRefused { Message, Detail },
@@ -138,7 +120,7 @@ impl Error {
 }
 
 impl fmt::Display for Error {
-	fn fmt(&self, Formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(Formatter, "{}: {}", self.Code().Name(), self.Message())
 	}
 }

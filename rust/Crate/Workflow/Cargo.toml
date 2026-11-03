@@ -1,0 +1,30 @@
+[package]
+name = "agentic-workflow"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Adapter-independent compositions, and the only place that knows both a consumer's port and the browser substrate."
+
+[lib]
+name = "AgenticWorkflow"
+path = "Source/Library.rs"
+
+[dependencies]
+agentic-runtime = { workspace = true }
+agentic-chat-driver = { workspace = true }
+agentic-design-verification = { workspace = true }
+agentic-skill-contract = { workspace = true }
+agentic-browser-cdp = { workspace = true }
+serde_json = { workspace = true }
+
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "Workflow"
+path = "Test/Workflow.rs"

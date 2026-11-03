@@ -1,62 +1,62 @@
-//! The port `agentic.chat.ask` promises, written the way its consumer asks for it.
+//! The port `agentic.chat.ask` promises, written the way its consumer asks for
+//! it.
 //!
-//! `module.json` names four errors - `not-ready`, `wrong-mode`, `wrong-model` and
-//! `truncated` - and [`crate::Struct::Error`] is where they live. A caller narrows
-//! on the variant; anything a page does that is not one of those four is mapped
-//! onto one of them at the boundary, so a consumer never has to guess what a
-//! failure meant.
+//! `module.json` names four errors - `not-ready`, `wrong-mode`, `wrong-model`
+//! and `truncated` - and [`crate::Struct::Error`] is where they live. A caller
+//! narrows on the variant; anything a page does that is not one of those four
+//! is mapped onto one of them at the boundary, so a consumer never has to guess
+//! what a failure meant.
 //!
-//! The port states more than data shapes, because two drivers that agreed on the
-//! shapes alone would still behave differently:
+//! The port states more than data shapes, because two drivers that agreed on
+//! the shapes alone would still behave differently:
 //!
-//! - **A question is answered or it is not.** `Ask` returns an answer whose text
-//!   the page had stopped changing, or it fails. A partial answer is never
+//! - **A question is answered or it is not.** `Ask` returns an answer whose
+//!   text the page had stopped changing, or it fails. A partial answer is never
 //!   returned as a whole one, and an empty string is never an answer.
-//! - **Mode and model are preconditions.** The composer is in search mode and set
-//!   to the requested model before anything is typed, so a wrong answer is
+//! - **Mode and model are preconditions.** The composer is in search mode and
+//!   set to the requested model before anything is typed, so a wrong answer is
 //!   refused rather than produced.
 //! - **The answer is the one this question caused.** A thread already holds the
 //!   answers to earlier questions, so the turn is correlated by counting them
 //!   before the send and reading only the one that appeared after it.
-//! - **A collapsed answer is refused.** When the page hides the rest of an answer
-//!   behind a control, the text in the DOM is not the answer, and returning it
-//!   would be a quiet lie.
+//! - **A collapsed answer is refused.** When the page hides the rest of an
+//!   answer behind a control, the text in the DOM is not the answer, and
+//!   returning it would be a quiet lie.
 //! - **Cancellation is `not-ready`.** A signal that fires and a deadline that
-//!   passes are the same event to a consumer - the answer did not arrive - so both
-//!   are `not-ready`. `detail` says which one happened.
-
-use serde_json::Value;
+//!   passes are the same event to a consumer - the answer did not arrive - so
+//!   both are `not-ready`. `detail` says which one happened.
 
 use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
 
 /// One step of the work an answer reports having done.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Step {
 	/// Nesting: a step inside a step is one level deeper than it.
-	pub Depth: i64,
+	pub Depth:i64,
 	/// What the step is called, as the page labels it.
-	pub Label: String,
+	pub Label:String,
 	/// The page's own note about it - a duration, a state - when it has one.
-	pub Detail: String,
+	pub Detail:String,
 }
 
 /// One cited source behind an answer.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Source {
 	/// Where the citation points.
-	pub Url: String,
+	pub Url:String,
 	/// How the page labels the citation.
-	pub Label: String,
+	pub Label:String,
 }
 
 /// The composer mode a question must be asked in.
 ///
-/// The port is defined for search only. An agent mode answers by running tools on
-/// the caller's behalf, which is a different capability with different costs and a
-/// different budget, so a driver that silently used one would be spending somebody
-/// else's allowance. [`Mode::Other`] exists so that asking for one is a refusal
-/// with a code rather than a value the type system quietly forbids: a caller
-/// migrating from another driver learns why from `wrong-mode`.
+/// The port is defined for search only. An agent mode answers by running tools
+/// on the caller's behalf, which is a different capability with different costs
+/// and a different budget, so a driver that silently used one would be spending
+/// somebody else's allowance. [`Mode::Other`] exists so that asking for one is
+/// a refusal with a code rather than a value the type system quietly forbids: a
+/// caller migrating from another driver learns why from `wrong-mode`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
 	/// The one mode this port asks in.
@@ -75,47 +75,45 @@ impl Mode {
 	}
 
 	/// Whether this is the mode the port asks in.
-	pub fn IsSearch(&self) -> bool {
-		matches!(self, Mode::Search)
-	}
+	pub fn IsSearch(&self) -> bool { matches!(self, Mode::Search) }
 }
 
 /// What a caller asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Question {
 	/// The question, sent as written.
-	pub Text: String,
+	pub Text:String,
 	/// The composer mode the question must be asked in.
-	pub Mode: Mode,
+	pub Mode:Mode,
 	/// The model the answer must come from, matched against the page's label.
-	pub Model: String,
+	pub Model:String,
 }
 
 /// What a settled turn produced.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Answer {
 	/// The answer's text, read once the page stopped changing it.
-	pub Text: String,
+	pub Text:String,
 	/// The work the answer reports having done, in the order it did it.
-	pub Trace: Vec<Step>,
+	pub Trace:Vec<Step>,
 	/// The sources the answer cites.
-	pub Sources: Vec<Source>,
+	pub Sources:Vec<Source>,
 	/// The model label the page showed when the question was sent.
-	pub Model: String,
+	pub Model:String,
 	/// The composer mode the page was in when the question was sent.
-	pub Mode: String,
+	pub Mode:String,
 }
 
 /// The handle a page is bound to.
 ///
-/// The driver passes it back to the `Page` that issued it and never reads it, so a
-/// provider may hang whatever it needs there - a target id, a session, a socket.
-/// `Url` is the one field the port keeps, because a failure report that cannot say
-/// which page failed is not a report.
+/// The driver passes it back to the `Page` that issued it and never reads it,
+/// so a provider may hang whatever it needs there - a target id, a session, a
+/// socket. `Url` is the one field the port keeps, because a failure report that
+/// cannot say which page failed is not a report.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Target {
 	/// The page this session is bound to.
-	pub Url: String,
+	pub Url:String,
 }
 
 /// What a page operation reports when it fails.
@@ -127,19 +125,14 @@ pub struct Target {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Failure {
 	/// The sentence a human reads.
-	pub Message: String,
+	pub Message:String,
 	/// What was observed.
-	pub Detail: String,
+	pub Detail:String,
 }
 
 impl Failure {
 	/// A failure with a sentence and nothing observed.
-	pub fn Of(Message: impl Into<String>) -> Self {
-		Self {
-			Message: Message.into(),
-			Detail: String::new(),
-		}
-	}
+	pub fn Of(Message:impl Into<String>) -> Self { Self { Message:Message.into(), Detail:String::new() } }
 }
 
 /// The browser as this capability needs it: one page, asked one expression at a
@@ -147,31 +140,33 @@ impl Failure {
 ///
 /// What the port demands of an implementation:
 ///
-/// - `Evaluate` returns the value of the expression, not a wrapper around it, and
-///   the expression is a complete JavaScript expression whose value is
-///   JSON-serialisable. `document` is the only host object it may touch, so a page
-///   that is a tab and a page that is a fixture answer the same driver.
-/// - the [`Call`] is honoured: a page that never answers is failed, not awaited.
-///   The driver checks the same deadline on its side, so an implementation that
-///   ignores it cannot quietly turn a bounded call into an unbounded one.
-/// - `Dispose` never fails. A release that fails is a fact about the browser, and
-///   a caller that already has its answer must not lose it to a failing cleanup.
+/// - `Evaluate` returns the value of the expression, not a wrapper around it,
+///   and the expression is a complete JavaScript expression whose value is
+///   JSON-serialisable. `document` is the only host object it may touch, so a
+///   page that is a tab and a page that is a fixture answer the same driver.
+/// - the [`Call`] is honoured: a page that never answers is failed, not
+///   awaited. The driver checks the same deadline on its side, so an
+///   implementation that ignores it cannot quietly turn a bounded call into an
+///   unbounded one.
+/// - `Dispose` never fails. A release that fails is a fact about the browser,
+///   and a caller that already has its answer must not lose it to a failing
+///   cleanup.
 pub trait Page: Send + Sync {
 	/// Open the page at `Url`.
-	fn Open<'a>(&'a self, Url: &'a str, Call: Call) -> FutureBox<'a, Result<Target, Failure>>;
+	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>>;
 	/// Evaluate one expression in the page and return its value.
 	fn Evaluate<'a>(
 		&'a self,
-		Target: &'a Target,
-		Expression: &'a str,
-		Call: Call,
+		Target:&'a Target,
+		Expression:&'a str,
+		Call:Call,
 	) -> FutureBox<'a, Result<Value, Failure>>;
 	/// Release everything the page holds. Never fails.
-	fn Dispose<'a>(&'a self, Target: Target) -> FutureBox<'a, ()>;
+	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()>;
 }
 
 /// The one port this capability offers.
 pub trait Chat: Send + Sync {
 	/// Ask one question and return the answer once the page has settled.
-	fn Ask<'a>(&'a self, Question: Question, Call: Call) -> FutureBox<'a, Result<Answer, crate::Struct::Error::Error>>;
+	fn Ask<'a>(&'a self, Question:Question, Call:Call) -> FutureBox<'a, Result<Answer, crate::Struct::Error::Error>>;
 }

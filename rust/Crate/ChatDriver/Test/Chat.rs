@@ -1,71 +1,53 @@
-//! `agentic.chat.ask`, exercised against a scripted page and a clock the test owns.
+//! `agentic.chat.ask`, exercised against a scripted page and a clock the test
+//! owns.
 //!
 //! No browser, no network and no sleeping: a page that never answers is a page
-//! whose script says so, and a deadline is passed because the test advanced its own
-//! clock.
+//! whose script says so, and a deadline is passed because the test advanced its
+//! own clock.
 
 mod Fake;
 
-use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-use AgenticChatDriver::{
-	Code, Create, DefaultSelectors, Driver, Error, Mode, Options, Question,
+use std::{
+	sync::{Arc, Mutex, atomic::Ordering},
+	time::Duration,
 };
-use AgenticChatDriver::{Answer, Chat};
-use AgenticRuntime::{BlockOn, Call, Cancellation, Clock, Never, Signal};
-use Fake::{Answers, FakePage, Kind, Release, Script, TestPace};
+
+use AgenticChatDriver::{Answer, Chat, Code, Create, DefaultSelectors, Driver, Error, Mode, Options, Question};
+use AgenticRuntime::{BlockOn, Call, Clock, Never, Signal};
+use Fake::{Answers, FakePage, Release, Script, TestPace};
 use serde_json::json;
 
-fn Span(Milliseconds: u64) -> Duration {
-	Duration::from_millis(Milliseconds)
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
+
+fn Asked(Text:&str, Model:&str) -> Question {
+	Question { Text:Text.to_string(), Mode:Mode::Search, Model:Model.to_string() }
 }
 
-fn Asked(Text: &str, Model: &str) -> Question {
-	Question {
-		Text: Text.to_string(),
-		Mode: Mode::Search,
-		Model: Model.to_string(),
-	}
-}
-
-fn Built(Page: &Arc<FakePage>, Pace: &Arc<TestPace>) -> Driver {
+fn Built(Page:&Arc<FakePage>, Pace:&Arc<TestPace>) -> Driver {
 	Create(
 		Page.clone(),
 		Options {
-			Url: "https://chat.example/".to_string(),
-			Selectors: DefaultSelectors(),
-			Poll: Span(250),
-			DisposeBudget: Duration::from_secs(5),
+			Url:"https://chat.example/".to_string(),
+			Selectors:DefaultSelectors(),
+			Poll:Span(250),
+			DisposeBudget:Duration::from_secs(5),
 		},
 		Pace.clone(),
 	)
 }
 
-fn Ask(
-	Driver: &Driver,
-	Pace: &TestPace,
-	Question: Question,
-	Budget: Duration,
-) -> Result<Answer, Error> {
+fn Ask(Driver:&Driver, Pace:&TestPace, Question:Question, Budget:Duration) -> Result<Answer, Error> {
 	let Call = Call::Within(Budget, Pace, Arc::new(Never));
 	BlockOn(Driver.Ask(Question, Call))
 }
 
 #[test]
 fn the_port_declares_exactly_the_errors_the_manifest_promises() {
-	let Declared: Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
-	assert_eq!(
-		Declared,
-		vec!["not-ready", "wrong-mode", "wrong-model", "truncated"]
-	);
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["not-ready", "wrong-mode", "wrong-model", "truncated"]);
 	let Manifest = include_str!("../module.json");
 	for Name in Declared {
-		assert!(
-			Manifest.contains(&format!("\"{Name}\"")),
-			"{Name} is not in module.json"
-		);
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
 	}
 }
 
@@ -126,9 +108,9 @@ fn refuses_a_question_that_asks_for_a_mode_this_port_does_not_offer() {
 	let Page = FakePage::New(Script::New("why", "sol", "Because."));
 	let Driver = Built(&Page, &Pace);
 	let Question = Question {
-		Text: "why".to_string(),
-		Mode: Mode::Other("computer".to_string()),
-		Model: "sol".to_string(),
+		Text:"why".to_string(),
+		Mode:Mode::Other("computer".to_string()),
+		Model:"sol".to_string(),
 	};
 	let Error = Ask(&Driver, &Pace, Question, Span(2_000)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::WrongMode);
@@ -223,10 +205,7 @@ fn refuses_before_asking_when_the_deadline_has_already_passed() {
 	let Pace = TestPace::New();
 	let Page = FakePage::New(Script::New("why", "sol", "answer"));
 	let Driver = Built(&Page, &Pace);
-	let Call = Call {
-		Deadline: Pace.Now() - Span(1),
-		Cancellation: Arc::new(Never),
-	};
+	let Call = Call { Deadline:Pace.Now() - Span(1), Cancellation:Arc::new(Never) };
 	let Error = BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::NotReady);
 	assert_eq!(Page.Opens.load(Ordering::SeqCst), 0, "no page was opened");
@@ -301,10 +280,7 @@ fn reports_not_ready_before_opening_anything_when_the_signal_already_fired() {
 	let Driver = Built(&Page, &Pace);
 	let Signal = Signal::New();
 	Signal.Fire();
-	let Call = Call {
-		Deadline: Pace.Now() + Span(5_000),
-		Cancellation: Signal.clone(),
-	};
+	let Call = Call { Deadline:Pace.Now() + Span(5_000), Cancellation:Signal.clone() };
 	let Error = BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::NotReady);
 	assert!(Error.Detail().contains("signal"));
@@ -319,10 +295,7 @@ fn reports_not_ready_when_the_caller_gives_up_while_the_answer_is_arriving() {
 	Script.Thread = Answers::Changing;
 	let Page = FakePage::New(Script);
 	let Driver = Built(&Page, &Pace);
-	let Call = Call {
-		Deadline: Pace.Now() + Span(30_000),
-		Cancellation: Signal.clone(),
-	};
+	let Call = Call { Deadline:Pace.Now() + Span(30_000), Cancellation:Signal.clone() };
 	let Error = BlockOn(Driver.Ask(Asked("why", "sol"), Call)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::NotReady);
 	assert!(Error.Detail().contains("signal"));
@@ -335,13 +308,10 @@ fn reports_a_release_that_hangs_instead_of_waiting_for_it() {
 	let mut Script = Script::New("why", "sol", "answer");
 	Script.Release = Release::Hang;
 	let Page = FakePage::New(Script);
-	let Reported: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+	let Reported:Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 	let Collected = Reported.clone();
 	let Driver = Built(&Page, &Pace).Reporting(Arc::new(move |_Target, Error| {
-		Collected
-			.lock()
-			.unwrap()
-			.push(Error.Message().to_string());
+		Collected.lock().unwrap().push(Error.Message().to_string());
 	}));
 	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(30_000));
 	assert!(Answer.is_ok(), "the caller keeps its answer");

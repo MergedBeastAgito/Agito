@@ -1,53 +1,57 @@
 //! `agentic.verify.design`, exercised against a scripted transport.
 //!
-//! No browser and no network: the transport answers what the test told it to, and a
-//! deadline passes because the test advanced its own clock.
+//! No browser and no network: the transport answers what the test told it to,
+//! and a deadline passes because the test advanced its own clock.
 
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::{
+	sync::{Arc, Mutex},
+	time::{Duration, Instant},
+};
 
 use AgenticDesignVerification::{
-	Browse, Code, Create, Error, Failure, Invariant, Measurement, Outcome, Verdict, Verifier,
-	Verify, Want,
+	Browse,
+	Code,
+	Create,
+	Error,
+	Failure,
+	Invariant,
+	Measurement,
+	Outcome,
+	Verdict,
+	Verifier,
+	Verify,
+	Want,
 };
 use AgenticRuntime::{BlockOn, Call, Clock, FutureBox, Never, Pace, Signal};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-fn Span(Milliseconds: u64) -> Duration {
-	Duration::from_millis(Milliseconds)
-}
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
 
 /// A clock the test owns, and a wait that advances it.
 struct TestPace {
-	Now: Mutex<Instant>,
-	Fire: Mutex<Option<Arc<Signal>>>,
+	Now:Mutex<Instant>,
+	Fire:Mutex<Option<Arc<Signal>>>,
 }
 
 impl TestPace {
-	fn New() -> Arc<Self> {
-		Arc::new(Self {
-			Now: Mutex::new(Instant::now()),
-			Fire: Mutex::new(None),
-		})
-	}
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()), Fire:Mutex::new(None) }) }
 
-	fn Firing(self: &Arc<Self>, Signal: Arc<Signal>) -> Arc<Self> {
+	fn Firing(self: &Arc<Self>, Signal:Arc<Signal>) -> Arc<Self> {
 		*self.Fire.lock().unwrap() = Some(Signal);
 		self.clone()
 	}
 }
 
 impl Clock for TestPace {
-	fn Now(&self) -> Instant {
-		*self.Now.lock().unwrap()
-	}
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
 }
 
 impl Pace for TestPace {
-	fn Sleep(&self, Span: Duration) -> FutureBox<'_, ()> {
-		// A pace that is about to fire a signal models a caller giving up, not time
-		// passing: it advances a millisecond, fires, and never finishes its wait - so
-		// the cancellation and not the deadline is what stops the call.
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> {
+		// A pace that is about to fire a signal models a caller giving up, not
+		// time passing: it advances a millisecond, fires, and never
+		// finishes its wait - so the cancellation and not the deadline
+		// is what stops the call.
 		if let Some(Signal) = self.Fire.lock().unwrap().take() {
 			*self.Now.lock().unwrap() += Duration::from_millis(1);
 			Signal.Fire();
@@ -61,31 +65,27 @@ impl Pace for TestPace {
 /// A transport that answers what the test scripted.
 struct Script {
 	/// The wire answer: one object per selector.
-	Answer: Vec<Value>,
+	Answer:Vec<Value>,
 	/// A failure instead of an answer.
-	Fail: Option<String>,
+	Fail:Option<String>,
 	/// Never answer at all.
-	Hang: bool,
+	Hang:bool,
 }
 
 struct FakeTransport {
-	Script: Mutex<Script>,
-	Asked: Mutex<Vec<Vec<String>>>,
+	Script:Mutex<Script>,
+	Asked:Mutex<Vec<Vec<String>>>,
 }
 
 impl FakeTransport {
-	fn New(Answer: Vec<Value>) -> Arc<Self> {
+	fn New(Answer:Vec<Value>) -> Arc<Self> {
 		Arc::new(Self {
-			Script: Mutex::new(Script {
-				Answer,
-				Fail: None,
-				Hang: false,
-			}),
-			Asked: Mutex::new(Vec::new()),
+			Script:Mutex::new(Script { Answer, Fail:None, Hang:false }),
+			Asked:Mutex::new(Vec::new()),
 		})
 	}
 
-	fn Failing(Message: &str) -> Arc<Self> {
+	fn Failing(Message:&str) -> Arc<Self> {
 		let Fake = Self::New(vec![]);
 		Fake.Script.lock().unwrap().Fail = Some(Message.to_string());
 		Fake
@@ -97,17 +97,11 @@ impl FakeTransport {
 		Fake
 	}
 
-	fn Asked(&self) -> Vec<Vec<String>> {
-		self.Asked.lock().unwrap().clone()
-	}
+	fn Asked(&self) -> Vec<Vec<String>> { self.Asked.lock().unwrap().clone() }
 }
 
 impl Browse for FakeTransport {
-	fn Measure<'a>(
-		&'a self,
-		Selectors: &'a [String],
-		_Call: Call,
-	) -> FutureBox<'a, Result<Vec<Value>, Failure>> {
+	fn Measure<'a>(&'a self, Selectors:&'a [String], _Call:Call) -> FutureBox<'a, Result<Vec<Value>, Failure>> {
 		self.Asked.lock().unwrap().push(Selectors.to_vec());
 		let Script = self.Script.lock().unwrap();
 		let Fail = Script.Fail.clone();
@@ -125,36 +119,26 @@ impl Browse for FakeTransport {
 	}
 }
 
-fn Built(Transport: &Arc<FakeTransport>, Pace: &Arc<TestPace>) -> Verifier {
-	Create(Transport.clone(), Pace.clone())
-}
+fn Built(Transport:&Arc<FakeTransport>, Pace:&Arc<TestPace>) -> Verifier { Create(Transport.clone(), Pace.clone()) }
 
 fn Measured(
-	Verifier: &impl Verify,
-	Pace: &TestPace,
-	Selectors: &[String],
-	Budget: Duration,
+	Verifier:&impl Verify,
+	Pace:&TestPace,
+	Selectors:&[String],
+	Budget:Duration,
 ) -> Result<Vec<Measurement>, Error> {
 	let Call = Call::Within(Budget, Pace, Arc::new(Never));
 	BlockOn(Verifier.Measure(Selectors, Call))
 }
 
-fn Selectors(Names: &[&str]) -> Vec<String> {
-	Names.iter().map(|Name| Name.to_string()).collect()
-}
+fn Selectors(Names:&[&str]) -> Vec<String> { Names.iter().map(|Name| Name.to_string()).collect() }
 
 /// The selectors a test asks about, none of them a design of this package.
-fn Asked() -> Vec<String> {
-	Selectors(&["[data-rail]", "[data-drawer]"])
-}
+fn Asked() -> Vec<String> { Selectors(&["[data-rail]", "[data-drawer]"]) }
 
-fn Present(Selector: &str, Value: Value) -> Value {
-	json!({ "selector": Selector, "present": true, "value": Value })
-}
+fn Present(Selector:&str, Value:Value) -> Value { json!({ "selector": Selector, "present": true, "value": Value }) }
 
-fn Absent(Selector: &str) -> Value {
-	json!({ "selector": Selector, "present": false, "value": null })
-}
+fn Absent(Selector:&str) -> Value { json!({ "selector": Selector, "present": false, "value": null }) }
 
 fn Readings() -> Vec<Measurement> {
 	vec![
@@ -165,27 +149,18 @@ fn Readings() -> Vec<Measurement> {
 
 #[test]
 fn the_error_codes_are_the_manifests_errors_and_there_are_no_others() {
-	let Declared: Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
-	assert_eq!(
-		Declared,
-		vec!["absent-element", "invariant-broke", "not-ready"]
-	);
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["absent-element", "invariant-broke", "not-ready"]);
 	let Manifest = include_str!("../module.json");
 	for Name in Declared {
-		assert!(
-			Manifest.contains(&format!("\"{Name}\"")),
-			"{Name} is not in module.json"
-		);
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
 	}
 }
 
 #[test]
 fn measure_asks_for_every_selector_once_and_answers_in_the_order_it_was_given() {
 	let Pace = TestPace::New();
-	let Transport = FakeTransport::New(vec![
-		Absent("[data-drawer]"),
-		Present("[data-rail]", json!(320)),
-	]);
+	let Transport = FakeTransport::New(vec![Absent("[data-drawer]"), Present("[data-rail]", json!(320))]);
 	let Verifier = Built(&Transport, &Pace);
 	let Measurements = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect("measured");
 	assert_eq!(Transport.Asked(), vec![Asked()], "one request, once");
@@ -197,10 +172,7 @@ fn measure_asks_for_every_selector_once_and_answers_in_the_order_it_was_given() 
 #[test]
 fn an_answer_that_arrives_in_another_order_is_matched_by_selector_not_by_position() {
 	let Pace = TestPace::New();
-	let Transport = FakeTransport::New(vec![
-		Present("[data-drawer]", json!(200)),
-		Present("[data-rail]", json!(320)),
-	]);
+	let Transport = FakeTransport::New(vec![Present("[data-drawer]", json!(200)), Present("[data-rail]", json!(320))]);
 	let Verifier = Built(&Transport, &Pace);
 	let Measurements = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect("measured");
 	assert_eq!(Measurements[0].Value, json!(320));
@@ -257,10 +229,7 @@ fn a_signal_that_had_already_fired_refuses_before_the_page_is_asked() {
 	let Verifier = Built(&Transport, &Pace);
 	let Signal = Signal::New();
 	Signal.Fire();
-	let Call = Call {
-		Deadline: Pace.Now() + Span(5_000),
-		Cancellation: Signal.clone(),
-	};
+	let Call = Call { Deadline:Pace.Now() + Span(5_000), Cancellation:Signal.clone() };
 	let Error = BlockOn(Verifier.Measure(&Asked(), Call)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::NotReady);
 	assert!(Error.Detail().contains("signal"));
@@ -273,10 +242,7 @@ fn a_signal_that_fires_while_the_page_is_being_read_is_not_ready_named_as_a_canc
 	let Pace = TestPace::New().Firing(Signal.clone());
 	let Transport = FakeTransport::Hanging();
 	let Verifier = Built(&Transport, &Pace);
-	let Call = Call {
-		Deadline: Pace.Now() + Span(30_000),
-		Cancellation: Signal.clone(),
-	};
+	let Call = Call { Deadline:Pace.Now() + Span(30_000), Cancellation:Signal.clone() };
 	let Error = BlockOn(Verifier.Measure(&Asked(), Call)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::NotReady);
 	assert!(Error.Detail().contains("signal"));
@@ -308,10 +274,7 @@ fn a_measurement_that_does_not_say_whether_the_element_was_there_is_refused() {
 #[test]
 fn a_value_that_is_not_a_number_a_string_or_null_is_refused_rather_than_flattened() {
 	let Pace = TestPace::New();
-	let Transport = FakeTransport::New(vec![
-		Present("[data-rail]", json!({ "width": 320 })),
-		Absent("[data-drawer]"),
-	]);
+	let Transport = FakeTransport::New(vec![Present("[data-rail]", json!({ "width": 320 })), Absent("[data-drawer]")]);
 	let Verifier = Built(&Transport, &Pace);
 	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
 	assert_eq!(Error.Code(), Code::NotReady);
@@ -322,7 +285,8 @@ fn a_value_that_is_not_a_number_a_string_or_null_is_refused_rather_than_flattene
 fn a_transport_that_answers_with_something_other_than_a_list_is_refused() {
 	let Pace = TestPace::New();
 	// A list of one number: the entry is not an object, which is the wire-shape
-	// version of "the transport answered with something that is not a measurement".
+	// version of "the transport answered with something that is not a
+	// measurement".
 	let Transport = FakeTransport::New(vec![json!(42)]);
 	let Verifier = Built(&Transport, &Pace);
 	let Error = Measured(&Verifier, &Pace, &Asked(), Span(2_000)).expect_err("refused");
@@ -428,14 +392,14 @@ fn an_expectation_that_is_a_function_of_the_measurements_is_derived_not_hard_cod
 fn a_comparator_makes_a_relational_invariant_expressible() {
 	let Pace = TestPace::New();
 	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
-	let Invariants = vec![Invariant::Equal(
-		"the rail is wider than the drawer",
-		|Measurements| Ok(Measurements[0].Value.clone()),
-		json!(200),
-	)
-	.Tested(|Got, Want| {
-		Got.as_f64().unwrap_or_default() > Want.as_f64().unwrap_or_default()
-	})];
+	let Invariants = vec![
+		Invariant::Equal(
+			"the rail is wider than the drawer",
+			|Measurements| Ok(Measurements[0].Value.clone()),
+			json!(200),
+		)
+		.Tested(|Got, Want| Got.as_f64().unwrap_or_default() > Want.as_f64().unwrap_or_default()),
+	];
 	let Verdict = Verifier.Check(&Invariants, &Readings());
 	assert!(Verdict.Held, "320 is wider than 200");
 }
@@ -444,12 +408,14 @@ fn a_comparator_makes_a_relational_invariant_expressible() {
 fn a_comparator_that_panics_counts_as_not_held() {
 	let Pace = TestPace::New();
 	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
-	let Invariants = vec![Invariant::Equal(
-		"a comparison that cannot be made",
-		|Measurements| Ok(Measurements[0].Value.clone()),
-		json!(320),
-	)
-	.Tested(|_, _| panic!("the comparator is broken"))];
+	let Invariants = vec![
+		Invariant::Equal(
+			"a comparison that cannot be made",
+			|Measurements| Ok(Measurements[0].Value.clone()),
+			json!(320),
+		)
+		.Tested(|_, _| panic!("the comparator is broken")),
+	];
 	let Verdict = Verifier.Check(&Invariants, &Readings());
 	assert!(!Verdict.Held);
 	assert_eq!(Verdict.Evidence[0].Got, Outcome::Value(json!(320)));
@@ -483,10 +449,7 @@ fn the_absent_list_names_each_selector_once_in_the_order_it_was_measured() {
 		Measurement::Absent("[data-second]"),
 	];
 	let Verdict = Verifier.Check(&[], &Measurements);
-	assert_eq!(
-		Verdict.Absent,
-		vec!["[data-second]".to_string(), "[data-first]".to_string()]
-	);
+	assert_eq!(Verdict.Absent, vec!["[data-second]".to_string(), "[data-first]".to_string()]);
 }
 
 #[test]
@@ -538,8 +501,9 @@ fn a_verdict_becomes_the_error_the_manifest_names_absence_before_a_broken_invari
 
 #[test]
 fn the_package_carries_no_selector_length_or_colour_of_any_design() {
-	// The rule this crate exists to keep, checked against its own source: a port
-	// that knew one site's rail width could not measure another site at all.
+	// The rule this crate exists to keep, checked against its own source: a
+	// port that knew one site's rail width could not measure another site
+	// at all.
 	let Sources = [
 		include_str!("../Source/Struct/Port.rs"),
 		include_str!("../Source/Struct/Verify.rs"),
@@ -549,10 +513,7 @@ fn the_package_carries_no_selector_length_or_colour_of_any_design() {
 	];
 	for Source in Sources {
 		for Forbidden in ["data-testid", "aria-label", "#ffffff", "#fff", " px"] {
-			assert!(
-				!Source.contains(Forbidden),
-				"the package names {Forbidden}, which is a design"
-			);
+			assert!(!Source.contains(Forbidden), "the package names {Forbidden}, which is a design");
 		}
 	}
 }
@@ -561,7 +522,7 @@ fn the_package_carries_no_selector_length_or_colour_of_any_design() {
 fn a_verdict_with_nothing_wrong_becomes_no_error_at_all() {
 	let Pace = TestPace::New();
 	let Verifier = Built(&FakeTransport::New(vec![]), &Pace);
-	let Verdict: Verdict = Verifier.Check(&[], &Readings());
+	let Verdict:Verdict = Verifier.Check(&[], &Readings());
 	assert!(Verdict.Held);
 	assert_eq!(Error::From(&Verdict), None);
 	let _ = Want::Value(Value::Null);

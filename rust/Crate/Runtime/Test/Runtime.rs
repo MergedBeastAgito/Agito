@@ -1,45 +1,58 @@
 //! `agentic.runtime`, exercised against a clock the test owns.
 //!
-//! No tokio, no browser, no network and no sleeping: a lease expires because the
-//! test advances a clock, which is the whole reason the clock is a parameter of
-//! the port rather than a call to the system's.
+//! No tokio, no browser, no network and no sleeping: a lease expires because
+//! the test advances a clock, which is the whole reason the clock is a
+//! parameter of the port rather than a call to the system's.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::{
+	sync::{
+		Arc,
+		Mutex,
+		atomic::{AtomicBool, Ordering},
+	},
+	time::{Duration, Instant},
+};
 
 use AgenticRuntime::{
-	Admission, BlockOn, Budget, Call, Clock, Code, Error, Lease, Options, Policy, Request, Runtime,
-	Signal, StateClass, States, Create,
+	Admission,
+	BlockOn,
+	Budget,
+	Call,
+	Cancellation,
+	Clock,
+	Code,
+	Create,
+	Error,
+	Lease,
+	Options,
+	Policy,
+	Request,
+	Runtime,
+	StateClass,
+	States,
 };
 
 /// A clock that only moves when the test moves it.
 #[derive(Debug)]
 struct TestClock {
-	Now: Mutex<Instant>,
+	Now:Mutex<Instant>,
 }
 
 impl TestClock {
-	fn New() -> Arc<Self> {
-		Arc::new(Self {
-			Now: Mutex::new(Instant::now()),
-		})
-	}
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()) }) }
 
-	fn Advance(&self, Span: Duration) {
+	fn Advance(&self, Span:Duration) {
 		let mut Now = self.Now.lock().unwrap();
 		*Now += Span;
 	}
 }
 
 impl Clock for TestClock {
-	fn Now(&self) -> Instant {
-		*self.Now.lock().unwrap()
-	}
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
 }
 
 /// A runtime bound to generation 7 with two registrations.
-fn Engine(Clock: Arc<TestClock>) -> Policy {
+fn Engine(Clock:Arc<TestClock>) -> Policy {
 	Create(
 		Options::New(7)
 			.With("chat", StateClass::HoldsTransport)
@@ -49,56 +62,40 @@ fn Engine(Clock: Arc<TestClock>) -> Policy {
 	.expect("the runtime binds")
 }
 
-fn Claim(Policy: &Policy, Resource: &str, Ttl: Duration) -> Result<Lease, Error> {
+fn Claim(Policy:&Policy, Resource:&str, Ttl:Duration) -> Result<Lease, Error> {
 	BlockOn(Policy.Claim(Resource, Ttl, None))
 }
 
-fn Claimed(Policy: &Policy, Resource: &str, Ttl: Duration) -> Lease {
+fn Claimed(Policy:&Policy, Resource:&str, Ttl:Duration) -> Lease {
 	Claim(Policy, Resource, Ttl).expect("the claim is admitted")
 }
 
-fn Span(Milliseconds: u64) -> Duration {
-	Duration::from_millis(Milliseconds)
-}
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
 
 /// Poll a future once, without an executor, so a test can observe the state
 /// between "admitted" and "settled" instead of only after it finishes.
-fn PollOnce<Work: std::future::Future + ?Sized>(Work: std::pin::Pin<&mut Work>) -> bool {
+fn PollOnce<Work:std::future::Future + ?Sized>(Work:std::pin::Pin<&mut Work>) -> bool {
 	let Waker = std::task::Waker::noop();
 	let mut Context = std::task::Context::from_waker(Waker);
-	matches!(
-		Work.poll(&mut Context),
-		std::task::Poll::Ready(_)
-	)
+	matches!(Work.poll(&mut Context), std::task::Poll::Ready(_))
 }
 
 #[test]
 fn the_port_declares_exactly_the_errors_the_manifest_promises() {
-	let Declared: Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
-	assert_eq!(
-		Declared,
-		vec!["admission-refused", "lease-held", "budget-exhausted"]
-	);
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(Declared, vec!["admission-refused", "lease-held", "budget-exhausted"]);
 	let Manifest = include_str!("../module.json");
 	for Name in Declared {
-		assert!(
-			Manifest.contains(&format!("\"{Name}\"")),
-			"{Name} is not in module.json"
-		);
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
 	}
 }
 
 #[test]
 fn the_port_declares_exactly_the_state_classes_the_manifest_promises() {
-	let Declared: Vec<&str> = States.into_iter().map(StateClass::Name).collect();
+	let Declared:Vec<&str> = States.into_iter().map(StateClass::Name).collect();
 	assert_eq!(
 		Declared,
-		vec![
-			"stateless",
-			"holds-transport",
-			"holds-identity",
-			"holds-workspace"
-		]
+		vec!["stateless", "holds-transport", "holds-identity", "holds-workspace"]
 	);
 	assert_eq!(StateClass::Parse("holds-identity"), Some(StateClass::HoldsIdentity));
 	assert_eq!(StateClass::Parse("resident"), None);
@@ -117,9 +114,9 @@ fn reads_the_clock_it_was_given_not_the_wall_clock() {
 fn admits_a_registered_capability_at_the_generation_it_is_bound_to() {
 	let Engine = Engine(TestClock::New());
 	let Answer = BlockOn(Engine.Admit(Request {
-		Capability: "chat".to_string(),
-		State: StateClass::HoldsTransport,
-		Generation: 7,
+		Capability:"chat".to_string(),
+		State:StateClass::HoldsTransport,
+		Generation:7,
 	}));
 	assert_eq!(Answer, Admission::Admitted);
 	assert!(Answer.Ok());
@@ -129,9 +126,9 @@ fn admits_a_registered_capability_at_the_generation_it_is_bound_to() {
 fn refuses_a_generation_it_was_not_bound_to() {
 	let Engine = Engine(TestClock::New());
 	let Answer = BlockOn(Engine.Admit(Request {
-		Capability: "chat".to_string(),
-		State: StateClass::HoldsTransport,
-		Generation: 8,
+		Capability:"chat".to_string(),
+		State:StateClass::HoldsTransport,
+		Generation:8,
 	}));
 	assert!(!Answer.Ok());
 	assert!(Answer.Reason().starts_with("admission-refused: generation 8"));
@@ -141,9 +138,9 @@ fn refuses_a_generation_it_was_not_bound_to() {
 fn refuses_a_capability_it_does_not_register() {
 	let Engine = Engine(TestClock::New());
 	let Answer = BlockOn(Engine.Admit(Request {
-		Capability: "browse".to_string(),
-		State: StateClass::HoldsTransport,
-		Generation: 7,
+		Capability:"browse".to_string(),
+		State:StateClass::HoldsTransport,
+		Generation:7,
 	}));
 	assert!(!Answer.Ok());
 	assert!(Answer.Reason().contains("browse is not registered"));
@@ -153,9 +150,9 @@ fn refuses_a_capability_it_does_not_register() {
 fn refuses_a_state_class_the_registration_does_not_declare() {
 	let Engine = Engine(TestClock::New());
 	let Answer = BlockOn(Engine.Admit(Request {
-		Capability: "verify".to_string(),
-		State: StateClass::HoldsWorkspace,
-		Generation: 7,
+		Capability:"verify".to_string(),
+		State:StateClass::HoldsWorkspace,
+		Generation:7,
 	}));
 	assert!(!Answer.Ok());
 	assert!(Answer.Reason().contains("verify declares stateless"));
@@ -166,7 +163,7 @@ fn the_manifest_it_reports_is_the_manifest_it_enforces() {
 	let Engine = Engine(TestClock::New());
 	let Binding = Engine.Reflect();
 	assert_eq!(Binding.Generation, 7);
-	let Names: Vec<&str> = Binding
+	let Names:Vec<&str> = Binding
 		.Capabilities
 		.iter()
 		.map(|Registration| Registration.Name.as_str())
@@ -303,7 +300,8 @@ fn a_claim_during_an_effect_on_an_expired_lease_is_refused() {
 	let Error = BlockOn(Running).unwrap_err();
 	assert_eq!(Error.Code(), Code::LeaseHeld);
 	assert!(Error.Message().contains("effect in flight"));
-	// Dropping the abandoned effect settles it, which is what frees the resource.
+	// Dropping the abandoned effect settles it, which is what frees the
+	// resource.
 	drop(Write);
 	assert_eq!(Claimed(&Engine, "page", Span(1_000)).Fence, 2);
 }
@@ -350,11 +348,9 @@ fn release_during_an_effect_frees_the_resource_once_it_settles() {
 	assert!(!PollOnce(Write.as_mut()), "the effect is admitted and waiting");
 	// Released while the write is admitted but not yet settled.
 	BlockOn(Engine.Release(Lease));
-	// The record survives only to account for the effect, so nothing may take it.
-	assert_eq!(
-		Claim(&Engine, "page", Span(1_000)).unwrap_err().Code(),
-		Code::LeaseHeld
-	);
+	// The record survives only to account for the effect, so nothing may take
+	// it.
+	assert_eq!(Claim(&Engine, "page", Span(1_000)).unwrap_err().Code(), Code::LeaseHeld);
 	drop(Write);
 	let Next = Claimed(&Engine, "page", Span(1_000));
 	assert_eq!(Next.Fence, 2, "the resource came back");
@@ -364,10 +360,10 @@ fn release_during_an_effect_frees_the_resource_once_it_settles() {
 fn release_never_fails_whatever_it_is_handed() {
 	let Engine = Engine(TestClock::New());
 	let Foreign = Lease {
-		Id: "r999#page#1".to_string(),
-		Resource: "page".to_string(),
-		Fence: 1,
-		ExpiresAt: Instant::now(),
+		Id:"r999#page#1".to_string(),
+		Resource:"page".to_string(),
+		Fence:1,
+		ExpiresAt:Instant::now(),
 	};
 	BlockOn(Engine.Release(Foreign.clone()));
 	BlockOn(Engine.Release(Foreign));
@@ -376,15 +372,8 @@ fn release_never_fails_whatever_it_is_handed() {
 #[test]
 fn a_budget_is_not_inherited_a_new_run_starts_from_the_callers_count() {
 	let Engine = Engine(TestClock::New());
-	let First = BlockOn(Engine.Claim(
-		"page",
-		Span(1_000),
-		Some(Budget {
-			Deadline: None,
-			Operations: 1,
-		}),
-	))
-	.expect("the first claim is admitted");
+	let First = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the first claim is admitted");
 	assert!(BlockOn(Engine.WithLease(First.clone(), || Box::pin(async { 1 }))).is_ok());
 	assert_eq!(
 		BlockOn(Engine.WithLease(First.clone(), || Box::pin(async { 2 })))
@@ -393,15 +382,8 @@ fn a_budget_is_not_inherited_a_new_run_starts_from_the_callers_count() {
 		Code::BudgetExhausted
 	);
 	BlockOn(Engine.Release(First));
-	let Second = BlockOn(Engine.Claim(
-		"page",
-		Span(1_000),
-		Some(Budget {
-			Deadline: None,
-			Operations: 1,
-		}),
-	))
-	.expect("the second claim is admitted");
+	let Second = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the second claim is admitted");
 	assert!(
 		BlockOn(Engine.WithLease(Second, || Box::pin(async { 3 }))).is_ok(),
 		"a retry never inherits a spent count"
@@ -413,15 +395,8 @@ fn a_budgets_deadline_refuses_effects_past_it() {
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Deadline = Clock.Now() + Span(100);
-	let Lease = BlockOn(Engine.Claim(
-		"page",
-		Span(1_000),
-		Some(Budget {
-			Deadline: Some(Deadline),
-			Operations: 10,
-		}),
-	))
-	.expect("the claim is admitted");
+	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:Some(Deadline), Operations:10 })))
+		.expect("the claim is admitted");
 	Clock.Advance(Span(101));
 	let Error = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 1 }))).unwrap_err();
 	assert_eq!(Error.Code(), Code::BudgetExhausted);
@@ -431,17 +406,10 @@ fn a_budgets_deadline_refuses_effects_past_it() {
 #[test]
 fn an_effect_that_fails_still_spends_an_operation() {
 	let Engine = Engine(TestClock::New());
-	let Lease = BlockOn(Engine.Claim(
-		"page",
-		Span(1_000),
-		Some(Budget {
-			Deadline: None,
-			Operations: 1,
-		}),
-	))
-	.expect("the claim is admitted");
-	// The runtime never interprets the write: a write that failed is a value, and
-	// the charge happened before it ran.
+	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the claim is admitted");
+	// The runtime never interprets the write: a write that failed is a value,
+	// and the charge happened before it ran.
 	let Failed = BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { Err::<(), ()>(()) })));
 	assert_eq!(Failed.expect("the effect was admitted"), Err(()));
 	let Spent = BlockOn(Engine.WithLease(Lease, || Box::pin(async { Ok::<(), ()>(()) })));
@@ -460,15 +428,8 @@ fn a_run_with_no_budget_is_unbounded() {
 #[test]
 fn a_budget_of_no_operations_refuses_every_effect() {
 	let Engine = Engine(TestClock::New());
-	let Lease = BlockOn(Engine.Claim(
-		"page",
-		Span(1_000),
-		Some(Budget {
-			Deadline: None,
-			Operations: 0,
-		}),
-	))
-	.expect("a probe is admitted");
+	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:0 })))
+		.expect("a probe is admitted");
 	let Error = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 1 }))).unwrap_err();
 	assert_eq!(Error.Code(), Code::BudgetExhausted);
 }
@@ -476,24 +437,10 @@ fn a_budget_of_no_operations_refuses_every_effect() {
 #[test]
 fn one_runs_budget_is_not_another_resources() {
 	let Engine = Engine(TestClock::New());
-	let Page = BlockOn(Engine.Claim(
-		"page",
-		Span(1_000),
-		Some(Budget {
-			Deadline: None,
-			Operations: 1,
-		}),
-	))
-	.expect("the page claim is admitted");
-	let Tab = BlockOn(Engine.Claim(
-		"tab",
-		Span(1_000),
-		Some(Budget {
-			Deadline: None,
-			Operations: 1,
-		}),
-	))
-	.expect("the tab claim is admitted");
+	let Page = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the page claim is admitted");
+	let Tab = BlockOn(Engine.Claim("tab", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
+		.expect("the tab claim is admitted");
 	assert!(BlockOn(Engine.WithLease(Page.clone(), || Box::pin(async { 1 }))).is_ok());
 	assert!(
 		BlockOn(Engine.WithLease(Tab, || Box::pin(async { 1 }))).is_ok(),
@@ -504,27 +451,24 @@ fn one_runs_budget_is_not_another_resources() {
 
 #[test]
 fn a_bound_call_stops_its_wait_when_the_caller_cancels() {
-	// The one place the combinator itself is exercised: a page that never answers
-	// is cut short by the caller, and the answer is a cancellation rather than a
-	// timeout, so a consumer can tell its own impatience from a slow page.
+	// The one place the combinator itself is exercised: a page that never
+	// answers is cut short by the caller, and the answer is a cancellation
+	// rather than a timeout, so a consumer can tell its own impatience from
+	// a slow page.
 	struct Fixed(Instant);
 	impl Clock for Fixed {
-		fn Now(&self) -> Instant {
-			self.0
-		}
+		fn Now(&self) -> Instant { self.0 }
 	}
 	struct Waiting;
 	impl AgenticRuntime::Pace for Waiting {
-		fn Sleep(&self, Span: Duration) -> AgenticRuntime::FutureBox<'_, ()> {
+		fn Sleep(&self, Span:Duration) -> AgenticRuntime::FutureBox<'_, ()> {
 			// A wait that never ends: only the signal can stop this call.
 			let _ = Span;
 			Box::pin(std::future::pending())
 		}
 	}
 	impl Clock for Waiting {
-		fn Now(&self) -> Instant {
-			Instant::now()
-		}
+		fn Now(&self) -> Instant { Instant::now() }
 	}
 
 	let Signal = AgenticRuntime::Signal::New();

@@ -1,0 +1,37 @@
+[package]
+name = "agentic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The composition root: wiring, executable entry points, and the manifest table."
+
+[lib]
+name = "Agentic"
+path = "Source/Library.rs"
+
+[[bin]]
+name = "agentic"
+path = "Source/Main.rs"
+
+[dependencies]
+agentic-runtime = { workspace = true }
+agentic-skill-contract = { workspace = true }
+agentic-chat-driver = { workspace = true }
+agentic-design-verification = { workspace = true }
+agentic-browser-cdp = { workspace = true }
+agentic-workflow = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "Composition"
+path = "Test/Composition.rs"

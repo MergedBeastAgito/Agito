@@ -1,5 +1,5 @@
-//! Types: the port, its three codes, the provider seam, the session that applies
-//! the rules, and the two concrete implementations this crate supplies.
+//! Types: the port, its three codes, the provider seam, the session that
+//! applies the rules, and the two concrete implementations this crate supplies.
 
 pub mod Cancellation;
 pub mod Chrome;

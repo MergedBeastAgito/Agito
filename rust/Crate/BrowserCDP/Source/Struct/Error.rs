@@ -1,8 +1,8 @@
 //! The three failure modes `module.json` declares, and no others.
 //!
-//! One enum, one variant per code, `detail` kept apart from the message in every
-//! one of them: what was observed is the only thing that says which part of the
-//! transport broke, and a sentence written for a human loses it.
+//! One enum, one variant per code, `detail` kept apart from the message in
+//! every one of them: what was observed is the only thing that says which part
+//! of the transport broke, and a sentence written for a human loses it.
 
 use std::fmt;
 
@@ -28,14 +28,10 @@ impl Code {
 	}
 
 	/// Every code, so a harness can compare the manifest against the type.
-	pub const fn All() -> [Code; 3] {
-		[Code::Unavailable, Code::Navigation, Code::Timeout]
-	}
+	pub const fn All() -> [Code; 3] { [Code::Unavailable, Code::Navigation, Code::Timeout] }
 
 	/// The code a manifest string names, if it names one of the three.
-	pub fn Parse(Value: &str) -> Option<Code> {
-		Code::All().into_iter().find(|Code| Code.Name() == Value)
-	}
+	pub fn Parse(Value:&str) -> Option<Code> { Code::All().into_iter().find(|Code| Code.Name() == Value) }
 }
 
 /// The one error type a `Browse` call fails with.
@@ -44,49 +40,40 @@ pub enum Error {
 	/// The transport is gone.
 	Unavailable {
 		/// The sentence a human reads.
-		Message: String,
+		Message:String,
 		/// What was observed, kept apart from the sentence.
-		Detail: String,
+		Detail:String,
 	},
 	/// The page exists but could not be used.
 	Navigation {
 		/// The sentence a human reads.
-		Message: String,
+		Message:String,
 		/// What was observed.
-		Detail: String,
+		Detail:String,
 	},
 	/// The signal fired or the deadline passed.
 	Timeout {
 		/// The sentence a human reads.
-		Message: String,
+		Message:String,
 		/// What was observed.
-		Detail: String,
+		Detail:String,
 	},
 }
 
 impl Error {
 	/// A dead transport.
-	pub fn Unavailable(Message: impl Into<String>, Detail: impl Into<String>) -> Self {
-		Error::Unavailable {
-			Message: Message.into(),
-			Detail: Detail.into(),
-		}
+	pub fn Unavailable(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Unavailable { Message:Message.into(), Detail:Detail.into() }
 	}
 
 	/// A page that could not be used.
-	pub fn Navigation(Message: impl Into<String>, Detail: impl Into<String>) -> Self {
-		Error::Navigation {
-			Message: Message.into(),
-			Detail: Detail.into(),
-		}
+	pub fn Navigation(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Navigation { Message:Message.into(), Detail:Detail.into() }
 	}
 
 	/// A deadline that passed or a caller that gave up.
-	pub fn Timeout(Message: impl Into<String>, Detail: impl Into<String>) -> Self {
-		Error::Timeout {
-			Message: Message.into(),
-			Detail: Detail.into(),
-		}
+	pub fn Timeout(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
+		Error::Timeout { Message:Message.into(), Detail:Detail.into() }
 	}
 
 	/// The code this failure carries.
@@ -101,24 +88,24 @@ impl Error {
 	/// The sentence a human reads.
 	pub fn Message(&self) -> &str {
 		match self {
-			Error::Unavailable { Message, .. }
-			| Error::Navigation { Message, .. }
-			| Error::Timeout { Message, .. } => Message,
+			Error::Unavailable { Message, .. } | Error::Navigation { Message, .. } | Error::Timeout { Message, .. } => {
+				Message
+			},
 		}
 	}
 
 	/// What was observed, which may be empty.
 	pub fn Detail(&self) -> &str {
 		match self {
-			Error::Unavailable { Detail, .. }
-			| Error::Navigation { Detail, .. }
-			| Error::Timeout { Detail, .. } => Detail,
+			Error::Unavailable { Detail, .. } | Error::Navigation { Detail, .. } | Error::Timeout { Detail, .. } => {
+				Detail
+			},
 		}
 	}
 }
 
 impl fmt::Display for Error {
-	fn fmt(&self, Formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(Formatter, "{}: {}", self.Code().Name(), self.Message())
 	}
 }

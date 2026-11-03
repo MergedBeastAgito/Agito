@@ -10,12 +10,14 @@
 //! wrong for a future that only ever resolves from a real timer. A test that
 //! wants time to pass advances a clock instead of waiting for one.
 
-use std::future::Future;
-use std::pin::pin;
-use std::task::{Context, Waker};
+use std::{
+	future::Future,
+	pin::pin,
+	task::{Context, Waker},
+};
 
 /// Poll `Work` until it produces a value.
-pub fn BlockOn<Work: Future>(Work: Work) -> Work::Output {
+pub fn BlockOn<Work:Future>(Work:Work) -> Work::Output {
 	let mut Work = pin!(Work);
 	let Waker = Waker::noop();
 	let mut Context = Context::from_waker(Waker);

@@ -1,0 +1,31 @@
+{
+	"name": "@agentic/composition",
+	"kind": "composition",
+	"version": "0.1.0",
+	"provides": {
+		"port": "agentic.compose",
+		"errors": []
+	},
+	"requires": {
+		"ports": [
+			"agentic.browse",
+			"agentic.chat.ask",
+			"agentic.verify.design",
+			"agentic.skill.validate",
+			"agentic.runtime",
+			"agentic.workflow"
+		]
+	},
+	"artefact": {
+		"entry": "Target/debug/agentic",
+		"hash": null,
+		"runtime": "rust>=1.88"
+	},
+	"state": "stateless",
+	"cost": {
+		"coldMs": 5,
+		"warmMs": 1,
+		"network": false
+	},
+	"verify": "agentic verify --module @agentic/composition"
+}
