@@ -24,6 +24,11 @@ const Manifest = (Name) => JSON.parse(Read(`${Name}/manifest.json`));
 try {
 	mkdirSync(join(Work, "tree/Source/Fn"), { recursive: true });
 	mkdirSync(join(Work, "tree/target"), { recursive: true });
+	// A Rust workspace builds into `Target/`, and the exclude list is written by
+	// hand in lower case. On a case-sensitive volume those are two directories, and
+	// build scratch ended up in a batch because of it.
+	mkdirSync(join(Work, "tree/Target/tmp"), { recursive: true });
+	writeFileSync(join(Work, "tree/Target/tmp/Scratch.rs"), "scratch\n");
 	writeFileSync(join(Work, "tree/Source/Fn/A.rs"), "alpha\n");
 	writeFileSync(join(Work, "tree/Source/Fn/B.rs"), "beta\n");
 	writeFileSync(join(Work, "tree/target/Skip.rs"), "skip\n");
@@ -38,6 +43,7 @@ try {
 	const One = Manifest("first");
 	Check("files kept", One.totalFiles, 2);
 	Check("excluded directory", Read("first/tree.txt").includes("target/Skip.rs"), false);
+	Check("excluded directory, other case", Read("first/tree.txt").includes("Target/tmp/Scratch.rs"), false);
 	Check("oversize recorded", One.leftOut[0]?.path, "Source/Big.rs");
 	Check("one file per batch", One.batches.every((Batch) => Batch.files.length === 1), true);
 	Check("file delimiter", Read("first/batch-01.txt").startsWith("--- FILE: Source/Fn/A.rs ---"), true);

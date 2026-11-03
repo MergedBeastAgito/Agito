@@ -41,7 +41,14 @@ const Exclude = At("--exclude", "target,node_modules,.git,dist,bundle")
 	.filter(Boolean);
 
 const Wanted = (Name) => Include.some((Extension) => Name.endsWith(Extension));
-const Skipped = (Path) => Exclude.some((Name) => Path.split(sep).includes(Name));
+// Case-insensitive: a Rust workspace puts its build in `Target/` and the exclude
+// list is written by hand as `target`, and on a case-sensitive volume those are
+// two different directories. Three files of build scratch ended up in a batch
+// because of exactly that.
+const Skipped = (Path) => {
+	const Parts = Path.split(sep).map((Part) => Part.toLowerCase());
+	return Exclude.some((Name) => Parts.includes(Name.toLowerCase()));
+};
 
 const Files = [];
 const Left = [];

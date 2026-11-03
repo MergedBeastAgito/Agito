@@ -1,6 +1,6 @@
 {
 	"root": "/Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/Agentic",
-	"generated": "2026-11-03T22:00:10.279Z",
+	"generated": "2026-11-03T22:16:37.464Z",
 	"maxFiles": 30,
 	"maxBytes": 200000,
 	"include": [
@@ -14,8 +14,8 @@
 		"dist",
 		"bundle"
 	],
-	"totalFiles": 182,
-	"totalBytes": 649422,
+	"totalFiles": 111,
+	"totalBytes": 704333,
 	"batches": [
 		{
 			"name": "batch-01.txt",
@@ -83,24 +83,26 @@
 				"rust/Crate/BrowserCDP/Source/Struct/Session.rs",
 				"rust/Crate/BrowserCDP/Source/Struct/Transport.rs",
 				"rust/Crate/BrowserCDP/Test/Browse.rs",
+				"rust/Crate/BrowserCDP/tests/parity.rs",
 				"rust/Crate/ChatDriver/Source/Fn.rs",
 				"rust/Crate/ChatDriver/Source/Fn/Expressions.rs",
 				"rust/Crate/ChatDriver/Source/Fn/Read.rs",
 				"rust/Crate/ChatDriver/Source/Library.rs",
 				"rust/Crate/ChatDriver/Source/Struct.rs",
 				"rust/Crate/ChatDriver/Source/Struct/Driver.rs",
-				"rust/Crate/ChatDriver/Source/Struct/Error.rs",
-				"rust/Crate/ChatDriver/Source/Struct/Port.rs"
+				"rust/Crate/ChatDriver/Source/Struct/Error.rs"
 			],
-			"bytes": 115463
+			"bytes": 129404
 		},
 		{
 			"name": "batch-04.txt",
 			"files": [
+				"rust/Crate/ChatDriver/Source/Struct/Port.rs",
 				"rust/Crate/ChatDriver/Source/Struct/Selectors.rs",
 				"rust/Crate/ChatDriver/Source/Struct/Settlement.rs",
 				"rust/Crate/ChatDriver/Test/Chat.rs",
 				"rust/Crate/ChatDriver/Test/Fake.rs",
+				"rust/Crate/ChatDriver/tests/parity.rs",
 				"rust/Crate/DesignVerification/Source/Fn.rs",
 				"rust/Crate/DesignVerification/Source/Fn/Judge.rs",
 				"rust/Crate/DesignVerification/Source/Fn/Measure.rs",
@@ -124,15 +126,15 @@
 				"rust/Crate/Runtime/Test/Runtime.rs",
 				"rust/Crate/SkillContract/Source/Fn.rs",
 				"rust/Crate/SkillContract/Source/Fn/Digest.rs",
-				"rust/Crate/SkillContract/Source/Fn/Discover.rs",
-				"rust/Crate/SkillContract/Source/Fn/Entries.rs",
-				"rust/Crate/SkillContract/Source/Fn/Frontmatter.rs"
+				"rust/Crate/SkillContract/Source/Fn/Discover.rs"
 			],
-			"bytes": 141463
+			"bytes": 162197
 		},
 		{
 			"name": "batch-05.txt",
 			"files": [
+				"rust/Crate/SkillContract/Source/Fn/Entries.rs",
+				"rust/Crate/SkillContract/Source/Fn/Frontmatter.rs",
 				"rust/Crate/SkillContract/Source/Fn/Names.rs",
 				"rust/Crate/SkillContract/Source/Fn/Validate.rs",
 				"rust/Crate/SkillContract/Source/Library.rs",
@@ -142,6 +144,7 @@
 				"rust/Crate/SkillContract/Source/Struct/Port.rs",
 				"rust/Crate/SkillContract/Source/Struct/Skill.rs",
 				"rust/Crate/SkillContract/Test/SkillContract.rs",
+				"rust/Crate/SkillContract/tests/parity.rs",
 				"rust/Crate/Workflow/Source/Fn.rs",
 				"rust/Crate/Workflow/Source/Fn/Measure.rs",
 				"rust/Crate/Workflow/Source/Fn/VerifySkillPage.rs",
@@ -151,101 +154,9 @@
 				"rust/Crate/Workflow/Source/Struct/Binding/Measure.rs",
 				"rust/Crate/Workflow/Source/Struct/Binding/Page.rs",
 				"rust/Crate/Workflow/Test/Workflow.rs",
-				"rust/README.md",
-				"rust/Target/debug/build/serde_core/276cf0c56b249f41/out/private.rs",
-				"rust/Target/debug/build/serde_core/69930647961c080b/out/private.rs",
-				"rust/Target/debug/build/serde_core/7ff70972e140899f/out/private.rs",
-				"rust/Target/debug/build/serde/6941ca10e21f9388/out/private.rs",
-				"rust/Target/debug/build/serde/c62f62c527a076c6/out/private.rs",
-				"rust/Target/debug/build/thiserror/3392d557b4e6e60e/out/private.rs",
-				"rust/Target/release/build/serde_core/a3b015bd072f5e52/out/private.rs",
-				"rust/Target/release/build/serde/8823c37fd56ae6c4/out/private.rs",
-				"rust/Target/release/build/thiserror/78e8fd0758759ed9/out/private.rs",
-				"rust/Target/tmp/agents/AGENTS.md",
-				"rust/Target/tmp/agents/Iota/SKILL.md"
+				"rust/README.md"
 			],
-			"bytes": 57243
-		},
-		{
-			"name": "batch-06.txt",
-			"files": [
-				"rust/Target/tmp/cli-corpus-json/Alpha/SKILL.md",
-				"rust/Target/tmp/cli-corpus-json/Index.md",
-				"rust/Target/tmp/cli-corpus/Alpha/SKILL.md",
-				"rust/Target/tmp/cli-corpus/Index.md",
-				"rust/Target/tmp/deterministic/Alpha/SKILL.md",
-				"rust/Target/tmp/deterministic/Beta/SKILL.md",
-				"rust/Target/tmp/deterministic/Gamma/SKILL.md",
-				"rust/Target/tmp/digest-changes/Alpha/Reference/Index.md",
-				"rust/Target/tmp/digest-changes/Alpha/Reference/Notes.md",
-				"rust/Target/tmp/digest-changes/Alpha/SKILL.md",
-				"rust/Target/tmp/digest-changes/Index.md",
-				"rust/Target/tmp/digest-recorded/Alpha/Reference/Index.md",
-				"rust/Target/tmp/digest-recorded/Alpha/Reference/Notes.md",
-				"rust/Target/tmp/digest-recorded/Alpha/SKILL.md",
-				"rust/Target/tmp/digest-recorded/Index.md",
-				"rust/Target/tmp/digest-times/Alpha/Reference/Index.md",
-				"rust/Target/tmp/digest-times/Alpha/Reference/Notes.md",
-				"rust/Target/tmp/digest-times/Alpha/SKILL.md",
-				"rust/Target/tmp/digest-times/Index.md",
-				"rust/Target/tmp/folded/Index.md",
-				"rust/Target/tmp/folded/Xi/SKILL.md",
-				"rust/Target/tmp/no-corpus-index/Lambda/SKILL.md",
-				"rust/Target/tmp/no-description/Index.md",
-				"rust/Target/tmp/no-description/Zeta/SKILL.md",
-				"rust/Target/tmp/no-index/Gamma/Reference/One.md",
-				"rust/Target/tmp/no-index/Gamma/Reference/Two.md",
-				"rust/Target/tmp/no-index/Gamma/SKILL.md",
-				"rust/Target/tmp/no-index/Index.md",
-				"rust/Target/tmp/no-references/Index.md",
-				"rust/Target/tmp/no-references/Nu/SKILL.md"
-			],
-			"bytes": 2869
-		},
-		{
-			"name": "batch-07.txt",
-			"files": [
-				"rust/Target/tmp/order/Alpha/SKILL.md",
-				"rust/Target/tmp/order/Zulu/SKILL.md",
-				"rust/Target/tmp/re-read/Alpha/Reference/Added.md",
-				"rust/Target/tmp/re-read/Alpha/Reference/Index.md",
-				"rust/Target/tmp/re-read/Alpha/Reference/Notes.md",
-				"rust/Target/tmp/re-read/Alpha/SKILL.md",
-				"rust/Target/tmp/re-read/Index.md",
-				"rust/Target/tmp/renamed/Eta/SKILL.md",
-				"rust/Target/tmp/renamed/Index.md",
-				"rust/Target/tmp/stateless/Alpha/Reference/Index.md",
-				"rust/Target/tmp/stateless/Alpha/Reference/Notes.md",
-				"rust/Target/tmp/stateless/Alpha/SKILL.md",
-				"rust/Target/tmp/stateless/Index.md",
-				"rust/Target/tmp/substring/Delta/Reference/Index.md",
-				"rust/Target/tmp/substring/Delta/Reference/Notes.md",
-				"rust/Target/tmp/substring/Delta/SKILL.md",
-				"rust/Target/tmp/substring/Index.md",
-				"rust/Target/tmp/symlink-real/Linked/SKILL.md",
-				"rust/Target/tmp/uncited/Index.md",
-				"rust/Target/tmp/uncited/Kappa/SKILL.md",
-				"rust/Target/tmp/unlisted/Beta/Reference/Index.md",
-				"rust/Target/tmp/unlisted/Beta/Reference/Listed.md",
-				"rust/Target/tmp/unlisted/Beta/Reference/Unlisted.md",
-				"rust/Target/tmp/unlisted/Beta/SKILL.md",
-				"rust/Target/tmp/unlisted/Index.md",
-				"rust/Target/tmp/unparsable/Epsilon/SKILL.md",
-				"rust/Target/tmp/unparsable/Index.md",
-				"rust/Target/tmp/valid/Alpha/Reference/Index.md",
-				"rust/Target/tmp/valid/Alpha/Reference/Notes.md",
-				"rust/Target/tmp/valid/Alpha/SKILL.md"
-			],
-			"bytes": 2875
-		},
-		{
-			"name": "batch-08.txt",
-			"files": [
-				"rust/Target/tmp/valid/Index.md",
-				"rust/Target/tmp/vocabulary/Mu/SKILL.md",
-				"rust/Target/tmp/workflow-corpus/Broken/SKILL.md"
-			],
-			"bytes": 224
+			"bytes": 79111
 		}
 	],
 	"leftOut": []
