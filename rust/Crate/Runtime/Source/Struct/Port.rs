@@ -51,9 +51,9 @@
 //! replaces it through.
 //!
 //! One port shape changed in the port: `claim(resource, ttl, budget?)` and
-//! `now()`/`reflect()` are on this one trait instead of a `Policy` extension,
-//! because Rust has no method overloading and an extension trait that repeats
-//! `claim` with a different arity cannot exist.
+//! `now()`/`reflect()` are on this one trait instead of a separate extension
+//! trait, because Rust has no method overloading and an extension trait that
+//! repeats `claim` with a different arity cannot exist.
 
 use std::{
 	fmt,
@@ -267,9 +267,9 @@ impl Ticket {
 		LeaseId:impl Into<String>,
 		Fence:u64,
 		ExpiresAt:Instant,
-		Seal:Seal,
+		Holder:Seal,
 	) -> Ticket {
-		Ticket { Generation, Resource:Resource.into(), LeaseId:LeaseId.into(), Fence, ExpiresAt, Seal }
+		Ticket { Generation, Resource:Resource.into(), LeaseId:LeaseId.into(), Fence, ExpiresAt, Seal:Holder }
 	}
 
 	/// The generation the effect was admitted under.

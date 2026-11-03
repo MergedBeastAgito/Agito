@@ -217,7 +217,7 @@ export const Tables: Readonly<Record<TableName, Table>> = {
 				name: "state",
 				type: "string",
 				key: null,
-				note: "held | released",
+				note: "held | released | quarantined - quarantined means an effect admitted under this epoch was refused when it landed, so the resource is not reassigned until `resolve` states whether it did",
 			},
 			{
 				name: "acquiredAt",

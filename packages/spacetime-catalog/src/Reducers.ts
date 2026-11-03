@@ -1,25 +1,33 @@
 /**
- * The five reducers, as pure functions over `Context`.
+ * The seven reducers, as pure functions over `Context`.
  *
  * Nothing here imports `spacetimedb/server`, reads a clock, or throws on a bad
  * argument: a rule answers, and the answer is a result. That is what lets these
  * be tested with a fake context and adopted by a module that supplies the real
  * one.
  *
- * The four invariants, and where each is enforced:
+ * The five invariants, and where each is enforced:
  *
  * 1. **Coherence.** `bind` appends a generation and refuses a manifest naming a
  *    capability the catalog does not declare. Every other reducer refuses to
  *    write under a generation that is not the latest bound one (`Latest`), and a
  *    lease never adopts a later generation than the one it was granted under.
- * 2. **Fence.** `claim` increments the fence; `renew` and `probe` refuse a fence
- *    that is not the lease's current one, so a worker whose lease expired cannot
- *    write as though it still held it.
+ * 2. **Fence.** `claim` increments the fence; `renew`, `record` and `probe` refuse
+ *    a fence that is not the lease's current one, so a worker whose lease expired
+ *    cannot write as though it still held it. `record` is where an effect is
+ *    checked, and it checks the caller too: `lease.holder` is `ctx.sender`, so a
+ *    caller that reproduces every number on the row is still not the holder.
  * 3. **Disclosure.** `probe` writes exactly one audience-scoped row and returns
  *    only that row. The private value is never an argument, so it is never a
  *    column: a reader cannot select what the database was never told.
  * 4. **Time.** Every timestamp a row carries is `ctx.now`. No function reads a
  *    wall clock, and the lags between times are differences the caller computes.
+ * 5. **Handover.** An effect that was admitted under an epoch and refused when it
+ *    lands is not retracted, because rejecting a result does not undo an effect.
+ *    `record` writes the refusal as an `effect-ambiguous` trace row and moves the
+ *    lease to `quarantined`; `claim` refuses a quarantined resource; `resolve`
+ *    states whether the effect landed or was absent and only then releases the
+ *    resource for reassignment.
  */
 import type { Context, Row } from "./Context.ts";
 
@@ -189,6 +197,10 @@ export const claim = (ctx: Context, args: Claim): Result => {
 	if (!(args.ttl > 0)) return Refused;
 
 	const existing = ctx.find("lease", args.resource);
+	// A quarantined resource is not reassigned. An effect admitted under its last
+	// epoch may have landed, and a new holder would act on a state nobody knows;
+	// `resolve` is the only way out, and it is a decision somebody has to make.
+	if (existing !== null && existing["state"] === "quarantined") return Held;
 	if (existing !== null && IsLive(existing, ctx.now)) return Held;
 
 	const previous = existing === null ? 0 : existing["fence"];
@@ -233,6 +245,141 @@ export const renew = (ctx: Context, args: Renew): Result => {
 		...lease,
 		renewedAt: ctx.now,
 		expiresAt: ctx.now + args.ttl,
+	});
+	return Ok;
+};
+
+/** One effect asking to be recorded at the epoch that admitted it. */
+export type Effect = {
+	/** The generation the effect was admitted under. */
+	readonly generation: string;
+	/** The resource whose lease admitted it. */
+	readonly resource: string;
+	/** The fence the resource was at when it was admitted. */
+	readonly fence: number;
+	/** The effect's own name for what it did. */
+	readonly name: string;
+};
+
+/**
+ * Write a refusal as an ambiguity and quarantine the resource.
+ *
+ * The row is a trace rather than a new table because the catalog's six tables are
+ * what a module renders, and evidence of a refused write is what `trace` is for:
+ * it carries no fence, so the write worth keeping - the one that was refused - is
+ * not dropped. The quarantine is the lease row's `state`, so "may this resource be
+ * reassigned" stays one key lookup, which is the only kind of question this
+ * context can answer.
+ */
+const Quarantine = (ctx: Context, lease: Row, args: Effect, reason: string): Refusal => {
+	ctx.insert("trace", {
+		id: `${ctx.now}:effect-ambiguous:${args.resource}#${args.fence}#${args.name}`,
+		at: ctx.now,
+		kind: "effect-ambiguous",
+		subject: args.resource,
+		payload: JSON.stringify({ name: args.name, fence: args.fence, reason }),
+		generation: args.generation,
+		sender: ctx.sender,
+	});
+	if (lease["state"] !== "quarantined") ctx.update("lease", { ...lease, state: "quarantined" });
+	return Refused;
+};
+
+/**
+ * Record one effect where it lands, or refuse it.
+ *
+ * This is the guarantee, and `claim` is the optimisation: a claim refuses work
+ * whose authority had already ended, but it ran before the effect did anything and
+ * cannot say anything about the instant it writes. Only the place the record is
+ * presented to can, so the check is here.
+ *
+ * The checks are asked in the order that makes the answer the true one:
+ *
+ * 1. **Is this the latest generation?** A record under a superseded one is not
+ *    this database's record.
+ * 2. **Is there a lease row?** No row means nothing was admitted for this
+ *    resource, so nothing can be attributed to it.
+ * 3. **Was the lease granted under this generation?** A lease never adopts a later
+ *    one.
+ * 4. **Is this the current fence?** A superseded epoch is refused, and the claim
+ *    that superseded it is the accounting point for the effects it had in flight -
+ *    the row no longer describes that epoch, so this rule cannot attribute them.
+ * 5. **Is the caller the holder?** `lease.holder === ctx.sender`. This is the check
+ *    a caller cannot pass by reproducing numbers: the transport authenticates the
+ *    sender, so the sender is never an argument.
+ *
+ * Only after all five does a refusal become *ambiguous*, because only then is the
+ * effect one this database admitted. An effect that was admitted and refused
+ * anyway may have changed the world, so the refusal is written as an
+ * `effect-ambiguous` trace row and the lease is quarantined: the write is not
+ * counted as a success, and `claim` will not hand the resource to anybody else
+ * until `resolve` says what happened.
+ */
+export const record = (ctx: Context, args: Effect): Result => {
+	if (args.name.length === 0) return Refused;
+	if (Latest(ctx, args.generation) === null) return Refused;
+	const lease = ctx.find("lease", args.resource);
+	if (lease === null) return Refused;
+	if (lease["generation"] !== args.generation) return Refused;
+	if (lease["fence"] !== args.fence) return Refused;
+	if (lease["holder"] !== ctx.sender) return Refused;
+
+	// From here the record is one this database issued to this caller, so a
+	// refusal means an authorised effect may have landed.
+	if (lease["state"] === "quarantined")
+		return Quarantine(ctx, lease, args, "already quarantined by an earlier effect");
+	if (lease["state"] === "released")
+		return Quarantine(ctx, lease, args, "released while the effect was in flight");
+	if (!IsLive(lease, ctx.now)) return Quarantine(ctx, lease, args, "outlived its authority");
+
+	ctx.insert("trace", {
+		id: `${ctx.now}:effect:${args.resource}#${args.fence}#${args.name}`,
+		at: ctx.now,
+		kind: "effect",
+		subject: args.resource,
+		payload: JSON.stringify({ name: args.name, fence: args.fence }),
+		generation: args.generation,
+		sender: ctx.sender,
+	});
+	return Ok;
+};
+
+/** One answer to "what happened to the effect that made this resource ambiguous". */
+export type Resolve = {
+	/** The quarantined resource. */
+	readonly resource: string;
+	/** The generation the resolver is answering under. */
+	readonly generation: string;
+	/** What the resolver found: the external action landed, or it was absent. */
+	readonly outcome: "landed" | "absent";
+};
+
+/**
+ * State what happened to the effects that quarantined a resource, and release it
+ * for reassignment.
+ *
+ * The lease row is moved to `released` rather than deleted, so the fence survives
+ * and the next claim advances past it. The ambiguity rows stay and the answer is
+ * appended as a third row: a resolution that erased the question would be the
+ * retraction the handover rule forbids.
+ *
+ * The sender is recorded, not checked. Who may resolve is a role, and a role is a
+ * deployment's decision; the rule's job is that the answer is attributable.
+ */
+export const resolve = (ctx: Context, args: Resolve): Result => {
+	if (Latest(ctx, args.generation) === null) return Refused;
+	const lease = ctx.find("lease", args.resource);
+	if (lease === null) return Refused;
+	if (lease["state"] !== "quarantined") return Refused;
+	ctx.update("lease", { ...lease, state: "released" });
+	ctx.insert("trace", {
+		id: `${ctx.now}:effect-resolved:${args.resource}`,
+		at: ctx.now,
+		kind: "effect-resolved",
+		subject: args.resource,
+		payload: JSON.stringify({ outcome: args.outcome, fence: lease["fence"] }),
+		generation: args.generation,
+		sender: ctx.sender,
 	});
 	return Ok;
 };

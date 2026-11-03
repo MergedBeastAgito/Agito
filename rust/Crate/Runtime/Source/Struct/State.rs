@@ -26,9 +26,6 @@ use crate::Struct::{
 
 /// What the authority knows about one live grant.
 pub(crate) struct Run {
-	/// The id the lease was issued with; carried in a ticket so a receipt names
-	/// the grant it came from.
-	pub(crate) Id:String,
 	/// The holder's identity. This is the reducer's `lease.holder` column: the
 	/// only caller a fenced write is accepted from, rendered as something a
 	/// caller cannot guess instead of a name a caller could.

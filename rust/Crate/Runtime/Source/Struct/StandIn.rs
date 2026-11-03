@@ -57,6 +57,17 @@
 //! the destination guarantees is that a stale effect is never *recorded* as a
 //! success, and that one which may have landed is recorded as unknown rather than
 //! as nothing.
+//!
+//! # What a restart does, and why that is the argument for the database
+//!
+//! The table lives in this process, so a restart discards it: the fence counter
+//! starts again, and a seal minted before the restart is not recognised after it.
+//! A fence that restarts at one is a fence a late worker can satisfy, and that is
+//! exactly why this type is not the authority. In the database the fence is a row
+//! that no process owns, so it survives every restart, and the seal is a column of
+//! that row rather than a value in memory. The stand-in's restart behaviour is not
+//! a defect to fix here - it is the measurement that says the table belongs to the
+//! reducer.
 
 use std::{
 	sync::{
@@ -204,14 +215,14 @@ impl StandIn {
 	/// answers it with an ambiguity when the answer is no. Sharing one function
 	/// between the two would reintroduce exactly the defect the destination exists
 	/// to close, so [`Destination::Present`] has its own.
-	fn Held(Inner:&mut Inner, Resource:&str, Seal:Seal, Fence:u64, Now:Instant) -> Result<&mut Run, Error> {
+	fn Held<'a>(Inner:&'a mut Inner, Resource:&str, Holder:Seal, Fence:u64, Now:Instant) -> Result<&'a mut Run, Error> {
 		let Some(Run) = Inner.Runs.get_mut(Resource) else {
 			return Err(Error::Refused(format!("no lease is live for {Resource}")));
 		};
 		if Run.Fence != Fence {
 			return Err(Error::Held(format!("{Resource} is held under fence {}, not fence {Fence}", Run.Fence)));
 		}
-		if Run.Seal != Seal {
+		if Run.Seal != Holder {
 			return Err(Error::Refused(format!(
 				"the lease presented for {Resource} was not the one issued: the caller is not the holder that was admitted"
 			)));
@@ -333,7 +344,6 @@ impl Authority for StandIn {
 			Inner.Runs.insert(
 				Resource.to_string(),
 				Run {
-					Id:Lease.Id.clone(),
 					Seal:Lease.Seal,
 					Generation:self.Generation,
 					Fence,
@@ -430,13 +440,23 @@ impl Destination for StandIn {
 					self.Generation
 				)));
 			}
-			let Some((Seal, Fence, Released, Quarantined, ExpiresAt)) = Inner
+			let Some((Granted, Seal, Fence, Released, Quarantined, ExpiresAt)) = Inner
 				.Runs
 				.get(Ticket.Resource())
-				.map(|Run| (Run.Seal, Run.Fence, Run.Released, Run.Quarantined, Run.ExpiresAt))
+				.map(|Run| (Run.Generation, Run.Seal, Run.Fence, Run.Released, Run.Quarantined, Run.ExpiresAt))
 			else {
 				return Err(Error::Refused(format!("no lease is live for {}", Ticket.Resource())));
 			};
+			// The reducer's `lease["generation"] !== generation`: a lease never
+			// adopts a later generation, so a ticket naming one it was not granted
+			// under is not this epoch's ticket.
+			if Granted != Ticket.Generation() {
+				return Err(Error::Refused(format!(
+					"the lease on {} was granted under generation {Granted}, not {}",
+					Ticket.Resource(),
+					Ticket.Generation()
+				)));
+			}
 			// The fence before the seal, for the same reason the caller's check
 			// does: a superseded ticket fails both, and "the epoch you were in has
 			// ended" is the fact it needs. A superseded epoch is where the

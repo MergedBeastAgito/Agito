@@ -45,6 +45,10 @@ pub struct Admitted {
 	/// The authority the effect presents when it lands.
 	pub Ticket:Ticket,
 	/// Dropping this settles the local future this admission opened.
+	///
+	/// Never read: the runner holds it for exactly as long as the work runs, and
+	/// the count of unsettled futures is the authority's business.
+	#[expect(dead_code, reason = "held only for its Drop; the runner must not read it")]
 	pub(crate) Settle:Box<dyn Send>,
 }
 
