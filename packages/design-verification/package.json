@@ -1,0 +1,8 @@
+{
+	"name": "@agentic/design-verification",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Measure a built page and produce evidence; expectations stay with the consumer.",
+	"main": "Target/index.js"
+}

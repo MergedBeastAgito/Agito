@@ -1,0 +1,8 @@
+{
+	"name": "@agentic/runtime",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Admission, leases, budgets, cancellation, cleanup and lifecycle telemetry.",
+	"main": "Target/index.js"
+}

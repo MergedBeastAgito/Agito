@@ -1,0 +1,31 @@
+{
+	"name": "@agentic/chat-driver",
+	"kind": "capability",
+	"version": "0.1.0",
+	"provides": {
+		"port": "agentic.chat.ask",
+		"errors": [
+			"not-ready",
+			"wrong-mode",
+			"wrong-model",
+			"truncated"
+		]
+	},
+	"requires": {
+		"ports": [
+			"agentic.browse"
+		]
+	},
+	"artefact": {
+		"entry": "Target/index.js",
+		"hash": null,
+		"runtime": "node>=22.23.4"
+	},
+	"state": "holds-transport",
+	"cost": {
+		"coldMs": 20,
+		"warmMs": 2,
+		"network": true
+	},
+	"verify": "node --test Test/*.test.ts"
+}

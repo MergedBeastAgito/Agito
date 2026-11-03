@@ -1,0 +1,8 @@
+{
+	"name": "@agentic/skill-contract",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Discover, validate and package a skill corpus.",
+	"main": "Target/index.js"
+}
