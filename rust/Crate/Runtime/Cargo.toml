@@ -1,0 +1,36 @@
+[package]
+name = "agentic-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Execution policy and resource ownership: admission, leases with a fence, per-run budgets, and cleanup that never throws."
+
+[lib]
+name = "AgenticRuntime"
+path = "Source/Library.rs"
+
+[features]
+default = []
+# The optional tokio implementation of `Pace`. Nothing in this workspace enables
+# it: the composition root starts tokio itself, and a capability must not inherit
+# an executor through this crate.
+tokio = ["dep:tokio"]
+
+[dependencies]
+tokio = { workspace = true, optional = true }
+
+# The house style is PascalCase everywhere: functions, modules, fields and
+# constants. These three lints are the only ones that disagree with it, and they
+# are allowed for every target in the package so an integration test needs no
+# attribute of its own.
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "Runtime"
+path = "Test/Runtime.rs"

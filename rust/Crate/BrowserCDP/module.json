@@ -1,0 +1,25 @@
+{
+	"name": "@agentic/browser-cdp",
+	"kind": "adapter",
+	"version": "0.1.0",
+	"provides": {
+		"port": "agentic.browse",
+		"errors": ["browser-unavailable", "navigation-failed", "timeout"]
+	},
+	"requires": {
+		"endpoint": "env:CDP_URL"
+	},
+	"artefact": {
+		"entry": "Target/debug/libAgenticBrowserCDP.rlib",
+		"hash": null,
+		"runtime": "rust>=1.88"
+	},
+	"state": "holds-transport",
+	"cost": {
+		"coldMs": 900,
+		"warmMs": 5,
+		"network": true,
+		"processes": ["chromium"]
+	},
+	"verify": "agentic verify --module @agentic/browser-cdp"
+}

@@ -1,0 +1,22 @@
+{
+	"name": "@agentic/skill-contract",
+	"kind": "capability",
+	"version": "0.1.0",
+	"provides": {
+		"port": "agentic.skill.validate",
+		"errors": ["unparsable", "unlisted-reference", "uncited"]
+	},
+	"requires": {},
+	"artefact": {
+		"entry": "Target/debug/libAgenticSkillContract.rlib",
+		"hash": null,
+		"runtime": "rust>=1.88"
+	},
+	"state": "stateless",
+	"cost": {
+		"coldMs": 30,
+		"warmMs": 5,
+		"network": false
+	},
+	"verify": "agentic verify --module @agentic/skill-contract"
+}

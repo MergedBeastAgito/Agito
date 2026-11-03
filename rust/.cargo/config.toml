@@ -1,0 +1,4 @@
+# The house build directory: one `Target/` at the workspace root, not one per
+# crate. Relative to this file's parent, so the tree keeps its shape.
+[build]
+target-dir = "Target"

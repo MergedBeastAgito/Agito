@@ -1,0 +1,27 @@
+[package]
+name = "agentic-design-verification"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Measure a built page and judge the measurements against invariants the caller supplies. Holds no design of its own."
+
+[lib]
+name = "AgenticDesignVerification"
+path = "Source/Library.rs"
+
+[dependencies]
+agentic-runtime = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "Verification"
+path = "Test/Verification.rs"

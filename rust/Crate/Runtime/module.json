@@ -1,0 +1,22 @@
+{
+	"name": "@agentic/runtime",
+	"kind": "runtime",
+	"version": "0.1.0",
+	"provides": {
+		"port": "agentic.runtime",
+		"errors": ["admission-refused", "lease-held", "budget-exhausted"]
+	},
+	"requires": {},
+	"artefact": {
+		"entry": "Target/debug/libAgenticRuntime.rlib",
+		"hash": null,
+		"runtime": "rust>=1.85"
+	},
+	"state": "holds-workspace",
+	"cost": {
+		"coldMs": 10,
+		"warmMs": 1,
+		"network": false
+	},
+	"verify": "agentic verify --module @agentic/runtime"
+}
