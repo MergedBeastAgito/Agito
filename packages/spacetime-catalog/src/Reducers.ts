@@ -38,8 +38,7 @@ export type Result = { readonly ok: true } | Refusal;
  * result type alone still type-checks.
  */
 export type ProbeResult =
-	| { readonly ok: true; readonly observation: Row }
-	| Refusal;
+	{ readonly ok: true; readonly observation: Row } | Refusal;
 
 const Ok: Result = { ok: true };
 const Refused: Refusal = { ok: false, reason: "admission-refused" };
@@ -142,7 +141,8 @@ export const bind = (ctx: Context, args: Bind): Result => {
 	if (args.manifest.digest.length === 0) return Refused;
 	const named = [...args.manifest.capabilities];
 	if (new Set(named).size !== named.length) return Refused;
-	for (const id of named) if (ctx.find("capability", id) === null) return Refused;
+	for (const id of named)
+		if (ctx.find("capability", id) === null) return Refused;
 
 	let sequence: number;
 	if (args.previous === null) {

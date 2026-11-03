@@ -54,12 +54,7 @@ export type Table = {
 };
 
 export type TableName =
-	| "capability"
-	| "generation"
-	| "lease"
-	| "probe"
-	| "belief"
-	| "trace";
+	"capability" | "generation" | "lease" | "probe" | "belief" | "trace";
 
 /**
  * The six tables, in the order a reader meets them: what may be bound, what was
@@ -440,7 +435,9 @@ export const TableNames: readonly TableName[] = [
 export const PrimaryKey = (table: string): string => {
 	const described = (Tables as Record<string, Table | undefined>)[table];
 	if (described === undefined) throw new Error(`no such table: ${table}`);
-	const primary = described.columns.filter((column) => column.key === "primary");
+	const primary = described.columns.filter(
+		(column) => column.key === "primary",
+	);
 	const [key] = primary;
 	if (key === undefined || primary.length !== 1)
 		throw new Error(`${table} does not declare exactly one primary key`);

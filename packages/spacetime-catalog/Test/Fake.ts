@@ -16,8 +16,15 @@
  * sequence of reducer calls at a chosen time is a transcript the test controls
  * completely.
  */
-import type { Column, Context, Row, TableName, Value } from "../src/index.ts";
-import { PrimaryKey, Tables } from "../src/index.ts";
+import {
+	PrimaryKey,
+	Tables,
+	type Column,
+	type Context,
+	type Row,
+	type TableName,
+	type Value,
+} from "../src/index.ts";
 
 export type Write = {
 	readonly kind: "insert" | "update" | "delete";
@@ -60,7 +67,9 @@ const Conforms = (table: string, column: Column, value: Value): void => {
 
 const Check = (table: string, row: Row): void => {
 	const described = Described(table);
-	const columns = new Map(described.columns.map((column) => [column.name, column]));
+	const columns = new Map(
+		described.columns.map((column) => [column.name, column]),
+	);
 	for (const [name, value] of Object.entries(row)) {
 		const column = columns.get(name);
 		if (column === undefined)
@@ -98,7 +107,8 @@ export class Memory implements Context {
 		Check(table, row);
 		const id = this.#id(table, row);
 		const rows = this.#rows(table);
-		if (rows.has(id)) throw new Error(`insert of an existing row: ${table}/${id}`);
+		if (rows.has(id))
+			throw new Error(`insert of an existing row: ${table}/${id}`);
 		rows.set(id, row);
 		this.writes.push({ kind: "insert", table, id, row });
 	}
@@ -109,7 +119,8 @@ export class Memory implements Context {
 		Check(table, row);
 		const id = this.#id(table, row);
 		const rows = this.#rows(table);
-		if (!rows.has(id)) throw new Error(`update of a missing row: ${table}/${id}`);
+		if (!rows.has(id))
+			throw new Error(`update of a missing row: ${table}/${id}`);
 		rows.set(id, row);
 		this.writes.push({ kind: "update", table, id, row });
 	}
@@ -118,7 +129,8 @@ export class Memory implements Context {
 		if (Described(table).appendOnly)
 			throw new Error(`delete from an append-only table: ${table}`);
 		const rows = this.#rows(table);
-		if (!rows.delete(id)) throw new Error(`delete of a missing row: ${table}/${id}`);
+		if (!rows.delete(id))
+			throw new Error(`delete of a missing row: ${table}/${id}`);
 		this.writes.push({ kind: "delete", table, id, row: null });
 	}
 

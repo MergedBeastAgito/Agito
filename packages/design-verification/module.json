@@ -4,16 +4,10 @@
 	"version": "0.1.0",
 	"provides": {
 		"port": "agentic.verify.design",
-		"errors": [
-			"absent-element",
-			"invariant-broke",
-			"not-ready"
-		]
+		"errors": ["absent-element", "invariant-broke", "not-ready"]
 	},
 	"requires": {
-		"ports": [
-			"agentic.browse"
-		]
+		"ports": ["agentic.browse"]
 	},
 	"artefact": {
 		"entry": "Target/index.js",

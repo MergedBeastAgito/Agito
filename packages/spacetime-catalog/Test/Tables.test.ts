@@ -32,7 +32,11 @@ test("every table declares one primary key, and it is the column rows are addres
 		const primary = Tables[name].columns.filter(
 			(column) => column.key === "primary",
 		);
-		assert.equal(primary.length, 1, `${name} declares ${primary.length} keys`);
+		assert.equal(
+			primary.length,
+			1,
+			`${name} declares ${primary.length} keys`,
+		);
 		assert.equal(PrimaryKey(name), primary[0]?.name);
 	}
 	assert.deepEqual(
@@ -48,7 +52,10 @@ test("every column uses a type the catalog declares", () => {
 				(ColumnTypes as readonly string[]).includes(column.type),
 				`${name}.${column.name} is ${column.type}`,
 			);
-			assert.ok(column.note.length > 0, `${name}.${column.name} has no note`);
+			assert.ok(
+				column.note.length > 0,
+				`${name}.${column.name} has no note`,
+			);
 		}
 	}
 });

@@ -13,8 +13,8 @@ enforces, and exactly what TimeLine copies to adopt it in one step.
 
 - **`src/Tables.ts` is the catalog** - six tables described as data: name,
   columns with a type and a key, and whether a table is append-only. A module's
-  `Schema.ts` renders its `table(...)` declarations from this, and a reader diffs
-  two versions of it to see what a generation changed.
+  `Schema.ts` renders its `table(...)` declarations from this, and a reader
+  diffs two versions of it to see what a generation changed.
 - **`src/Context.ts` is the seam** - the whole of what a rule is given: who is
   calling, what time it is, and a way to read, insert, update and delete one row
   by key. Five members, and no more, because everything else on a module's `ctx`
@@ -65,8 +65,8 @@ that is not the latest bound one.
 The mechanism is worth stating, because it looks like a trick and is a
 consequence. Generation ids are dense sequence numbers, and `bind` computes a
 successor's id as its parent's sequence plus one. So "is this generation the
-latest?" is answered by one key lookup - does `sequence + 1` exist - in a context
-that finds by key and cannot scan. The same property is what leaves the
+latest?" is answered by one key lookup - does `sequence + 1` exist - in a
+context that finds by key and cannot scan. The same property is what leaves the
 predecessor byte-identical: a bind inserts a row and updates nothing, and the
 catalog marks the table append-only so a context cannot quietly rewrite it.
 
@@ -74,11 +74,12 @@ A bind names its predecessor and that predecessor must still be the latest, so
 two binds of the same parent are a compare-and-swap rather than a fork: in a
 serialised database the second sees the first one's successor and is refused.
 
-Proved by: `bind appends a successor and leaves the previous generation
-untouched`, `bind refuses a manifest that names a capability the catalog does not
-declare, and writes nothing`, `bind refuses a predecessor that is already
-superseded, or that was never bound`, and `a claim or a probe under a superseded
-generation is refused, and writes nothing`.
+Proved by:
+`bind appends a successor and leaves the previous generation untouched`,
+`bind refuses a manifest that names a capability the catalog does not declare, and writes nothing`,
+`bind refuses a predecessor that is already superseded, or that was never bound`,
+and
+`a claim or a probe under a superseded generation is refused, and writes nothing`.
 
 ### Fence - a late worker cannot write
 
@@ -86,16 +87,17 @@ generation is refused, and writes nothing`.
 lease's current one, and refuse without writing, so a worker whose lease expired
 cannot write as though it still held it.
 
-Expiry is a comparison, not a stored transition: a row that says `held` but whose
-deadline has passed is expired, because no timer has to have run for that to be
-true. An expired lease is re-claimed, which increments the fence - renewal
+Expiry is a comparison, not a stored transition: a row that says `held` but
+whose deadline has passed is expired, because no timer has to have run for that
+to be true. An expired lease is re-claimed, which increments the fence - renewal
 extends a lease and never resurrects one. The row is never deleted, so the fence
 never restarts at one.
 
-Proved by: `the fence: a claim past expiry increments it, and the first fence can
-no longer renew`, `a claim while a lease is live is lease-held, and writes
-nothing`, `an expired lease cannot be renewed back to life`, and `a probe
-carrying a stale fence is refused, and writes nothing`.
+Proved by:
+`the fence: a claim past expiry increments it, and the first fence can no longer renew`,
+`a claim while a lease is live is lease-held, and writes nothing`,
+`an expired lease cannot be renewed back to life`, and
+`a probe carrying a stale fence is refused, and writes nothing`.
 
 ### Disclosure - one row, to one audience, at one version
 
@@ -106,17 +108,17 @@ select what the database was never told.
 The row id is `<property>:<version>:<audience>`, which makes the reveal its own
 receipt and its own allowance. A second probe by the same audience at the same
 version finds the row and is refused as `budget-exhausted`, so no second row has
-to record a charge, and two racing probes cannot both spend a one-use allowance -
-the database serialises them and the loser finds the winner's row.
+to record a charge, and two racing probes cannot both spend a one-use
+allowance - the database serialises them and the loser finds the winner's row.
 
-The audience is `ctx.sender`, never an argument: a caller-supplied audience would
-be a caller-supplied identity, and the recipient of a reveal is not something the
-caller names.
+The audience is `ctx.sender`, never an argument: a caller-supplied audience
+would be a caller-supplied identity, and the recipient of a reveal is not
+something the caller names.
 
-Proved by: `a probe writes exactly one row, carrying the audience and the
-property version, not the private value`, `a second probe by the same audience at
-the same property version is budget-exhausted, and writes nothing`, and `the
-allowance is per audience, so another holder gets its own observation`.
+Proved by:
+`a probe writes exactly one row, carrying the audience and the property version, not the private value`,
+`a second probe by the same audience at the same property version is budget-exhausted, and writes nothing`,
+and `the allowance is per audience, so another holder gets its own observation`.
 
 ### Time - one clock, and it is the context's
 
@@ -125,8 +127,8 @@ the lags between times are differences the caller computes, because a reducer
 that read `Date.now()` could not be replayed and a test could not decide what
 time it is.
 
-Proved by: `every timestamp a row carries is ctx.now, so a fake clock decides the
-whole transcript`.
+Proved by:
+`every timestamp a row carries is ctx.now, so a fake clock decides the whole transcript`.
 
 ## Adopting it in TimeLine, in one step
 
@@ -135,17 +137,17 @@ One deliberate step, five parts. Everything but the fourth is a copy.
 1. **Copy the rules and the catalog, unchanged.** The exact list is below. They
    compile as they are; nothing in them names TimeLine.
 2. **Render `Schema.ts` from `Tables.ts`.** Each table becomes one `table(...)`
-   declaration, each column one `t.*` call. The mapping is mechanical:
-   `string` is `t.string()`, `number` is `t.u64()`, `boolean` is `t.bool()`,
-   `json` is `t.string()` holding the array's text, `optional-string` is
+   declaration, each column one `t.*` call. The mapping is mechanical: `string`
+   is `t.string()`, `number` is `t.u64()`, `boolean` is `t.bool()`, `json` is
+   `t.string()` holding the array's text, `optional-string` is
    `t.string().optional()`, `optional-number` is `t.u64().optional()`, a
    `primary` key takes `.primaryKey()` and an `index` key `.index()`.
 3. **Write the adapter that satisfies `Context`.** This is the only new code
    TimeLine writes, and it is the five members below.
 4. **Seed `capability` in `init`** from the package manifests TimeLine already
    has, so the first `bind` has something to check against.
-5. **Register the five rules as reducers**, with their arguments as the
-   `t.*` declarations the module already uses for `observe` and `record`.
+5. **Register the five rules as reducers**, with their arguments as the `t.*`
+   declarations the module already uses for `observe` and `record`.
 
 ### The declarations to copy
 
@@ -165,14 +167,14 @@ different catalog than the module renders.
 
 ### The adapter, which is the only code TimeLine writes
 
-- **`sender`** - `ctx.sender`, the module's `Identity`, rendered to a string once
-  at the boundary. Every rule compares that rendering, so a rule never compares
-  an identity to a caller-supplied argument.
-- **`now`** - `ctx.timestamp` in whatever integer unit the module uses. The rules
-  only add, compare and store it, so the unit is TimeLine's choice; a `ttl`
-  passed to `claim` or `renew` has to be in that same unit. A `u64` column is a
-  `bigint` in the module's TypeScript, so the adapter converts at the boundary
-  and the rules stay on `number`.
+- **`sender`** - `ctx.sender`, the module's `Identity`, rendered to a string
+  once at the boundary. Every rule compares that rendering, so a rule never
+  compares an identity to a caller-supplied argument.
+- **`now`** - `ctx.timestamp` in whatever integer unit the module uses. The
+  rules only add, compare and store it, so the unit is TimeLine's choice; a
+  `ttl` passed to `claim` or `renew` has to be in that same unit. A `u64` column
+  is a `bigint` in the module's TypeScript, so the adapter converts at the
+  boundary and the rules stay on `number`.
 - **`find(table, id)`** - `ctx.db[table].id.find(id)`.
 - **`insert(table, row)`** - `ctx.db[table].insert(row)`.
 - **`update(table, row)`** - `ctx.db[table].id.update(row)`.
@@ -188,15 +190,15 @@ published module - there is no `ctx.db` before a module is compiled and no
 tested without a database, and would pin the rules to one server version.
 
 That is the whole of what stays behind in TimeLine: `Schema.ts`, the `Context`
-adapter, `init`, and the five `spacetimedb.reducer(...)` registrations. The rules,
-the catalog and the interface travel unchanged, and the tests that prove them
-travel with them.
+adapter, `init`, and the five `spacetimedb.reducer(...)` registrations. The
+rules, the catalog and the interface travel unchanged, and the tests that prove
+them travel with them.
 
 ## What is deliberately absent
 
 - **No reducer declares a capability.** A declaration is a deployment, and a
-  reducer that could add one would let a caller widen the set its own manifest is
-  checked against.
+  reducer that could add one would let a caller widen the set its own manifest
+  is checked against.
 - **No belief writer.** Deriving a belief is the actor's own act on observations
   it already holds; the table is described because its shape is the third thing
   the disclosure rule needs, and deleting a belief loses nothing.
@@ -205,8 +207,9 @@ travel with them.
   every fenced write, so a module that wants early release adds `release` and
   the rules already treat `released` as claimable.
 - **No scan.** Every question a rule asks is one key lookup, which is why
-  generation ids are dense sequence numbers and why a probe's key is its receipt.
-  A rule that needed `iter()` would be a rule that cannot be stated here.
+  generation ids are dense sequence numbers and why a probe's key is its
+  receipt. A rule that needed `iter()` would be a rule that cannot be stated
+  here.
 - **No wall clock, no credentials, no private values.** The catalog describes
   what is stored; a secret the rules are never given is not merely filtered from
   a reader, it never enters the database.
@@ -219,5 +222,6 @@ node --test Test/*.test.ts
 ```
 
 25 tests, no `spacetimedb` package installed, and no dependency in
-`package.json`. The workspace gate is `npm run check`, and the formatting gate is
+`package.json`. The workspace gate is `npm run check`, and the formatting gate
+is
 `pnpm exec prettier --check packages/spacetime-catalog docs/Spacetime-Catalog.md`.

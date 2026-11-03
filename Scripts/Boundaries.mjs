@@ -29,7 +29,9 @@ const Walk = (Directory) => {
 const Kinds = new Map();
 for (const Entry of readdirSync(join(Root, "packages"))) {
 	try {
-		const Manifest = JSON.parse(readFileSync(join(Root, "packages", Entry, "module.json"), "utf8"));
+		const Manifest = JSON.parse(
+			readFileSync(join(Root, "packages", Entry, "module.json"), "utf8"),
+		);
 		Kinds.set(Manifest.name, Manifest.kind);
 	} catch {
 		Problems.push("packages/" + Entry + ": no readable module.json");
@@ -40,7 +42,9 @@ for (const [Name, Kind] of Kinds) {
 	const Directory = join(Root, "packages", Name.replace("@agentic/", ""));
 	for (const File of Walk(Directory)) {
 		const Text = readFileSync(File, "utf8");
-		for (const Match of Text.matchAll(/from\s+["'](@agentic\/[a-z-]+)["']/g)) {
+		for (const Match of Text.matchAll(
+			/from\s+["'](@agentic\/[a-z-]+)["']/g,
+		)) {
 			const Target = Match[1];
 			const TargetKind = Kinds.get(Target);
 			if (Target === Name) continue;
@@ -49,7 +53,16 @@ for (const [Name, Kind] of Kinds) {
 				(Kind === "capability" && TargetKind === "capability") ||
 				(Kind === "adapter" && TargetKind === "capability");
 			if (!Allowed)
-				Problems.push(File.replace(Root + "/", "") + ": " + Kind + " imports " + Target + " (" + TargetKind + ")");
+				Problems.push(
+					File.replace(Root + "/", "") +
+						": " +
+						Kind +
+						" imports " +
+						Target +
+						" (" +
+						TargetKind +
+						")",
+				);
 		}
 	}
 }

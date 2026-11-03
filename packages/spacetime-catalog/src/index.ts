@@ -8,12 +8,7 @@
  * the same rules on both sides of that seam.
  */
 
-export type {
-	Column,
-	ColumnType,
-	Table,
-	TableName,
-} from "./Tables.ts";
+export type { Column, ColumnType, Table, TableName } from "./Tables.ts";
 export { ColumnTypes, PrimaryKey, TableNames, Tables } from "./Tables.ts";
 export type { Context, Row, Value } from "./Context.ts";
 export type {

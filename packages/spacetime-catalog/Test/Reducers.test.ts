@@ -190,11 +190,17 @@ test("bind refuses a predecessor that is already superseded, or that was never b
 	Bound(ctx, "1", "sha256:second");
 	const mark = ctx.writes.length;
 	assert.deepEqual(
-		bind(ctx, { previous: "1", manifest: { digest: "sha256:x", capabilities: [Browse] } }),
+		bind(ctx, {
+			previous: "1",
+			manifest: { digest: "sha256:x", capabilities: [Browse] },
+		}),
 		{ ok: false, reason: "admission-refused" },
 	);
 	assert.deepEqual(
-		bind(ctx, { previous: "9", manifest: { digest: "sha256:x", capabilities: [Browse] } }),
+		bind(ctx, {
+			previous: "9",
+			manifest: { digest: "sha256:x", capabilities: [Browse] },
+		}),
 		{ ok: false, reason: "admission-refused" },
 	);
 	assert.deepEqual(Written(ctx, mark), []);
@@ -225,7 +231,9 @@ test("the fence: a claim past expiry increments it, and the first fence can no l
 	assert.equal(ctx.find("lease", Resource)?.["fence"], 1);
 
 	ctx.now = 1_001;
-	assert.deepEqual(Claimed(ctx, { task: "task:2", ttl: 1_000 }), { ok: true });
+	assert.deepEqual(Claimed(ctx, { task: "task:2", ttl: 1_000 }), {
+		ok: true,
+	});
 	assert.equal(ctx.find("lease", Resource)?.["fence"], 2);
 
 	const mark = ctx.writes.length;
@@ -355,10 +363,10 @@ test("a claim or a probe under a superseded generation is refused, and writes no
 	Bound(ctx, "1", "sha256:second");
 	ctx.now = 10;
 	const mark = ctx.writes.length;
-	assert.deepEqual(
-		Claimed(ctx, { resource: "browser:second" }),
-		{ ok: false, reason: "admission-refused" },
-	);
+	assert.deepEqual(Claimed(ctx, { resource: "browser:second" }), {
+		ok: false,
+		reason: "admission-refused",
+	});
 	assert.deepEqual(Probed(ctx), { ok: false, reason: "admission-refused" });
 	assert.deepEqual(Written(ctx, mark), []);
 	assert.deepEqual(ctx.rows("probe"), []);
@@ -371,7 +379,10 @@ test("recordTrace appends once per instant, kind and subject, and refuses differ
 	assert.deepEqual(Traced(ctx), { ok: true });
 	assert.deepEqual(Traced(ctx), { ok: true });
 	assert.equal(Written(ctx, mark).length, 1);
-	assert.equal(ctx.rows("trace")[0]?.["id"], `1000:lease.claimed:${Resource}`);
+	assert.equal(
+		ctx.rows("trace")[0]?.["id"],
+		`1000:lease.claimed:${Resource}`,
+	);
 	assert.equal(ctx.rows("trace")[0]?.["sender"], "agent:a");
 
 	const second = ctx.writes.length;
@@ -406,7 +417,10 @@ test("every timestamp a row carries is ctx.now, so a fake clock decides the whol
 				typeof value === "number",
 		),
 	);
-	assert.ok(times.length >= 4, `only ${times.length} timestamps were written`);
+	assert.ok(
+		times.length >= 4,
+		`only ${times.length} timestamps were written`,
+	);
 	for (const [column, value] of times)
 		assert.equal(value, 1_234_567, `${column} did not come from ctx.now`);
 });
@@ -416,11 +430,18 @@ test("every rule answers a malformed argument with a refusal, and throws nothing
 	Bound(ctx);
 	const mark = ctx.writes.length;
 	const calls: (() => { ok: boolean })[] = [
-		() => bind(ctx, { previous: null, manifest: { digest: "", capabilities: [Browse] } }),
 		() =>
 			bind(ctx, {
 				previous: null,
-				manifest: { digest: "sha256:x", capabilities: [Browse, Browse] },
+				manifest: { digest: "", capabilities: [Browse] },
+			}),
+		() =>
+			bind(ctx, {
+				previous: null,
+				manifest: {
+					digest: "sha256:x",
+					capabilities: [Browse, Browse],
+				},
 			}),
 		() => Claimed(ctx, { resource: "" }),
 		() => Claimed(ctx, { generation: "nowhere" }),

@@ -1,13 +1,13 @@
 # Open Questions
 
 Every question the three captures left unanswered, gathered once. Each one names
-who asked it, the experiment or command that would settle it, and what it blocks.
-`docs/Research.md` says which thread each question came from; the captures
-themselves are the reasoning, and this file is only the worklist.
+who asked it, the experiment or command that would settle it, and what it
+blocks. `docs/Research.md` says which thread each question came from; the
+captures themselves are the reasoning, and this file is only the worklist.
 
 A question is closed by a run, not by an argument. Where the experiment does not
-exist yet, that is stated - an unbuilt fixture is a finding about the work, not a
-gap in the record.
+exist yet, that is stated - an unbuilt fixture is a finding about the work, not
+a gap in the record.
 
 ## How to read an entry
 
@@ -15,16 +15,17 @@ gap in the record.
   findings, or this repository reading the capture. The three are not equal, and
   the difference is always written down.
 - **Settle it with** - the run. Commands are literal; `<placeholders>` are not.
-- **Blocks** - the crate or document that cannot be decided until it is answered.
+- **Blocks** - the crate or document that cannot be decided until it is
+  answered.
 
 ---
 
 # Thread 1 - hidden properties and disclosure
 
 Source: `.hermes/research/research-575cb198.md`. Nothing in this workspace talks
-to SpacetimeDB yet, so every experiment below is a probe against a local instance
-rather than a test in this tree. `spacetime sql <database> "<query>"` is the shape
-of the check; `<database>` has to exist first.
+to SpacetimeDB yet, so every experiment below is a probe against a local
+instance rather than a test in this tree. `spacetime sql <database> "<query>"`
+is the shape of the check; `<database>` has to exist first.
 
 ## Q1 - What does a failed transaction roll back?
 
@@ -34,15 +35,15 @@ of the check; `<database>` has to exist first.
 afterwards. A surviving row means the insert is not part of the rollback.
 
 ```sh
-spacetime sql <database> "SELECT * FROM Observation"
+spacetime sql < database > "SELECT * FROM Observation"
 ```
 
 Repeat with a reducer that schedules a reducer and then fails - whether the
 schedule survives is a separate answer.
 
 **Blocks:** the `observe()` rule of charging and revealing in one transaction
-(`:135`). If rollback is partial, "pay and reveal is all-or-nothing" is false and
-the reducer has to be restructured.
+(`:135`). If rollback is partial, "pay and reveal is all-or-nothing" is false
+and the reducer has to be restructured.
 
 ## Q2 - What is the exact concurrency model across modules?
 
@@ -106,9 +107,9 @@ published the secret with extra steps.
 
 **Asked:** the thread's own check (`:135`).
 
-**Settle it with:** two clients probing a capability with an allowance of one, in
-the same transaction window; count the `Observation` rows written. The reducer
-authenticates and charges before revealing, so the count must be one.
+**Settle it with:** two clients probing a capability with an allowance of one,
+in the same transaction window; count the `Observation` rows written. The
+reducer authenticates and charges before revealing, so the count must be one.
 
 **Blocks:** the `observe()` reducer contract. This is the only place where the
 thread claims atomicity buys correctness, so it is the one that has to be run.
@@ -117,16 +118,16 @@ thread claims atomicity buys correctness, so it is the one that has to be run.
 
 **Asked:** the thread's own check (`:139`).
 
-**Settle it with:** plant a canary value in a private property, run a full probe,
-then read every client-visible row, trace, failure response, result-size field
-and exported artefact, and grep for the canary. Then run the paired worlds of
-`:140` - two databases differing only in the secret - and diff the complete
+**Settle it with:** plant a canary value in a private property, run a full
+probe, then read every client-visible row, trace, failure response, result-size
+field and exported artefact, and grep for the canary. Then run the paired worlds
+of `:140` - two databases differing only in the secret - and diff the complete
 observable transcripts.
 
 **Blocks:** the trace-projection rule and the claim that the schema provides
 nonleakage. The thread is explicit that timing, size, contention and operator
 access are outside it (`:141`); the experiment's job is to show those are the
-*only* channels left.
+_only_ channels left.
 
 ---
 
@@ -147,12 +148,12 @@ the crate that has to carry it.
 
 **Settle it with:** a fixture page with two articles; snapshot A at index 0,
 replace the article at index 0 with B, then run the exported selector expression
-for the toggle and record which button receives the click. No live account and no
-real mutation.
+for the toggle and record which button receives the click. No live account and
+no real mutation.
 
-**Blocks:** the port shape of `agentic-browser-cdp`. If the transport can address
-a post by position, the port has to accept an identity, not an index - which
-changes `Browse::Evaluate` as specified in `docs/Rust.md`.
+**Blocks:** the port shape of `agentic-browser-cdp`. If the transport can
+address a post by position, the port has to accept an identity, not an index -
+which changes `Browse::Evaluate` as specified in `docs/Rust.md`.
 
 ## Q10 - Does a URL target resolve the post named in the URL, or index 0?
 
@@ -161,8 +162,8 @@ changes `Browse::Evaluate` as specified in `docs/Rust.md`.
 **Settle it with:** a controlled page whose URL contains `/status/123` and whose
 articles are 999 then 123. The resolved post must be 123 regardless of order.
 
-**Blocks:** `agentic-browser-cdp` and `agentic-chat-driver`, both of which take a
-URL target today.
+**Blocks:** `agentic-browser-cdp` and `agentic-chat-driver`, both of which take
+a URL target today.
 
 ## Q11 - Does an unrelated article satisfy readiness for an id target?
 
@@ -191,8 +192,8 @@ one of the four paths only (`:78`).
 **Asked:** the thread's experiment (`:94`).
 
 **Settle it with:** a fixture that starts a fetch whose response is held open,
-then `waitForIdle({quiet: 600})`. If it resolves while the request is pending, the
-semantic gap is proven rather than inferred.
+then `waitForIdle({quiet: 600})`. If it resolves while the request is pending,
+the semantic gap is proven rather than inferred.
 
 **Blocks:** the persistence verification of every mutation, which currently
 assumes a quiet network means a finished write.
@@ -205,8 +206,8 @@ assumes a quiet network means a finished write.
 execution-context destruction, and assert not only that both terminate but that
 the permanent error's cause is still available to the caller.
 
-**Blocks:** `agentic-browser-cdp`'s error taxonomy. A dead connection reported as
-"the page showed no posts" is the failure the port exists to prevent.
+**Blocks:** `agentic-browser-cdp`'s error taxonomy. A dead connection reported
+as "the page showed no posts" is the failure the port exists to prevent.
 
 ## Q15 - Does an attachment failure leak the tab it opened?
 
@@ -224,9 +225,9 @@ tabs behind.
 **Asked:** the thread's experiment (`:116`), and one step it explicitly did not
 trace - the CLI's treatment of the returned mismatch (`:114`).
 
-**Settle it with:** a fake session that reports a successful click, never settles,
-then loses the control; and a second test where the temporary-tab reload fails.
-Then read the caller's handling of `now != want`.
+**Settle it with:** a fake session that reports a successful click, never
+settles, then loses the control; and a second test where the temporary-tab
+reload fails. Then read the caller's handling of `now != want`.
 
 **Blocks:** the port's result type. A mutation result that can be "not verified"
 is a different type from a boolean, and `docs/Design.md`'s lifecycle claims
@@ -248,8 +249,8 @@ source. The assertion is that each unknown is distinguishable from a real `0`,
 
 # Thread 3 - the Rust port
 
-Source: `.hermes/research/rust-4ffde6d5.md`. The answer is cut off mid-sentence at
-`:378-383`, so the last two questions it was asked were never reached.
+Source: `.hermes/research/rust-4ffde6d5.md`. The answer is cut off mid-sentence
+at `:378-383`, so the last two questions it was asked were never reached.
 
 ## Q18 - Can a Rust adapter pass the TypeScript conformance suite?
 
@@ -261,8 +262,8 @@ evaluation timeout, disconnect, disposal, shared-browser ownership - run against
 the current TS transport and against `chromiumoxide` behind the proposed session
 API, comparing results per case.
 
-**Blocks:** `agentic-browser-cdp` and the whole port. `docs/Rust.md` is written as
-if the backend decision is made; the capture makes it conditional on this run
+**Blocks:** `agentic-browser-cdp` and the whole port. `docs/Rust.md` is written
+as if the backend decision is made; the capture makes it conditional on this run
 (`:226`).
 
 ## Q19 - How do the manifest fields map onto Rust?
@@ -270,17 +271,19 @@ if the backend decision is made; the capture makes it conditional on this run
 **Asked:** the thread's question 6 (`:49`), never reached - the answer stops at
 `:378`.
 
-**Settle it with:** write one real `module.json` for `ChatDriver`, a serde struct
-that validates it in CI, and a harness that reads the packaged file alone and
-decides warm or cold from `state`, `cost` and `artefact.hash`. If the planner
-needs to execute anything, the mapping has lost the property it exists for.
+**Settle it with:** write one real `module.json` for `ChatDriver`, a serde
+struct that validates it in CI, and a harness that reads the packaged file alone
+and decides warm or cold from `state`, `cost` and `artefact.hash`. If the
+planner needs to execute anything, the mapping has lost the property it exists
+for.
 
 **Blocks:** `agentic-runtime` (the pre-warm planner) and the manifest section of
 `docs/Design.md`.
 
 ## Q20 - What is the CI check that keeps the arrows pointing inward?
 
-**Asked:** the thread's question 5 (`:47`), asserted at `:58` but never specified.
+**Asked:** the thread's question 5 (`:47`), asserted at `:58` but never
+specified.
 
 **Settle it with:** `cargo metadata --format-version 1`, walk the resolved
 dependency edges, and fail on any edge outside an allowlist - the Cargo analogue
@@ -295,38 +298,39 @@ are enforced rather than merely described.
 
 ## Q21 - Is the house style what the thread was told it is?
 
-**Asked:** the thread's own caveat (`:60`) - it could not retrieve the repository
-and took the description as specification.
+**Asked:** the thread's own caveat (`:60`) - it could not retrieve the
+repository and took the description as specification.
 
-**Settle it with:** clone the repository at the branch the request named and diff
-the described files against what is there: `.cargo/config.toml` (target-dir,
-opt-level, codegen-units, lto, panic, strip), the `[lib]` and `[[bin]]` layout,
-the `Fn`/`Struct` module trees, the CI workflow names.
+**Settle it with:** clone the repository at the branch the request named and
+diff the described files against what is there: `.cargo/config.toml`
+(target-dir, opt-level, codegen-units, lto, panic, strip), the `[lib]` and
+`[[bin]]` layout, the `Fn`/`Struct` module trees, the CI workflow names.
 
 ```sh
-git clone --branch Current https://github.com/PlayForm/Run <scratch>/Run
+git clone --branch Current https://github.com/PlayForm/Run < scratch > /Run
 ```
 
-**Blocks:** `docs/Rust.md`'s opening claim about house style. If the clone fails,
-the house style stays an unverified assumption and should be labelled as one.
+**Blocks:** `docs/Rust.md`'s opening claim about house style. If the clone
+fails, the house style stays an unverified assumption and should be labelled as
+one.
 
 ## Q22 - Do the two consumer-owned `Browse` traits actually differ?
 
-**Asked:** this repository, reading the capture. The thread asserts they need not
-have identical methods (`:197`) but does not derive either trait from the existing
-call sites.
+**Asked:** this repository, reading the capture. The thread asserts they need
+not have identical methods (`:197`) but does not derive either trait from the
+existing call sites.
 
 **Settle it with:** write both traits from what `chat-driver` and
 `design-verification` actually call today, then diff them. Identical traits mean
 one trait belongs somewhere shared - or that the split is theatre.
 
-**Blocks:** `agentic-chat-driver`, `agentic-design-verification`, and the
-"ports belong to their consumers" section of `docs/Rust.md`.
+**Blocks:** `agentic-chat-driver`, `agentic-design-verification`, and the "ports
+belong to their consumers" section of `docs/Rust.md`.
 
 ## Q23 - Does `panic = "abort"` survive the cancellation and cleanup ladder?
 
-**Asked:** this repository, reading the capture. The request asked for anything in
-the house style that fights the design (`:50`); the answer was cut off before
+**Asked:** this repository, reading the capture. The request asked for anything
+in the house style that fights the design (`:50`); the answer was cut off before
 that, and the style mandates `panic = "abort"` (`:25`) while the design mandates
 supervised cleanup after a bounded evaluation (`:259`).
 
@@ -365,12 +369,13 @@ of the answer that was cut off. Without them the manifest is a JSON file nobody
 has mapped and the layering rule is a convention, which is exactly the state the
 Rust port exists to leave behind.
 
-**Q9 and Q10, transport identity.** If a transport can address a post by position,
-the browser port's signature is wrong, and it is wrong in a way that every
-capability above it inherits. This is the cheapest of the blocking questions to
-settle - a fixture page and no live account - which makes it the one to run first.
+**Q9 and Q10, transport identity.** If a transport can address a post by
+position, the browser port's signature is wrong, and it is wrong in a way that
+every capability above it inherits. This is the cheapest of the blocking
+questions to settle - a fixture page and no live account - which makes it the
+one to run first.
 
-**Q1 and Q7, transaction rollback and probe allowance.** These decide whether the
-disclosure model in `research-575cb198.md` is implementable as written or only as
-a sketch. Nothing in this workspace depends on them yet, which is why they are
-last: the thread that produced them has no consumer in `docs/` today.
+**Q1 and Q7, transaction rollback and probe allowance.** These decide whether
+the disclosure model in `research-575cb198.md` is implementable as written or
+only as a sketch. Nothing in this workspace depends on them yet, which is why
+they are last: the thread that produced them has no consumer in `docs/` today.

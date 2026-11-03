@@ -13,22 +13,22 @@ measurement of that repository.
 
 **Source:** `.hermes/research/rust-4ffde6d5.md` §1 - the directory tree, the
 package and library names, and the decision that the five stay separate crates
-(`:56-58`, `:152-161`). The capture makes the workflow crate conditional on a real
-composition (`:133`); the rows below are the full proposed set.
+(`:56-58`, `:152-161`). The capture makes the workflow crate conditional on a
+real composition (`:133`); the rows below are the full proposed set.
 
-| Directory | Package | Library | Responsibility |
-| --- | --- | --- | --- |
-| `BrowserCDP/` | `agentic-browser-cdp` | `AgenticBrowserCDP` | concrete browser substrate |
-| `ChatDriver/` | `agentic-chat-driver` | `AgenticChatDriver` | chat use case and its browse contract |
-| `DesignVerification/` | `agentic-design-verification` | `AgenticDesignVerification` | measurement and evidence |
-| `SkillContract/` | `agentic-skill-contract` | `AgenticSkillContract` | corpus discovery, validation, packaging |
-| `Runtime/` | `agentic-runtime` | `AgenticRuntime` | execution policy and resource ownership |
-| `Workflow/` | `agentic-workflow` | `AgenticWorkflow` | adapter-independent compositions |
-| `Agentic/` | `agentic` | `Agentic` | wiring and executable entry points |
+| Directory             | Package                       | Library                     | Responsibility                          |
+| --------------------- | ----------------------------- | --------------------------- | --------------------------------------- |
+| `BrowserCDP/`         | `agentic-browser-cdp`         | `AgenticBrowserCDP`         | concrete browser substrate              |
+| `ChatDriver/`         | `agentic-chat-driver`         | `AgenticChatDriver`         | chat use case and its browse contract   |
+| `DesignVerification/` | `agentic-design-verification` | `AgenticDesignVerification` | measurement and evidence                |
+| `SkillContract/`      | `agentic-skill-contract`      | `AgenticSkillContract`      | corpus discovery, validation, packaging |
+| `Runtime/`            | `agentic-runtime`             | `AgenticRuntime`            | execution policy and resource ownership |
+| `Workflow/`           | `agentic-workflow`            | `AgenticWorkflow`           | adapter-independent compositions        |
+| `Agentic/`            | `agentic`                     | `Agentic`                   | wiring and executable entry points      |
 
-The five existing packages do **not** become modules of one crate. Collapsing them
-would turn the import-direction rule into a convention inside a single compiler
-boundary, which is the thing the rule exists to prevent. Their internal
+The five existing packages do **not** become modules of one crate. Collapsing
+them would turn the import-direction rule into a convention inside a single
+compiler boundary, which is the thing the rule exists to prevent. Their internal
 operations - attach/launch/dispose, ask/verify/read, discover/validate/package -
 stay modules.
 
@@ -43,8 +43,9 @@ Workflow → ChatDriver, DesignVerification, SkillContract
 BrowserCDP, ChatDriver, DesignVerification, SkillContract, Runtime → no domain crate
 ```
 
-`Runtime` is a policy engine, not a registry: it does not import every capability.
-The root registers capability invocations and cleanup operations with it.
+`Runtime` is a policy engine, not a registry: it does not import every
+capability. The root registers capability invocations and cleanup operations
+with it.
 
 ## "Ports belong to their consumers", in Rust
 
@@ -78,9 +79,9 @@ composition root is for.
 
 ## Module shape per crate
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §1 for the module paths (`:67-81`)
-and the house-style `.cargo/config.toml` values (`:25`, `:150`). One crate is
-reproduced here; the capture gives the tree for all seven.
+**Source:** `.hermes/research/rust-4ffde6d5.md` §1 for the module paths
+(`:67-81`) and the house-style `.cargo/config.toml` values (`:25`, `:150`). One
+crate is reproduced here; the capture gives the tree for all seven.
 
 ```
 ChatDriver/
@@ -106,21 +107,21 @@ follows the house style: `opt-level 3`, `codegen-units 1`, `debug false`,
 
 **Source:** `.hermes/research/rust-4ffde6d5.md` - and the list below is stale
 against it. The capture answers 1 (`:220-281`), 2 (`:283-312`) and 3
-(`:314-383`); it asserts 4 (`:58`) without specifying the check; it never reaches
-5, because the answer is cut off at `:378`. The questions stay here as they were
-asked, and each is tracked with its experiment and blocker in
+(`:314-383`); it asserts 4 (`:58`) without specifying the check; it never
+reaches 5, because the answer is cut off at `:378`. The questions stay here as
+they were asked, and each is tracked with its experiment and blocker in
 `docs/Open-Questions.md` Q18-Q24.
 
 These were asked. The capture answered the first three and left the rest below;
 nothing here should be built on a guess:
 
-1. **CDP in Rust or a TypeScript sidecar.** `chromiumoxide`, `headless_chrome`, or
-   raw CDP over a websocket, against keeping a small TS process driven over stdio
-   JSON-RPC. Each has different failure modes around connection loss and event
-   ordering.
-2. **The manifest in Rust.** A build script generating static data, a serde-loaded
-   file per crate, or const data in the crate. The constraint is that a harness
-   must read it without building anything at launch.
+1. **CDP in Rust or a TypeScript sidecar.** `chromiumoxide`, `headless_chrome`,
+   or raw CDP over a websocket, against keeping a small TS process driven over
+   stdio JSON-RPC. Each has different failure modes around connection loss and
+   event ordering.
+2. **The manifest in Rust.** A build script generating static data, a
+   serde-loaded file per crate, or const data in the crate. The constraint is
+   that a harness must read it without building anything at launch.
 3. **Cancellation and budgets.** The trait shape for a port with a deadline that
    does not leak `tokio` into every capability.
 4. **Enforcing the arrows.** Cargo permits any dependency direction; the check

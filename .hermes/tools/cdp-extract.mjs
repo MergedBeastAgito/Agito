@@ -35,7 +35,9 @@ const MinChars = Number(At("--min-chars", 200));
 const Expand = Args.includes("--expand");
 
 if (!WsUrl) {
-	console.error("usage: node cdp-extract.mjs <ws-url> [--selector <css>] [--out <file>] [--min-chars N]");
+	console.error(
+		"usage: node cdp-extract.mjs <ws-url> [--selector <css>] [--out <file>] [--min-chars N]",
+	);
 	process.exit(2);
 }
 
@@ -216,7 +218,8 @@ const Socket = new WebSocket(WsUrl);
 try {
 	await new Promise((Done, Fail) => {
 		Socket.onopen = Done;
-		Socket.onerror = (Event) => Fail(new Error(`cannot connect: ${Event.message ?? "error"}`));
+		Socket.onerror = (Event) =>
+			Fail(new Error(`cannot connect: ${Event.message ?? "error"}`));
 	});
 } catch (Error) {
 	console.error(`blocker: ${Error.message}`);
@@ -228,7 +231,10 @@ Socket.onmessage = (Event) => {
 	const Slot = Pending.get(Message.id);
 	if (Slot === undefined) return;
 	Pending.delete(Message.id);
-	if (Message.error) Slot.Fail(new Error(`${Message.error.message} (${Message.error.code})`));
+	if (Message.error)
+		Slot.Fail(
+			new Error(`${Message.error.message} (${Message.error.code})`),
+		);
 	else Slot.Done(Message.result);
 };
 
@@ -236,7 +242,9 @@ const Send = (Method, Params = {}) =>
 	new Promise((Done, Fail) => {
 		const Key = ++Id;
 		Pending.set(Key, { Done, Fail });
-		Socket.send(JSON.stringify({ id: Key, method: Method, params: Params }));
+		Socket.send(
+			JSON.stringify({ id: Key, method: Method, params: Params }),
+		);
 	});
 
 // A collapsed answer keeps its tail out of the DOM, so nothing downstream can
@@ -259,7 +267,10 @@ if (Expand) {
 	await new Promise((Done) => setTimeout(Done, 1500));
 }
 
-const Result = await Send("Runtime.evaluate", { expression: Extract, returnByValue: true });
+const Result = await Send("Runtime.evaluate", {
+	expression: Extract,
+	returnByValue: true,
+});
 if (Result.exceptionDetails) {
 	console.error(`blocker: ${Result.exceptionDetails.text}`);
 	process.exit(2);
@@ -281,7 +292,9 @@ if (Parsed.error) {
 const Summary = `container: ${Parsed.container}  chars: ${Parsed.chars}  formulas: ${Parsed.katex}  code: ${Parsed.code}  tables: ${Parsed.tables}  images: ${Parsed.images}`;
 
 if (Parsed.chars < MinChars) {
-	console.error(`blocker: the capture is ${Parsed.chars} characters, below --min-chars ${MinChars}; refusing a stub. ${Summary}`);
+	console.error(
+		`blocker: the capture is ${Parsed.chars} characters, below --min-chars ${MinChars}; refusing a stub. ${Summary}`,
+	);
 	process.exit(1);
 }
 
