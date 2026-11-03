@@ -4,11 +4,7 @@
 	"version": "0.1.0",
 	"provides": {
 		"port": "agentic.skill.validate",
-		"errors": [
-			"unparsable",
-			"unlisted-reference",
-			"uncited"
-		]
+		"errors": ["unparsable", "unlisted-reference", "uncited"]
 	},
 	"requires": {},
 	"artefact": {
