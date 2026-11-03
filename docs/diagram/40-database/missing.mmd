@@ -1,0 +1,15 @@
+---
+title: Database - the abandoned holder and the workspace it may have left dirty
+line9:
+  theme: boardroom
+---
+flowchart LR
+  HELD["Held"]:::store
+  ABANDONED["Abandoned<br>the holder dies without releasing"]:::hook
+  EXPIRED["Expired<br>the clock, eventually"]:::store
+  QUARANTINED["Quarantined<br>the resource may be dirty"]:::hook
+  FREE["Free<br>a reset is proven"]:::store
+  HELD -.->|"the holder dies without releasing"| ABANDONED
+  ABANDONED ==>|"the clock, eventually"| EXPIRED
+  EXPIRED -.->|"the resource may be dirty"| QUARANTINED
+  QUARANTINED ==>|"a reset is proven"| FREE

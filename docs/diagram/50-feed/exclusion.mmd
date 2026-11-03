@@ -1,0 +1,13 @@
+---
+title: Feed - the exclusion bug, as a state
+line9:
+  theme: boardroom
+---
+flowchart TD
+  WALKING["Walking<br>the tree"]:::host
+  EXCLUDED["Excluded<br>a directory matches, case-insensitively"]:::host
+  INCLUDED["Included<br>a file matches the extension"]:::host
+  REFUSED["Refused<br>larger than the cap"]:::fail
+  WALKING -.->|"a directory matches, case-insensitively"| EXCLUDED
+  WALKING ==>|"a file matches the extension"| INCLUDED
+  INCLUDED -.->|"larger than the cap"| REFUSED

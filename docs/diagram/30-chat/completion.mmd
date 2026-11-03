@@ -1,0 +1,28 @@
+---
+title: Chat - completion, which is a rule and not a sleep
+line9:
+  theme: boardroom
+---
+flowchart TD
+  B(["baseline<br>how many answers exist now"]):::host
+  S["submit"]:::host
+  W{"count above baseline?"}:::host
+  W2["wait, check the deadline"]:::host
+  T{"stable for three reads?"}:::host
+  T2["keep reading"]:::host
+  C{"Read more over it?"}:::host
+  X["truncated"]:::fail
+  OK["complete"]:::host
+  D["the deadline passed"]:::fail
+  R["not-ready<br>no partial text"]:::fail
+  B ==> S
+  S ==> W
+  W -.->|"no"| W2
+  W2 --> W
+  W ==>|"yes"| T
+  T -.->|"no"| T2
+  T2 --> T
+  T ==>|"yes"| C
+  C ==>|"yes"| X
+  C -->|"no"| OK
+  D -.->|"the deadline"| R

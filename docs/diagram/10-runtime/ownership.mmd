@@ -1,0 +1,18 @@
+---
+title: Runtime - who owns which state, the process or the database
+line9:
+  theme: boardroom
+---
+flowchart LR
+  subgraph Process["In the process"]
+    P1["the live transport"]:::host
+    P2["the effect itself"]:::host
+  end
+  subgraph Database["In the database"]
+    Q1[("lease, fence, generation")]:::store
+    Q2[("phase and handover record")]:::store
+    Q3[("the trace of both")]:::store
+  end
+  P2 ==> Q3
+  Q1 ==> P1
+  Q2 --> P1

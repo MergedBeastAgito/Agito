@@ -1,0 +1,22 @@
+---
+title: Runtime - the lease lifecycle as it exists today
+line9:
+  theme: boardroom
+---
+flowchart TD
+  FREE["Free<br>no holder"]:::host
+  CLAIMED["Claimed<br>fence, expires_at"]:::host
+  ADMITTED["Admitted<br>the effect was admitted"]:::host
+  LANDED["Landed<br>the effect completed"]:::host
+  EXPIRED["Expired<br>the clock passed expires_at"]:::host
+  REFUSED["Refused<br>ticket stale at the destination"]:::fail
+  RELEASED(["released"]):::host
+  FREE ==>|"claim (resource, ttl)"| CLAIMED
+  CLAIMED -.->|"renew(fence)"| CLAIMED
+  CLAIMED ==>|"with_lease(lease, effect)"| ADMITTED
+  ADMITTED ==>|"the effect completes"| LANDED
+  ADMITTED -.->|"ticket stale at the destination"| REFUSED
+  CLAIMED -.->|"the clock passes expires_at"| EXPIRED
+  LANDED -->|"release"| RELEASED
+  REFUSED -->|"release"| RELEASED
+  EXPIRED -->|"release"| RELEASED

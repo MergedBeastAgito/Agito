@@ -1,0 +1,16 @@
+---
+title: Database - a lease, and the fence that refuses a stale write
+line9:
+  theme: boardroom
+---
+flowchart TD
+  FREE["Free"]:::store
+  HELD["Held<br>fence n"]:::store
+  EXPIRED["Expired<br>the module's clock passed expiry"]:::store
+  REFUSED["Refused<br>another holder"]:::fail
+  FREE ==>|"claim(resource, ttl)"| HELD
+  HELD -.->|"renew(current fence)"| HELD
+  HELD -->|"release"| FREE
+  HELD -.->|"the module's clock passes expiry"| EXPIRED
+  EXPIRED -->|"claim again, fence + 1"| HELD
+  FREE -.->|"claim while another holds it"| REFUSED

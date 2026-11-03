@@ -68,16 +68,26 @@ pub fn ReadModel(Selectors:&Selectors) -> String {
 
 /// Put the question in the composer.
 ///
-/// A `textarea` or an `input` takes it as a value; anything else is treated as
-/// a contenteditable and takes it as text. Both paths dispatch `input`, because
-/// a composer that never saw an input event keeps its send control disabled and
-/// the question would sit there looking sent.
+/// A `textarea` or an `input` takes it through the property's own setter, so a
+/// framework that tracks the value sees the change; anything else is treated as
+/// a contenteditable and takes a real edit - a selection plus `insertText` -
+/// because an editor that keeps its own document model ignores a written
+/// `innerText` and leaves its send control disabled. Both paths dispatch
+/// `input`, because a composer that never saw one keeps that control disabled
+/// and the question would sit there looking sent.
 pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 	format!(
-		"(() => {{\n\tconst Composer = document.querySelector({});\n\tif (Composer === null) return false;\n\tconst \
-		 Text = {};\n\tif (Composer.tagName === \"TEXTAREA\" || Composer.tagName === \"INPUT\") Composer.value = \
-		 Text;\n\telse Composer.innerText = Text;\n\tComposer.dispatchEvent(new Event(\"input\", {{ bubbles: true \
-		 }}));\n\treturn true;\n}})()",
+		"(() => {{\n	const Composer = document.querySelector({});\n	if (Composer === null) return false;\n	const \
+		 Text = {};\n	Composer.focus();\n	if (Composer.tagName === \"TEXTAREA\" || Composer.tagName === \"INPUT\") \
+		 {{\n		const Proto = Composer.tagName === \"TEXTAREA\" ? HTMLTextAreaElement.prototype : \
+		 HTMLInputElement.prototype;\n		const Set = Object.getOwnPropertyDescriptor(Proto, \"value\").set;\n		\
+		 Set.call(Composer, Text);\n		Composer.dispatchEvent(new Event(\"input\", {{ bubbles: true }}));\n		\
+		 Composer.dispatchEvent(new Event(\"change\", {{ bubbles: true }}));\n		return true;\n	}}\n	const \
+		 Range = document.createRange();\n	Range.selectNodeContents(Composer);\n	const Selection = \
+		 window.getSelection();\n	Selection.removeAllRanges();\n	Selection.addRange(Range);\n	if \
+		 (document.execCommand(\"insertText\", false, Text)) return true;\n	Composer.innerText = Text;\n	\
+		 Composer.dispatchEvent(new InputEvent(\"input\", {{ bubbles: true, inputType: \"insertText\", data: Text \
+		 }}));\n	return true;\n}})()",
 		Literal(&Selectors.Composer),
 		Literal(Text)
 	)
@@ -97,13 +107,38 @@ pub fn PressSubmit(Selectors:&Selectors) -> String {
 	)
 }
 
-/// How many answers the thread holds, and the text of the newest one.
+/// How many answers the thread holds, the text of the newest one, and whether
+/// the page says it is still producing it.
+///
+/// `busy` is read here rather than in a probe of its own because it is a fact
+/// about the same moment as the text: a separate read would describe a
+/// different instant, and the two would disagree exactly when it matters.
+///
+/// It has two halves, and both are the page's own statements. A visible stop
+/// control means the page is working now. A turn whose text does not yet read
+/// as finished means the page has not said it is done - which covers the window
+/// before a stop control appears, where a turn is demonstrably not finished and
+/// nothing on the page says so.
 pub fn ReadAnswers(Selectors:&Selectors) -> String {
+	// An empty `done` is not a pattern that matches nothing: it is the caller
+	// saying the product has no terminal marker, which turns the check off
+	// rather than making every turn look unfinished.
+	let Pattern = if Selectors.Done.trim().is_empty() {
+		"null".to_string()
+	} else {
+		format!("new RegExp({})", Literal(&Selectors.Done))
+	};
 	format!(
-		"(() => {{\n\tconst Answers = [...document.querySelectorAll({})];\n\tif (Answers.length === 0) return {{ \
-		 count: 0, text: \"\" }};\n\tconst Last = Answers[Answers.length - 1];\n\treturn {{ count: Answers.length, \
-		 text: (Last.innerText || \"\").trim() }};\n}})()",
-		Literal(&Selectors.Answer)
+		"(() => {{\n	const Answers = [...document.querySelectorAll({})];\n	const Stopping = [...document.querySelectorAll({})].some((Control) => \
+		 Control.getClientRects().length > 0 && Control.disabled !== true);\n	const Pattern = {};\n	const Unfinished = (Answer) => {{\n		if \
+		 (Pattern === null) return false;\n		const Turn = {} === '' ? Answer : Answer.closest({});\n		if (Turn === null) return true;\n		return !Pattern.test((Turn.innerText || \
+		 \"\").trim());\n	}};\n	if (Answers.length === 0) return {{ count: 0, text: \"\", busy: Stopping }};\n	const Last = \
+		 Answers[Answers.length - 1];\n	return {{ count: Answers.length, text: (Last.innerText || \"\").trim(), busy: Stopping || Unfinished(Last) }};\n}})()",
+		Literal(&Selectors.Answer),
+		Literal(&Selectors.Busy),
+		Pattern,
+		Literal(&Selectors.Turn),
+		Literal(&Selectors.Turn)
 	)
 }
 

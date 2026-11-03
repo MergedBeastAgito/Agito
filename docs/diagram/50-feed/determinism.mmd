@@ -1,0 +1,18 @@
+---
+title: Feed - why the batches must be deterministic
+line9:
+  theme: boardroom
+---
+flowchart LR
+  T(["the same tree"]):::host
+  B1[("batch 1, run A")]:::store
+  B2[("batch 1, run B")]:::store
+  C{"identical bytes?"}:::host
+  OK["a batch can be compared between runs"]:::host
+  X["a batch is a one-off nobody can diff"]:::fail
+  T ==> B1
+  T ==> B2
+  B1 ==> C
+  B2 ==> C
+  C ==>|"yes"| OK
+  C -.->|"no"| X

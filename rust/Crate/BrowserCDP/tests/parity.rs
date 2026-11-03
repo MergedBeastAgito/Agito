@@ -29,7 +29,7 @@ use std::{
 };
 
 use AgenticBrowserCDP::{
-	Browse, Create, Error, Launcher, OpenOptions, Options, Ownership, Report, Target, Transport,
+	Browse, Create, Error, Launcher, OpenOptions, Options, Ownership, PageWant, Report, Target, Transport,
 };
 use AgenticRuntime::{BlockOn, Call, Cancellation, Clock, FutureBox, Never, Pace, Signal};
 use serde_json::{Map, Value, json};
@@ -40,6 +40,8 @@ type Effects = Arc<Mutex<Vec<String>>>;
 /// One scripted page connection.
 struct FakeTransport {
 	Endpoint: String,
+	/// Where the scripted page says it is.
+	Url: String,
 	Closed: AtomicBool,
 	/// `answer`, `hang`, `throw` or `dead`.
 	Behaviour: Mutex<String>,
@@ -57,6 +59,7 @@ impl FakeTransport {
 		let State = Fixture.get("transport").cloned().unwrap_or(Value::Null);
 		Self {
 			Endpoint,
+			Url: "https://example.test/".to_string(),
 			Closed: AtomicBool::new(bool_at(&State, &["closed"]).unwrap_or(false)),
 			Behaviour: Mutex::new(string_at(&State, &["behaviour"]).unwrap_or_else(|| "answer".to_string())),
 			Answer: Mutex::new(State.get("answer").cloned().unwrap_or(Value::Null)),
@@ -89,6 +92,8 @@ impl FakeTransport {
 
 impl Transport for FakeTransport {
 	fn Endpoint(&self) -> &str { &self.Endpoint }
+
+	fn Url(&self) -> &str { &self.Url }
 
 	fn Closed(&self) -> bool { self.Closed.load(Ordering::SeqCst) }
 
@@ -203,7 +208,7 @@ impl Launcher for FakeLauncher {
 	fn Attach<'a>(
 		&'a self,
 		Endpoint: &'a str,
-		_Url: &'a str,
+		_Want: PageWant<'a>,
 		_Call: Call,
 	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>> {
 		self.Effects.lock().unwrap().push(format!("attach:{Endpoint}"));

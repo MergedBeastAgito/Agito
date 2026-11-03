@@ -29,12 +29,28 @@ use serde_json::Value;
 /// The chat driver's page, served by the browser substrate.
 pub struct Page {
 	Browse:Arc<dyn BrowserBrowse>,
+	/// Where to attach, when the caller wants a browser it did not start.
+	Attach:Option<String>,
+	/// Which page to bind on that browser, when it is not a new one.
+	Bind:Option<String>,
 	/// What each chat target was bound to, by URL.
 	Held:Mutex<HashMap<String, BrowserTarget>>,
 }
 
-/// Bind the chat driver's `Page` to a browser.
-pub fn Create(Browse:Arc<dyn BrowserBrowse>) -> Page { Page { Browse, Held:Mutex::new(HashMap::new()) } }
+/// Bind the chat driver's `Page` to a browser this session launches.
+pub fn Create(Browse:Arc<dyn BrowserBrowse>) -> Page {
+	Page { Browse, Attach:None, Bind:None, Held:Mutex::new(HashMap::new()) }
+}
+
+/// Bind the chat driver's `Page` to a browser somebody else owns, and to the
+/// page `Bind` names when it is given.
+///
+/// Attaching without a bind opens a page in that browser; attaching with one
+/// drives the page that is already there, which is the difference between a
+/// test run and a conversation with a tab a person is looking at.
+pub fn Attached(Browse:Arc<dyn BrowserBrowse>, Endpoint:impl Into<String>, Bind:Option<String>) -> Page {
+	Page { Browse, Attach:Some(Endpoint.into()), Bind, Held:Mutex::new(HashMap::new()) }
+}
 
 impl Page {
 	fn Lock(&self) -> MutexGuard<'_, HashMap<String, BrowserTarget>> {
@@ -57,7 +73,12 @@ fn Classify(Why:BrowserError) -> Failure {
 impl ChatPage for Page {
 	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
 		Box::pin(async move {
-			let Target = self.Browse.Open(Url, OpenOptions::Launch(Call)).await.map_err(Classify)?;
+			let Options = match (&self.Attach, &self.Bind) {
+				(Some(Endpoint), Some(Key)) => OpenOptions::Existing(Endpoint.clone(), Key.clone(), Call),
+				(Some(Endpoint), None) => OpenOptions::Attach(Endpoint.clone(), Call),
+				(None, _) => OpenOptions::Launch(Call),
+			};
+			let Target = self.Browse.Open(Url, Options).await.map_err(Classify)?;
 			self.Lock().insert(Target.Url.clone(), Target.clone());
 			Ok(Target { Url:Target.Url })
 		})

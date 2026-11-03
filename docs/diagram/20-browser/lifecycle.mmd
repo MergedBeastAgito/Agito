@@ -1,0 +1,23 @@
+---
+title: Browser - attach or launch, and what dispose may do
+line9:
+  theme: boardroom
+---
+flowchart TD
+  UNBOUND["Unbound<br>no endpoint, no process"]:::host
+  LAUNCHED["Launched<br>we own the process"]:::host
+  ATTACHED["Attached<br>somebody else owns it"]:::host
+  LIVE["Live<br>the debug socket answers"]:::host
+  EVALUATED["Evaluated<br>evaluate(expression) returned"]:::host
+  UNAVAILABLE["Unavailable<br>no executable, or no endpoint"]:::fail
+  DISPOSED["Disposed"]:::host
+  UNBOUND ==>|"open(url), no endpoint"| LAUNCHED
+  UNBOUND ==>|"open(url) with attachTo"| ATTACHED
+  LAUNCHED ==>|"debug socket found"| LIVE
+  ATTACHED ==>|"/json/version answers"| LIVE
+  UNBOUND -.->|"no executable"| UNAVAILABLE
+  LIVE -.->|"evaluate (expression)"| EVALUATED
+  EVALUATED -->|"the answer returns"| LIVE
+  LIVE -->|"dispose()"| DISPOSED
+  ATTACHED -->|"dispose() only disconnects"| DISPOSED
+  LAUNCHED -->|"dispose() closes the process"| DISPOSED

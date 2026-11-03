@@ -1,0 +1,13 @@
+---
+title: Database - a generation, appended and never updated
+line9:
+  theme: boardroom
+---
+flowchart TD
+  UNBOUND["Unbound<br>no manifest bound"]:::store
+  BOUND["Bound<br>one manifest digest"]:::store
+  SUPERSEDED["Superseded<br>an older digest"]:::store
+  REFUSED["Refused<br>a digest naming an undeclared capability"]:::fail
+  UNBOUND ==>|"bind(manifest digest)"| BOUND
+  BOUND -.->|"bind(a newer digest)"| SUPERSEDED
+  UNBOUND -.->|"a digest naming an undeclared capability"| REFUSED

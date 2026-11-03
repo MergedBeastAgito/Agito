@@ -1,0 +1,9 @@
+---
+title: Rings - the authority that should disappear
+line9:
+  theme: boardroom
+---
+flowchart TD
+  RT["runtime<br>holds lease state in the process"]:::host
+  DB[("the database<br>holds the lease, the fence, the generation")]:::store
+  RT -.->|"should not exist as an authority"| DB

@@ -1,0 +1,17 @@
+---
+title: Chat - queued and interrupted, the states nobody reports
+line9:
+  theme: boardroom
+---
+flowchart LR
+  SENT["Sent"]:::host
+  QUEUED["Queued<br>the product queues the question"]:::hook
+  STREAMING["Streaming"]:::host
+  INTERRUPTED["Interrupted<br>the product stops mid-answer"]:::hook
+  SETTLED["Settled<br>resumed"]:::host
+  REFUSED["Refused<br>never resumed"]:::fail
+  SENT ==>|"the product queues the question"| QUEUED
+  QUEUED ==>|"after a wait nobody reports"| STREAMING
+  STREAMING -.->|"the product stops mid-answer"| INTERRUPTED
+  INTERRUPTED ==>|"resumed"| SETTLED
+  INTERRUPTED -.->|"never resumed"| REFUSED

@@ -14,16 +14,25 @@ use crate::Struct::Port::{Source, Step};
 
 /// One read of the thread.
 ///
-/// A thread with no answers is `{ Count: 0, Text: "" }`, so "there is no answer
-/// yet" and "the page did not answer the question I asked" are different
-/// values. Folding them together would let a provider's wrong shape look like
-/// an empty thread and cost the caller its whole deadline before `not-ready`.
+/// A thread with no answers is `{ Count: 0, Text: "", Busy: false }`, so "there
+/// is no answer yet" and "the page did not answer the question I asked" are
+/// different values. Folding them together would let a provider's wrong shape
+/// look like an empty thread and cost the caller its whole deadline before
+/// `not-ready`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Answers {
 	/// How many answers the thread holds.
 	pub Count:f64,
 	/// The last answer's text, trimmed; empty when there is none.
 	pub Text:String,
+	/// Whether the page says it is still producing the answer.
+	///
+	/// This is the page's own statement, not an inference from its text: a
+	/// pause between tokens, a reasoning step and a slow code block all leave
+	/// the text unchanged while the answer is demonstrably unfinished. A page
+	/// that offers no such signal answers `false`, which is the honest reading
+	/// ("nothing says it is still working") and leaves the text rule in charge.
+	pub Busy:bool,
 }
 
 /// A value as text: as it is when it is text, rendered when it is not.
@@ -65,7 +74,11 @@ pub fn DescribeText(Value:Option<&str>) -> String {
 pub fn AsAnswers(Value:&Value) -> Option<Answers> {
 	let Object = Value.as_object()?;
 	let Count = Object.get("count")?.as_f64()?;
-	Some(Answers { Count, Text:TextOf(Object.get("text")) })
+	Some(Answers {
+		Count,
+		Text:TextOf(Object.get("text")),
+		Busy:Object.get("busy").and_then(Value::as_bool).unwrap_or(false),
+	})
 }
 
 /// The steps the page reported, or `None` when it reported something else.

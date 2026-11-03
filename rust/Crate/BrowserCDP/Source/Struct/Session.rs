@@ -129,8 +129,17 @@ impl Browse for Session {
 				));
 			}
 			let Work = match &Options.AttachTo {
+				None if Options.Page.is_some() => {
+					return Err(Error::Unavailable(
+						"a page can only be bound on a browser this session attached to",
+						"the options asked for an existing page but named no endpoint",
+					));
+				},
 				None => self.Launcher.Launch(Url, Options.Call.clone()),
-				Some(Endpoint) => self.Launcher.Attach(Endpoint, Url, Options.Call.clone()),
+				Some(Endpoint) => {
+					self.Launcher
+						.Attach(Endpoint, Options.Want(Url), Options.Call.clone())
+				},
 			};
 			let Transport = match Bound(Work, &Options.Call, self.Pace.as_ref()).await {
 				Ok(Ok(Transport)) => Transport,
@@ -148,7 +157,11 @@ impl Browse for Session {
 					));
 				},
 			};
-			let Target = Target { Url:Url.to_string(), Ws:Transport.Endpoint().to_string(), Ownership };
+			let Target = Target {
+				Url:Transport.Url().to_string(),
+				Ws:Transport.Endpoint().to_string(),
+				Ownership,
+			};
 			if Transport.Closed() {
 				if let Some(Why) = self.Release(Transport.clone(), Ownership).await {
 					self.ReportQuietly(&Target, &Why);

@@ -46,14 +46,29 @@ pub struct OpenOptions {
 	pub Call:Call,
 	/// Attach to a browser already listening here instead of launching one.
 	pub AttachTo:Option<String>,
+	/// Bind the page that browser already has, named by target id or by a URL
+	/// prefix, instead of opening a new one.
+	///
+	/// Only meaningful with `AttachTo`: a browser this session launched has no
+	/// page to bind, and asking for one is refused rather than silently
+	/// opening a tab.
+	pub Page:Option<String>,
 }
 
 impl OpenOptions {
 	/// Open a new browser, bounded by `Call`.
-	pub fn Launch(Call:Call) -> Self { Self { Call, AttachTo:None } }
+	pub fn Launch(Call:Call) -> Self { Self { Call, AttachTo:None, Page:None } }
 
-	/// Attach to the browser at `Endpoint`, bounded by `Call`.
-	pub fn Attach(Endpoint:impl Into<String>, Call:Call) -> Self { Self { Call, AttachTo:Some(Endpoint.into()) } }
+	/// Attach to the browser at `Endpoint` and open a new page in it, bounded
+	/// by `Call`.
+	pub fn Attach(Endpoint:impl Into<String>, Call:Call) -> Self {
+		Self { Call, AttachTo:Some(Endpoint.into()), Page:None }
+	}
+
+	/// Attach to the browser at `Endpoint` and bind the page it already has.
+	pub fn Existing(Endpoint:impl Into<String>, Page:impl Into<String>, Call:Call) -> Self {
+		Self { Call, AttachTo:Some(Endpoint.into()), Page:Some(Page.into()) }
+	}
 
 	/// The ownership this option implies: attaching means somebody else owns
 	/// it.
@@ -61,6 +76,14 @@ impl OpenOptions {
 		match self.AttachTo {
 			None => Ownership::Launched,
 			Some(_) => Ownership::Attached,
+		}
+	}
+
+	/// The page this option asks a launcher for.
+	pub fn Want<'a>(&'a self, Url:&'a str) -> crate::Struct::Transport::PageWant<'a> {
+		match &self.Page {
+			Some(Key) => crate::Struct::Transport::PageWant::Existing(Key),
+			None => crate::Struct::Transport::PageWant::Fresh(Url),
 		}
 	}
 }

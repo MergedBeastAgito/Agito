@@ -1,0 +1,31 @@
+---
+title: Rings - the crates as authority, drawn as concentric layers
+line9:
+  theme: boardroom
+---
+flowchart TD
+  subgraph Ring3["Ring 3 - composition"]
+    A["agentic<br>names concrete adapters"]:::host
+  end
+  subgraph Ring2["Ring 2 - workflows"]
+    W["agentic-workflow<br>owns the Browse to Page bridge"]:::host
+  end
+  subgraph Ring1["Ring 1 - capabilities"]
+    C["chat-driver"]:::hook
+    D["design-verification"]:::hook
+    S["skill-contract"]:::hook
+  end
+  subgraph Ring0["Ring 0 - substrate and policy"]
+    B["browser-cdp<br>effects"]:::host
+    R["runtime<br>admission and leases"]:::host
+    P["spacetime-catalog<br>the rules the database enforces"]:::store
+  end
+  A ==> W
+  A ==> B
+  A ==> R
+  W ==> C
+  W ==> D
+  W ==> S
+  C -.-> B
+  D -.-> B
+  R -.-> P

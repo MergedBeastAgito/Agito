@@ -1,0 +1,18 @@
+---
+title: Browser - the three failures, and the one that hides
+line9:
+  theme: boardroom
+---
+flowchart TD
+  OP(["an operation is issued"]):::host
+  Q{"what failed?"}:::host
+  U["browser-unavailable"]:::fail
+  N["navigation-failed"]:::fail
+  T["timeout"]:::fail
+  D["looks alive<br>no state reports it"]:::fail
+  OP ==> Q
+  Q ==>|"no socket, no executable"| U
+  Q -->|"navigation rejected"| N
+  Q -->|"deadline or caller abort"| T
+  Q -.->|"socket open, nothing answers"| D
+  D -.->|"the gap"| U

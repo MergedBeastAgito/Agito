@@ -1,0 +1,13 @@
+---
+title: Feed - the upload quota, which turns a feed into a conversation
+line9:
+  theme: boardroom
+---
+flowchart LR
+  PROMPTED["Prompted"]:::host
+  RATELIMITED["RateLimited<br>the product refuses more uploads"]:::hook
+  CONTEXTONLY["ContextOnly<br>prompt without files"]:::hook
+  SETTLED["Settled"]:::host
+  PROMPTED -.->|"the product refuses more uploads"| RATELIMITED
+  RATELIMITED ==>|"the fallback"| CONTEXTONLY
+  CONTEXTONLY ==> SETTLED

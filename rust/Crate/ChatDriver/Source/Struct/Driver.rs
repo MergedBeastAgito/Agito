@@ -62,6 +62,9 @@ use crate::{
 /// How long between two reads of an answer while it is being written.
 pub const DefaultPoll:Duration = Duration::from_millis(250);
 
+
+
+
 /// A release that has not finished in this long is reported, not waited on.
 pub const DefaultDisposeBudget:Duration = Duration::from_secs(5);
 
@@ -319,8 +322,21 @@ impl Driver {
 				));
 			}
 			let Read = self.ReadAnswers("answer", Target, Call, Budget).await?;
-			let Current = if Read.Count > Before.Count { Some(Read.Text.as_str()) } else { None };
-			if Progress.Observe(Current) {
+			// A new turn is recognised by identity, not only by count: a long
+			// thread is virtualised, so the oldest turn unmounts as the newest
+			// arrives and the count stops growing while the answer is plainly
+			// there. A text that differs from the one the thread held before
+			// the question is the same fact read a more durable way.
+			let Fresh = Read.Count > Before.Count || Read.Text != Before.Text;
+			let Current = if Fresh { Some(Read.Text.as_str()) } else { None };
+			// A page that says it is still producing the answer has not
+			// finished, whatever its text is doing: a pause between tokens, a
+			// reasoning step and a slow code block all leave the text unchanged
+			// while the answer is demonstrably incomplete. So a busy read
+			// resets the confirmations instead of advancing them.
+			if Read.Busy {
+				Progress = Settlement::Empty;
+			} else if Progress.Observe(Current) {
 				break Progress.Text().unwrap_or_default().to_string();
 			}
 			let Wait = self.Options.Poll.min(Call.Remaining(self.Pace.as_ref()));

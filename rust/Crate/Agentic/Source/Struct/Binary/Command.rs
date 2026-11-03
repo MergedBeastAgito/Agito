@@ -37,7 +37,7 @@ pub enum Verb {
 	},
 	/// Open a page and evaluate one expression in it.
 	Browse {
-		/// The page to open.
+		/// The page to open. With `--bind` it is only a fallback.
 		#[arg(long)]
 		Url:String,
 		/// The expression to evaluate.
@@ -46,13 +46,17 @@ pub enum Verb {
 		/// Attach to a browser already listening here instead of launching one.
 		#[arg(long)]
 		Attach:Option<String>,
+		/// Bind the page the attached browser already has, by target id or URL
+		/// prefix, instead of opening a new one.
+		#[arg(long)]
+		Bind:Option<String>,
 		/// The whole operation's budget, in milliseconds.
 		#[arg(long, default_value_t = 30_000)]
 		Timeout:u64,
 	},
 	/// Ask a chat product one question and print the answer once it settles.
 	Chat {
-		/// The chat product's URL.
+		/// The chat product's URL. With `--bind` it is only a fallback.
 		#[arg(long)]
 		Url:String,
 		/// The model the answer must come from, as the page labels it.
@@ -61,6 +65,16 @@ pub enum Verb {
 		/// The question, sent as written.
 		#[arg(long)]
 		Question:String,
+		/// Attach to a browser already listening here instead of launching one.
+		#[arg(long)]
+		Attach:Option<String>,
+		/// Bind the page the attached browser already has, by target id or URL
+		/// prefix, instead of opening a new one.
+		#[arg(long)]
+		Bind:Option<String>,
+		/// A JSON file of selector overrides, merged over the defaults.
+		#[arg(long)]
+		Selectors:Option<String>,
 		/// The whole call's budget, in milliseconds.
 		#[arg(long, default_value_t = 120_000)]
 		Timeout:u64,

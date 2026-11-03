@@ -1,0 +1,152 @@
+---
+name: chat-research
+description: Use when a web chat UI must answer a research question from Rust. Ask, settle, read.
+version: 1.0.0
+license: MIT
+platforms: [macos, linux]
+metadata:
+    hermes:
+        tags: [cdp, rust, research, chat-ui, perplexity, chat-driver]
+---
+
+# Chat Research
+
+Ask a web chat product a question and read the answer once the page says it has finished. The
+capability is `agentic-chat-driver`; the verb is `agentic chat`.
+
+There is no API to call. The product is a composer, a send control and a block of text, so the
+driver's rules are about what a page is allowed to claim.
+
+---
+
+## The call
+
+```sh
+rust/Target/debug/agentic chat \
+  --url https://example.test/ \
+  --model '<the label the page shows>' \
+  --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
+  [--bind <target-id>] \
+  [--selectors <file.json>] \
+  --question '<text>' \
+  --timeout 300000
+```
+
+The result is `{"url", "text", "model", "mode", "trace", "sources"}`. `--bind` drives the tab a
+person is already looking at; without it the call opens a page of its own. Use a bind for research
+that belongs in an existing thread, and a new page for a probe you intend to throw away.
+
+---
+
+## Four preconditions, refused rather than assumed
+
+**The mode is a precondition.** The composer's toggle is read before anything is typed. Not `search`
+means it is pressed once, read again, and then refused as `wrong-mode` - nothing was sent. One
+press, not a loop: a toggle that does not move on the first press will not move on the fifth, and a
+retry loop spends the caller's deadline proving it.
+
+**The model is a precondition.** The label is compared to `--model` before anything is typed, and a
+mismatch is `wrong-model`. A driver that cannot say which model answered cannot defend its output.
+
+**Completion is a rule, not a sleep.** See below.
+
+**A collapsed answer is `truncated`.** The control that hides the rest of an answer is looked for
+inside the newest answer once it has settled, because at that point the text in the DOM is
+demonstrably not all of it.
+
+Everything else the page does that is not one of those four is `not-ready`, with the cause in the
+detail. The manifest has four codes and the driver does not invent a fifth.
+
+---
+
+## Completion: the page's own signal, then stable text
+
+Text stability alone false-settles. A pause between tokens, a reasoning step and a slow code block
+all leave the text unchanged while the answer is demonstrably unfinished, and a driver that only
+counts stable reads returns a partial answer that looks whole.
+
+So `ReadAnswers` returns `{count, text, busy}` in one read, where `busy` is the page's own statement
+that it is still producing - a visible stop or cancel control. The rule is:
+
+- a **busy** read resets the confirmations and confirms nothing;
+- otherwise three consecutive reads with no change settle the answer.
+
+`busy` is read in the same expression as the text, not in a probe of its own: a separate read
+describes a different instant, and the two disagree exactly when it matters.
+
+**The new turn is identified by identity, not by count.** A long thread is virtualised, so the
+oldest turn unmounts as the newest arrives and the answer count stops growing while the answer is
+plainly there. The newest answer counts as new when the count grew **or** its text differs from what
+the thread held before the question was typed.
+
+The honest limit: `busy` false is not proof of success. A cancelled or failed turn also stops
+generating. The driver's own turn identity and deadline are what distinguish those, and a caller
+that needs certainty reads the trace and the text rather than trusting the settle alone.
+
+---
+
+## Typing is an edit, not a property write
+
+A contenteditable editor keeps its own document model. Writing `innerText` changes the DOM and
+leaves the send control disabled, because no edit happened - the symptom is
+`not-ready: the send control is disabled after the question was typed`.
+
+`TypeQuestion` therefore performs a real edit: focus, select the contents, and
+`document.execCommand('insertText', …)`, falling back to a written `innerText` plus an `input` event
+only when the browser refuses. A `textarea` or `input` is set through its prototype's own value
+setter, so a framework tracking the value sees the change.
+
+The CDP-native alternative is `Input.insertText` after focusing the editable host. It is the better
+primitive for an editor that resists `execCommand`, and it is the next step this substrate does not
+yet expose.
+
+---
+
+## Ask, then weigh
+
+- **Over-supply, under-read.** Send the real inventory - names, paths, counts - and read only the
+  part where the verdict lands. The remote model's context is cheap; yours is not.
+- **A long answer is not a truncated one.** The tell is the text, not a `Read more` control, which
+  is a display clamp over text already in the DOM.
+- **Ask for the answer, not a format.** Impose a shape only for status you will act on mechanically.
+- **An answer is a hypothesis until the line it names is read.** A chat product sees the web and
+  other repositories, not your working tree or your commits.
+- **Make it argue against itself.** Paste the artefact rather than a description, ask for the
+  strongest case against its own advice, and ask where the design is worse. A concession with no
+  downside is a sales pitch.
+
+---
+
+## One question per thread, and say which tab answered
+
+A follow-up in an existing thread carries that thread's history, so it does not have to restate
+facts a fresh thread would need. A second question dropped into a saturated thread comes back
+truncated, because the answer budget is shared with everything already in it.
+
+Report the mode, the model and the tab. A reader who cannot tell which of the three produced an
+answer cannot weigh it.
+
+---
+
+## Reference
+
+- `Reference/Index.md` - the file list for this skill.
+- `Reference/Perplexity.md` - the verified selectors and DOM facts for the reference product, and
+  the two places its markup disagrees with a naive reading.
+
+---
+
+## Claim → test
+
+| Claim                                            | Test                                                                                                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A question is answered and read back             | `agentic chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                   |
+| The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                           |
+| The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                    |
+| A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                               |
+| Typing produces a real edit                      | after a failed send, the composer holds the question text and the send control is enabled                                                           |
+| A settled answer is the answer, not the question | the returned `text` is not equal to `--question`                                                                                                    |
+| A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                       |
+| A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                     |
+| A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM |
+| A settled answer equals the page's               | compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                       |

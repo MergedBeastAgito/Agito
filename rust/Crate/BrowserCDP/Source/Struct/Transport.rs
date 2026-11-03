@@ -26,6 +26,9 @@ use crate::Struct::Error::Error;
 pub trait Transport: Send + Sync {
 	/// The endpoint this transport is bound to; it becomes `Target::Ws`.
 	fn Endpoint(&self) -> &str;
+	/// The URL the page is actually on, which is not always the URL a caller
+	/// asked for: a page bound by target id keeps whatever it was showing.
+	fn Url(&self) -> &str;
 	/// True once the connection is gone. A closed transport is dead, not slow.
 	fn Closed(&self) -> bool;
 	/// Ask the page one expression and return what it produced.
@@ -36,13 +39,29 @@ pub trait Transport: Send + Sync {
 	fn Detach(&self) -> FutureBox<'_, ()>;
 }
 
+/// What an attach asks for: a page that already exists, or a new one.
+///
+/// Attaching to a browser and then opening a page in it is not the same
+/// operation as binding the page a person is already looking at. The first
+/// leaves a tab behind that nobody asked for; the second is the only way to act
+/// "on this tab". So the difference is a value the caller states, not a
+/// boolean a provider guesses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PageWant<'a> {
+	/// A new page at this URL.
+	Fresh(&'a str),
+	/// The page already open whose target id, or failing that whose URL
+	/// starts with this, is this.
+	Existing(&'a str),
+}
+
 /// Where a transport comes from: an existing browser, or a new one.
 pub trait Launcher: Send + Sync {
-	/// Attach to a browser already listening at `Endpoint`, bound to `Url`.
+	/// Attach to a browser already listening at `Endpoint`, bound to `Want`.
 	fn Attach<'a>(
 		&'a self,
 		Endpoint:&'a str,
-		Url:&'a str,
+		Want:PageWant<'a>,
 		Call:Call,
 	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>>;
 	/// Start a browser and open `Url` in it.

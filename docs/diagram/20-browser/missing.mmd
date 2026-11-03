@@ -1,0 +1,14 @@
+---
+title: Browser - the dead-but-open socket and the reclaimed page
+line9:
+  theme: boardroom
+---
+flowchart LR
+  LIVE["Live"]:::host
+  STALLED["Stalled<br>socket open, no reply within the probe window"]:::hook
+  UNAVAILABLE["Unavailable<br>the probe timed out"]:::fail
+  RECLAIMED["Reclaimed<br>another client attached to the same page"]:::hook
+  LIVE ==>|"no reply within the probe window"| STALLED
+  STALLED ==>|"the probe answers"| LIVE
+  STALLED -.->|"the probe times out"| UNAVAILABLE
+  LIVE -.->|"another client attached to the same page"| RECLAIMED

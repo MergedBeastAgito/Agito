@@ -11,7 +11,13 @@
 use std::sync::Arc;
 
 use AgenticBrowserCDP::{Browse, Chrome, ChromeOptions, Create as CreateSession, Options, Report, Tokio};
-use AgenticChatDriver::{Create as CreateChat, Driver, Options as ChatOptions, Page as ChatPage};
+use AgenticChatDriver::{
+	Create as CreateChat,
+	Driver,
+	Options as ChatOptions,
+	Page as ChatPort,
+	Selectors,
+};
 use AgenticDesignVerification::{Create as CreateVerify, Verifier};
 use AgenticWorkflow::Struct::Binding::{Measure, Page};
 
@@ -31,10 +37,31 @@ pub fn Browser(Chrome:ChromeOptions) -> Arc<dyn Browse> {
 	))
 }
 
+/// Where a chat driver's page comes from, and how it is read.
+pub struct ChatSpec {
+	/// The chat product's URL. With a bind it is only a fallback: the page
+	/// keeps whatever URL it was already showing.
+	pub Url:String,
+	/// Attach to this endpoint instead of launching a browser.
+	pub Attach:Option<String>,
+	/// Bind this page on the attached browser instead of opening one.
+	pub Bind:Option<String>,
+	/// How the page is read.
+	pub Selectors:Selectors,
+}
+
 /// A chat driver over a browser, with the workflow's page binding installed.
-pub fn Chat(Browse:Arc<dyn Browse>, Url:impl Into<String>) -> Driver {
-	let Page = Arc::new(Page::Create(Browse));
-	CreateChat(Page as Arc<dyn ChatPage>, ChatOptions::New(Url), Arc::new(Tokio))
+///
+/// Three cases, stated rather than inferred: no endpoint launches a browser this
+/// session owns; an endpoint with no bind opens a page in somebody else's
+/// browser; an endpoint with a bind drives the page that is already there.
+pub fn Chat(Browse:Arc<dyn Browse>, Spec:ChatSpec) -> Driver {
+	let Page = match &Spec.Attach {
+		Some(Endpoint) => Page::Attached(Browse, Endpoint.clone(), Spec.Bind.clone()),
+		None => Page::Create(Browse),
+	};
+	let Options = ChatOptions { Selectors:Spec.Selectors, ..ChatOptions::New(Spec.Url) };
+	CreateChat(Arc::new(Page) as Arc<dyn ChatPort>, Options, Arc::new(Tokio))
 }
 
 /// A design verifier over a browser, with the workflow's measurement binding

@@ -1,0 +1,19 @@
+---
+title: Runtime - the states nobody has built
+line9:
+  theme: boardroom
+---
+flowchart TD
+  FREE["Free"]:::host
+  CLAIMED["Claimed"]:::host
+  DISPATCHED["Dispatched<br>the effect started"]:::hook
+  AMBIGUOUS["Ambiguous<br>the lease expired mid-flight"]:::hook
+  RECONCILED["Reconciled<br>the destination records what landed"]:::hook
+  QUARANTINED["Quarantined<br>the resource is held until a human rules"]:::hook
+  FREE ==>|"claim"| CLAIMED
+  CLAIMED ==>|"the effect started"| DISPATCHED
+  DISPATCHED ==>|"the lease expired mid-flight"| AMBIGUOUS
+  AMBIGUOUS ==>|"the destination records what landed"| RECONCILED
+  AMBIGUOUS -.->|"the resource is held until a human rules"| QUARANTINED
+  RECONCILED -->|"release"| FREE
+  QUARANTINED -->|"release"| FREE

@@ -37,20 +37,79 @@ pub struct Selectors {
 	/// One cited source: an anchor whose `href` is the citation, searched for
 	/// *inside* the newest answer, for the same reason as `Trace`.
 	pub Sources:String,
+	/// The control that means the page is still producing the answer - a stop
+	/// or a cancel control.
+	///
+	/// Searched for across the whole page, not inside the answer, because a
+	/// product keeps it in the composer: it is a fact about the turn, not about
+	/// the text the turn has produced so far.
+	pub Busy:String,
+	/// The answer's own turn container, when the product has one.
+	///
+	/// Searched for as an ancestor of the answer, so a product that wraps a turn
+	/// (body, steps, duration, source chips) can be asked what the *turn* says
+	/// rather than what its body says.
+	pub Turn:String,
+	/// What the turn's text reads once the turn is over, as a pattern.
+	///
+	/// This is the positive half of completion: `Busy` says the page is still
+	/// working, and this says the page has finished. They are not each other's
+	/// negation - a cancelled turn is neither.
+	///
+	/// Empty by default, and deliberately so. A header that reads like a
+	/// completion marker is often a duration label that is present while the
+	/// answer streams, and a pattern that matches it makes every turn look
+	/// finished from its first token - the exact false settle the check exists
+	/// to prevent. Enable it only after watching a live turn and confirming the
+	/// text appears at the end rather than the start.
+	pub Done:String,
 }
 
 /// A chat product whose composer footer names its mode and its model.
 pub fn DefaultSelectors() -> Selectors {
 	Selectors {
-		Mode:"[data-command-menu-control]".to_string(),
-		Model:"[data-testid='model-selector'], [aria-label='Model']".to_string(),
+		Mode:"[data-command-menu-control] button".to_string(),
+		Model:"[class*='composer-row'] button[aria-haspopup='dialog'], [data-appearance='framed'] button[aria-haspopup='dialog']".to_string(),
 		Composer:"textarea, [contenteditable='true']".to_string(),
 		Submit:"[data-testid='submit-button'], button[aria-label='Submit']".to_string(),
-		Answer:"[data-testid='answer'], [role='article']".to_string(),
+		Answer:".prose[data-renderer='lm'], [data-testid='answer'], [role='article']".to_string(),
 		Collapse:"button".to_string(),
 		Trace:"[data-testid='trace-step'], [role='listitem']".to_string(),
 		Sources:"a[href^='http']".to_string(),
+		Busy:"button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i]".to_string(),
+		Turn:String::new(),
+		Done:String::new(),
 	}
+}
+
+/// The defaults, with whichever of these keys the caller stated replaced.
+///
+/// A merge rather than a whole object, because a caller changing one selector
+/// should not have to restate the seven it is happy with, and because a key that
+/// is absent must keep the default instead of becoming an empty selector that
+/// matches everything.
+///
+/// The keys are `mode`, `model`, `composer`, `submit`, `answer`, `collapse`,
+/// `trace`, `sources`, `busy`, `turn` and `done`.
+pub fn Merged(Overrides:&serde_json::Value) -> Selectors {
+	let mut Base = DefaultSelectors();
+	let Read = |Key:&str, Field:&mut String| {
+		if let Some(Text) = Overrides.get(Key).and_then(|Value| Value.as_str()) {
+			*Field = Text.to_string();
+		}
+	};
+	Read("mode", &mut Base.Mode);
+	Read("model", &mut Base.Model);
+	Read("composer", &mut Base.Composer);
+	Read("submit", &mut Base.Submit);
+	Read("answer", &mut Base.Answer);
+	Read("collapse", &mut Base.Collapse);
+	Read("trace", &mut Base.Trace);
+	Read("sources", &mut Base.Sources);
+	Read("busy", &mut Base.Busy);
+	Read("turn", &mut Base.Turn);
+	Read("done", &mut Base.Done);
+	Base
 }
 
 impl Default for Selectors {

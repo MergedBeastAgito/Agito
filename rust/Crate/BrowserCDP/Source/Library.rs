@@ -38,6 +38,6 @@ pub use crate::{
 		Pace::Tokio,
 		Port::{Browse, OpenOptions, Ownership, Target},
 		Session::{Create, Options, Report, Session},
-		Transport::{Launcher, Transport},
+		Transport::{Launcher, PageWant, Transport},
 	},
 };

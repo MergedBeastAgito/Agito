@@ -1,0 +1,23 @@
+---
+title: Browser - identity, which the review says is conflated
+line9:
+  theme: boardroom
+---
+flowchart LR
+  URL(["a URL"]):::host
+  EP(["an endpoint"]):::host
+  T1["target<br>page handle"]:::host
+  T2["browser handle"]:::host
+  S["session"]:::host
+  O{"ownership?"}:::host
+  L["may close"]:::host
+  A["may only disconnect"]:::host
+  U["the user's browser<br>same endpoint, different identity"]:::fail
+  URL ==> T1
+  EP ==> T2
+  T1 ==> S
+  T2 ==> S
+  S ==> O
+  O ==>|"launched"| L
+  O -->|"attached"| A
+  U -.->|"collides with"| T2

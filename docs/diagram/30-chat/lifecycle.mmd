@@ -1,0 +1,27 @@
+---
+title: Chat - the ask, and the three preconditions read before sending
+line9:
+  theme: boardroom
+---
+flowchart TD
+  IDLE["Idle<br>nothing typed"]:::host
+  MODECHECKED["ModeChecked<br>the composer's toggle was read"]:::host
+  MODEFIXED["ModeFixed<br>Search pressed, re-read"]:::host
+  MODELCHECKED["ModelChecked<br>the model label was read"]:::host
+  SENT["Sent<br>the composer empties"]:::host
+  STREAMING["Streaming<br>answer count above the baseline"]:::host
+  SETTLED["Settled<br>text unchanged for three reads"]:::host
+  COMPLETE["Complete"]:::host
+  TRUNCATED["Truncated<br>a Read more control sits over the answer"]:::fail
+  REFUSED["Refused<br>not-ready, wrong-mode, wrong-model, truncated"]:::fail
+  IDLE ==>|"read the composer's toggle"| MODECHECKED
+  MODECHECKED ==>|"press Search, re-read"| MODEFIXED
+  MODECHECKED -.->|"wrong-mode, nothing sent"| REFUSED
+  MODEFIXED ==>|"read the model label"| MODELCHECKED
+  MODELCHECKED -.->|"wrong-model, nothing sent"| REFUSED
+  MODELCHECKED ==>|"type, submit"| SENT
+  SENT ==>|"answer count exceeds the baseline"| STREAMING
+  STREAMING ==>|"text unchanged for three reads"| SETTLED
+  STREAMING -.->|"deadline hit, partial text not returned"| REFUSED
+  SETTLED -.->|"a Read more control sits over the answer"| TRUNCATED
+  SETTLED -->|"no control over the answer"| COMPLETE

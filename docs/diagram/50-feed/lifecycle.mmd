@@ -1,0 +1,26 @@
+---
+title: Feed - bundle, attach, prompt, observe
+line9:
+  theme: boardroom
+---
+flowchart TD
+  COLLECTED["Collected<br>bundle.mjs walked the tree"]:::host
+  BATCHED[("Batched<br>deterministic split, 30 files or 200 KB")]:::store
+  LEFTOUT["LeftOut<br>too large, or excluded"]:::fail
+  ATTACHED["Attached<br>attach.mjs set the hidden input"]:::host
+  CONFIRMED["Confirmed<br>the page shows the name back"]:::host
+  REFUSED["Refused<br>the input does not accept the extension"]:::fail
+  PROMPTED["Prompted<br>cdp-send, mode asserted"]:::host
+  WATCHING["Watching<br>observe.mjs"]:::host
+  SETTLED["Settled<br>quiet for N reads after a change"]:::host
+  TIMEDOUT["TimedOut<br>the deadline"]:::fail
+  COLLECTED ==>|"deterministic split, 30 files or 200 KB"| BATCHED
+  COLLECTED -.->|"too large, or excluded"| LEFTOUT
+  BATCHED ==>|"attach.mjs sets the hidden input"| ATTACHED
+  ATTACHED ==>|"the page shows the name back"| CONFIRMED
+  ATTACHED -.->|"the input does not accept the extension"| REFUSED
+  CONFIRMED ==>|"cdp-send, mode asserted"| PROMPTED
+  PROMPTED ==>|"observe.mjs"| WATCHING
+  WATCHING ==>|"quiet for N reads after a change"| SETTLED
+  WATCHING -.->|"the deadline"| TIMEDOUT
+  SETTLED -->|"next batch"| BATCHED

@@ -1,0 +1,23 @@
+---
+title: Runtime - the late arrival, and the two destinations it can meet
+line9:
+  theme: boardroom
+---
+flowchart TD
+  C1(["Worker<br>claim (resource, 30s)"]):::host
+  R1(["Runtime<br>lease fenced at 7"]):::host
+  A1(["Worker<br>with_lease (lease, effect)"]):::host
+  R2(["Runtime<br>check passes, effect admitted"]):::host
+  X1(["the lease expires here"]):::host
+  P1(["Worker<br>present ticket, fence 7"]):::host
+  Q{"checks its own record?"}:::host
+  D1["Refused<br>stale fence"]:::fail
+  D2["Accepted<br>and the effect landed"]:::host
+  C1 ==> R1
+  R1 ==> A1
+  A1 ==> R2
+  R2 ==> X1
+  X1 ==> P1
+  P1 ==> Q
+  Q ==>|"yes"| D1
+  Q -->|"no, it trusts the ticket"| D2

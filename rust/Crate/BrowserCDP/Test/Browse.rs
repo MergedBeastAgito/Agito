@@ -16,6 +16,7 @@ use std::{
 
 use AgenticBrowserCDP::{
 	Browse,
+	PageWant,
 	Code,
 	Create,
 	Error,
@@ -70,6 +71,8 @@ impl Pace for TestPace {
 /// One live page, scripted.
 struct FakeTransport {
 	Endpoint:String,
+	/// What the scripted page says it is on.
+	Url:String,
 	Closed:AtomicBool,
 	Evaluations:AtomicU64,
 	Closes:AtomicU64,
@@ -90,6 +93,7 @@ impl FakeTransport {
 	fn Base(Endpoint:&str) -> Self {
 		Self {
 			Endpoint:Endpoint.to_string(),
+			Url:"https://example.test/".to_string(),
 			Closed:AtomicBool::new(false),
 			Evaluations:AtomicU64::new(0),
 			Closes:AtomicU64::new(0),
@@ -129,6 +133,8 @@ impl FakeTransport {
 
 impl Transport for FakeTransport {
 	fn Endpoint(&self) -> &str { &self.Endpoint }
+
+	fn Url(&self) -> &str { &self.Url }
 
 	fn Closed(&self) -> bool { self.Closed.load(Ordering::SeqCst) }
 
@@ -224,7 +230,7 @@ impl Launcher for FakeLauncher {
 	fn Attach<'a>(
 		&'a self,
 		_Endpoint:&'a str,
-		_Url:&'a str,
+		_Want:PageWant<'a>,
 		_Call:Call,
 	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>> {
 		self.Attaches.fetch_add(1, Ordering::SeqCst);

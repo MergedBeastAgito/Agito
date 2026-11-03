@@ -1,0 +1,12 @@
+---
+title: Rings - the ring that is missing, the destination that refuses
+line9:
+  theme: boardroom
+---
+flowchart TD
+  DB[("SpacetimeDB<br>phases, leases, generations, records")]:::store
+  E["Rust effect runner<br>no lease state of its own"]:::host
+  X["the destination<br>refuses a stale ticket where the effect lands"]:::hook
+  DB ==>|"issues a ticket"| E
+  E ==>|"presents the ticket"| X
+  X -.->|"refuses, or records the result"| DB

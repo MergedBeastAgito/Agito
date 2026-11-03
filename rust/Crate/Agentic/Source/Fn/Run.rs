@@ -16,7 +16,7 @@ use serde_json::json;
 
 use crate::{
 	Fn::{
-		Composition::{Browser, Chat as ChatOver, Design, Headless},
+		Composition::{Browser, Chat as ChatOver, ChatSpec, Design, Headless},
 		VerifyModule::{ReadinessJSON, VerifyModule},
 	},
 	Struct::{Binary::Command::Verb, Manifest::All},
@@ -70,25 +70,33 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				Ok(Lines.join("\n"))
 			}
 		},
-		Verb::Browse { Url, Expression, Attach, Timeout } => {
+		Verb::Browse { Url, Expression, Attach, Bind, Timeout } => {
 			let Browse = Browser(Headless());
 			let Call = Budget(Timeout);
-			let Options = match Attach {
-				Some(Endpoint) => OpenOptions::Attach(Endpoint, Call.clone()),
-				None => OpenOptions::Launch(Call.clone()),
+			let Options = match (Attach, Bind) {
+				(Some(Endpoint), Some(Key)) => OpenOptions::Existing(Endpoint, Key, Call.clone()),
+				(Some(Endpoint), None) => OpenOptions::Attach(Endpoint, Call.clone()),
+				(None, Some(_)) => {
+					return Err(
+						"binding an existing page needs --attach: a browser this tool launched has no page to bind"
+							.to_string(),
+					);
+				},
+				(None, None) => OpenOptions::Launch(Call.clone()),
 			};
 			let Ownership = Options.Ownership();
 			let Target = Browse
 				.Open(&Url, Options)
 				.await
-				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
+			let Bound = Target.Url.clone();
 			let Value = Browse
 				.Evaluate(&Target, &Expression, Call)
 				.await
-				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
 			Browse.Dispose(Target).await;
 			Ok(serde_json::to_string_pretty(&json!({
-				"url": Url,
+				"url": Bound,
 				"ownership": match Ownership {
 					Ownership::Launched => "launched",
 					Ownership::Attached => "attached",
@@ -97,13 +105,28 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			}))
 			.unwrap_or_else(|_| "{}".to_string()))
 		},
-		Verb::Chat { Url, Model, Question: Text, Timeout } => {
-			let Driver = ChatOver(Browser(Headless()), Url.clone());
+		Verb::Chat { Url, Model, Question: Text, Attach, Bind, Selectors: Overrides, Timeout } => {
+			let Selectors = match &Overrides {
+				Some(Path) => {
+					let Text = std::fs::read_to_string(Path).map_err(|Why| {
+						format!("the selector file {Path} could not be read: {Why}")
+					})?;
+					let Parsed:serde_json::Value = serde_json::from_str(&Text).map_err(|Why| {
+						format!("the selector file {Path} is not JSON: {Why}")
+					})?;
+					AgenticChatDriver::Struct::Selectors::Merged(&Parsed)
+				},
+				None => AgenticChatDriver::DefaultSelectors(),
+			};
+			let Driver = ChatOver(
+				Browser(Headless()),
+				ChatSpec { Url:Url.clone(), Attach, Bind, Selectors },
+			);
 			let Call = Budget(Timeout);
 			let Answer = Driver
 				.Ask(Question { Text, Mode:Mode::Search, Model }, Call)
 				.await
-				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
+				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
 			Ok(serde_json::to_string_pretty(&json!({
 				"url": Url,
 				"text": Answer.Text,

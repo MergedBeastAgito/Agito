@@ -1,0 +1,17 @@
+---
+title: Chat - the trace, which is not the answer
+line9:
+  theme: boardroom
+---
+flowchart LR
+  A["answer text"]:::host
+  T["step tree"]:::host
+  S["cited sources"]:::host
+  M["mode and model"]:::host
+  N["nothing else"]:::fail
+  R1[("the record")]:::store
+  A ==> R1
+  T ==> R1
+  S --> R1
+  M --> R1
+  N -.->|"excluded on purpose"| R1

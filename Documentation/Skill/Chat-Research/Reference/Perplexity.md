@@ -1,0 +1,100 @@
+# Perplexity: what the page actually is
+
+Every selector here was read from a live tab with
+`agentic browse --bind <target-id> --expression '<probe>'`, not guessed from a framework. Markup is
+not a contract: re-probe before trusting any line below.
+
+---
+
+## The selectors the defaults use
+
+| Role     | Selector                                                                                                              | What it matched                                                         |
+| -------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| mode     | `[data-command-menu-control] button`                                                                                  | two buttons, `aria-label` `Search` / `Computer`, `aria-pressed` on each |
+| model    | `[class*='composer-row'] button[aria-haspopup='dialog'], [data-appearance='framed'] button[aria-haspopup='dialog']`   | one button whose `aria-label` is the model name                         |
+| composer | `textarea, [contenteditable='true']`                                                                                  | one `div[contenteditable=true]`                                         |
+| submit   | `[data-testid='submit-button'], button[aria-label='Submit']`                                                          | one button, `disabled` while the composer is empty                      |
+| answer   | `.prose[data-renderer='lm']`                                                                                          | the answer body, one per turn                                           |
+| busy     | `button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i]` | `Stop response (Esc)`, visible only while generating                    |
+| collapse | `button` (scoped inside the answer)                                                                                   | no control matched: nothing is clamped behind a "read more"             |
+| trace    | `[data-testid='trace-step'], [role='listitem']` (scoped inside the answer)                                            | nothing: the trace lives outside the answer body                        |
+| sources  | `a[href^='http']` (scoped inside the answer)                                                                          | nothing: citations are not anchors inside the body                      |
+
+---
+
+## The two places a naive reading is wrong
+
+**The question is rendered by the same renderer as the answer.** Both carry `data-renderer="lm"`, so
+a selector of `[data-renderer='lm']` counts the question as an answer, and a stability loop settles
+on the question the moment it appears - returning the prompt as the answer. The discriminator is the
+`prose` class, which only the answer body carries; the question's renderer sits inside
+`[data-message-bubble='right']` and has no `prose` class.
+
+**The answer body is not the turn.** The turn is a `[data-workflow-items]` block holding the body,
+the step list, the duration and the source chips. The body alone is the right container for text and
+the wrong one for provenance: `trace` and `sources` come back empty because they are siblings of the
+body, not descendants. Widening `answer` to the workflow block fills them in and makes the text
+noisy with the trace and the chips. Pick one, and say which in the report.
+
+---
+
+## Facts worth carrying
+
+- The mode toggle is two buttons, not one cycling control. `aria-pressed="true"` is on the selected
+  one, so "the label of the single pressed toggle" is a well-defined read.
+- The model button carries no `data-testid`; its `aria-label` _is_ the model name. That is why the
+  driver compares the label rather than asserting a model id.
+- The send control is `disabled` until the composer has a real edit in it, which is what makes a
+  property-write typing path fail loudly instead of silently.
+- A session started from a project page's composer is filed in the project while its URL is the
+  ordinary `/search/<id>` form. The project owns membership and instructions; the thread owns the
+  transcript. Read the thread URL for text, the project URL for where the next question lands.
+- The project page's own composer is a valid research surface: binding it and submitting starts a
+  thread in that project without opening a tab.
+
+---
+
+## What a live turn actually does
+
+Sampled at 250 ms through a bound tab, with the stop selector and the turn text recorded on every
+tick:
+
+| When                  | New answer exists | Stop control | Turn header         |
+| --------------------- | ----------------- | ------------ | ------------------- |
+| 0 - ~3 s after submit | no                | no           | the previous turn's |
+| ~3 s                  | no                | **yes**      | previous turn's     |
+| ~5 s                  | yes, 64 chars     | yes          | `Finished 4s …`     |
+| +250 ms each          | growing           | yes          | `Finished 4s …`     |
+| last ~250 - 500 ms    | still growing     | **no**       | `Finished 4s …`     |
+| after                 | final             | no           | `Finished 4s …`     |
+
+Three consequences, each of which cost a wrong implementation to find:
+
+**The stop control appears late and disappears early.** It is absent for the first ~3 s after
+submit - the search phase - and absent again for the last few hundred milliseconds while text is
+still landing. So `busy` is a gate, not a proof: it blocks the pre-generation window (where the
+thread still holds the previous answer) and the streaming window, and the three-stable-reads rule
+covers the tail it misses.
+
+**`Finished` is a duration label, not a completion marker.** The turn header reads `Finished 4s`
+from the first streamed token, so a `done` pattern of `^Finished` matches a turn that has just
+begun - the exact false settle the check exists to prevent. That is why `done` and `turn` default to
+empty and why a pattern must be enabled only after watching one live turn end to end.
+
+**A long thread is virtualised.** The oldest turn unmounts as the newest arrives, so the answer
+count stops growing - and a driver that identifies the new turn by `count > before.count` waits out
+its whole deadline on a page whose answer is plainly there. The turn is identified by text identity
+as well, which survives the unmounting.
+
+---
+
+## The cold-start race on a newly opened page
+
+`chat` without `--bind` opens a page and probes it immediately. On a fresh page the composer can be
+present before the model button has rendered, and the read then returns `nothing` - which the driver
+reports as `wrong-model: the page is set to a different model … the page reads nothing`. That is a
+page still arriving, not a different model; the selector is fine (the same selector reads
+`GPT-6.1 Sol` on that page a moment later).
+
+Bind an already-open tab for research, and treat that particular `wrong-model` whose detail says the
+page reads nothing as "retry", not as "wrong model".
