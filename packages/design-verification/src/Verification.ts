@@ -129,8 +129,7 @@ const bounded = <T>(
 		}
 		void pending.then(
 			(value) => settle(undefined, value),
-			(error: unknown) =>
-				settle(error ?? new Error(`${phase} failed without a reason`)),
+			(error: unknown) => settle(error ?? new Error(`${phase} failed without a reason`)),
 		);
 	});
 
@@ -237,16 +236,13 @@ const isThrown = (value: unknown): value is Thrown =>
 
 /** Whether one invariant held, without letting any part of it throw. */
 const judge = (invariant: Invariant, measurements: Measurement[]): Evidence => {
-	const label =
-		typeof invariant?.label === "string" ? invariant.label : "(unlabelled)";
+	const label = typeof invariant?.label === "string" ? invariant.label : "(unlabelled)";
 	let got: unknown;
 	let want: unknown;
 	try {
 		want =
 			typeof invariant.want === "function"
-				? (invariant.want as (m: Measurement[]) => unknown)(
-						measurements,
-					)
+				? (invariant.want as (m: Measurement[]) => unknown)(measurements)
 				: invariant.want;
 	} catch (error) {
 		want = threw(error);
@@ -280,18 +276,12 @@ const judge = (invariant: Invariant, measurements: Measurement[]): Evidence => {
  * through it happened to hold: the design named an element, and the page does
  * not have it.
  */
-const check = (
-	invariants: Invariant[],
-	measurements: Measurement[],
-): Verdict => {
+const check = (invariants: Invariant[], measurements: Measurement[]): Verdict => {
 	const measured = Array.isArray(measurements) ? measurements : [];
 	const absent: string[] = [];
 	for (const measurement of measured) {
 		if (measurement?.present !== false) continue;
-		const selector =
-			typeof measurement.selector === "string"
-				? measurement.selector
-				: "";
+		const selector = typeof measurement.selector === "string" ? measurement.selector : "";
 		if (!absent.includes(selector)) absent.push(selector);
 	}
 	const evidence: Evidence[] = [];

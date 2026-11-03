@@ -78,7 +78,10 @@ await Send("DOM.enable");
 
 const FindInput = async () => {
 	const Document = await Send("DOM.getDocument", { depth: -1 });
-	const Found = await Send("DOM.querySelector", { nodeId: Document.root.nodeId, selector: 'input[type="file"]' });
+	const Found = await Send("DOM.querySelector", {
+		nodeId: Document.root.nodeId,
+		selector: 'input[type="file"]',
+	});
 	return Found.nodeId || 0;
 };
 
@@ -131,7 +134,9 @@ const Refused = Files.filter((Path) => {
 	return Accept.length > 0 && !Accept.split(",").includes(Extension);
 });
 if (Refused.length > 0) {
-	console.error(`blocker: the input does not accept ${Refused.join(", ")}; allowed: ${Accept.split(",").slice(0, 12).join(",")}…`);
+	console.error(
+		`blocker: the input does not accept ${Refused.join(", ")}; allowed: ${Accept.split(",").slice(0, 12).join(",")}…`,
+	);
 	process.exit(2);
 }
 

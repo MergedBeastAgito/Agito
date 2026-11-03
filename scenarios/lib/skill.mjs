@@ -48,27 +48,17 @@
  * that answered the same findings in a different order, or that discovered
  * twice where the scenario says once, fails on the effect list alone.
  */
-import {
-	mkdir,
-	mkdtemp,
-	readdir,
-	rm,
-	symlink,
-	utimes,
-	writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 import { Create } from "../../packages/skill-contract/src/index.ts";
 
 /** One `SKILL.md`, as the contract suite writes it. */
-const Body = (name, frontmatter) =>
-	`---\n${frontmatter}\n---\n\n# ${name}\n\nA body.\n`;
+const Body = (name, frontmatter) => `---\n${frontmatter}\n---\n\n# ${name}\n\nA body.\n`;
 
 /** The corpus root's index, from the skills that are cited. */
-const Index = (names) =>
-	names.map((name) => `- [${name}/](${name}/)`).join("\n") + "\n";
+const Index = (names) => names.map((name) => `- [${name}/](${name}/)`).join("\n") + "\n";
 
 const Write = async (path, text) => {
 	await mkdir(dirname(path), { recursive: true });
@@ -101,10 +91,7 @@ export const Materialise = async (fixture) => {
 	await mkdir(root, { recursive: true });
 	const cited = [];
 	for (const skill of SkillsOf(fixture)) {
-		const home =
-			skill.external === true
-				? join(outside, skill.name)
-				: join(root, skill.name);
+		const home = skill.external === true ? join(outside, skill.name) : join(root, skill.name);
 		await mkdir(home, { recursive: true });
 		if (skill.noBody !== true)
 			await Write(join(home, "SKILL.md"), Body(skill.name, skill.frontmatter ?? ""));

@@ -28,8 +28,5 @@ import type { Measurement, OperationOptions } from "./Port.ts";
 
 export interface Transport {
 	/** Read every named element, or report that it is not in the page. */
-	measure(
-		selectors: string[],
-		options: OperationOptions,
-	): Promise<Measurement[]>;
+	measure(selectors: string[], options: OperationOptions): Promise<Measurement[]>;
 }

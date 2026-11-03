@@ -3,10 +3,18 @@
 //! The port states more than data shapes, because two runtimes that agreed on
 //! the shapes alone would still disagree about when authority ends:
 //!
-//! - **Admission is per effect, not per run.** `WithLease` re-checks the fence
-//!   before every write. A lease that expired while its worker was still
-//!   running refuses the next write instead of letting it land late: the worker
-//!   keeps existing, and stops having authority.
+//! - **An effect carries its authority.** `WithLease` hands the work a
+//!   [`Ticket`]: the lease id, the fence and the generation it was admitted
+//!   under. An effect is not a bare closure, because a closure has nothing to
+//!   present when it arrives late.
+//! - **The destination is the guarantee; the admission is the optimisation.**
+//!   `WithLease` checks the lease so doomed work does not start, but that check
+//!   ran before the effect did any work and cannot say anything about the
+//!   instant it writes. The effect presents its ticket to the place that records
+//!   it - the reducer, or the local stand-in for one - and that place refuses a
+//!   stale fence, a stale generation, a released lease or an expired record. A
+//!   design where only the caller checks is a design where an effect admitted
+//!   while a lease was live can still land after the lease ended.
 //! - **A fence is a number, and expiry is a clock.** A monotonically increasing
 //!   fence alone does not prove a lease is live - an expired worker can arrive
 //!   before any newer token has reached the resource - so every check compares
@@ -86,6 +94,35 @@ pub struct Lease {
 	pub Fence:u64,
 	/// When authority ends, on the runtime's clock. Half-open: the instant
 	/// itself is already outside it.
+	pub ExpiresAt:Instant,
+}
+
+/// One effect's authority to be recorded.
+///
+/// Minted by `WithLease` for exactly one admitted effect, and handed to the work
+/// it admits. The work presents it to the destination, which re-checks it there
+/// and refuses it when it is stale. That is the whole reason the type exists: a
+/// closure admitted under a lease can outlive the lease, and the numbers that
+/// admitted it are the only thing that can still be compared when it arrives.
+///
+/// The fields are public so a test can present a forged ticket and watch the
+/// destination refuse it. A hand-built ticket is a claim about authority, not
+/// authority: the destination reads the lease it issued, never the copy
+/// presented to it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ticket {
+	/// The generation the effect was admitted under.
+	pub Generation:u64,
+	/// The resource the lease is over.
+	pub Resource:String,
+	/// The id of the lease that admitted it.
+	pub LeaseId:String,
+	/// The fence the resource was at when it was admitted.
+	pub Fence:u64,
+	/// The expiry the record carried at admission. Diagnostic only: the
+	/// destination compares *its own* record's expiry against *its own* clock,
+	/// because the copy a caller presents is exactly the thing a lease that
+	/// outlived its authority still has.
 	pub ExpiresAt:Instant,
 }
 
@@ -175,12 +212,21 @@ pub trait Runtime: Send + Sync {
 	/// Extend a lease, only for the holder of the current fence, and only
 	/// forwards.
 	fn Renew<'a>(&'a self, Lease:Lease, Ttl:Duration) -> FutureBox<'a, Result<Lease, Error>>;
-	/// Write under a lease; refuse when the fence is stale, released or
-	/// expired.
+	/// Admit one effect under a lease, and hand it the authority it was
+	/// admitted under.
+	///
+	/// The check here is an optimisation: work whose authority has already
+	/// ended is refused before it starts, and the run is charged for the
+	/// attempt. It is not the guarantee. A lease can expire while the work is
+	/// running, and this call cannot revoke the effect at that point because
+	/// this call is not where the effect lands. The work receives a [`Ticket`]
+	/// and must present it to the destination - the reducer, or the local
+	/// stand-in for one - which refuses a stale fence, a stale generation, a
+	/// released lease or an expired record.
 	fn WithLease<'a, T, Write>(&'a self, Lease:Lease, Write:Write) -> FutureBox<'a, Result<T, Error>>
 	where
 		T: Send + 'a,
-		Write: FnOnce() -> FutureBox<'a, T> + Send + 'a;
+		Write: FnOnce(Ticket) -> FutureBox<'a, T> + Send + 'a;
 	/// Release, always. Never fails.
 	fn Release<'a>(&'a self, Lease:Lease) -> FutureBox<'a, ()>;
 	/// The runtime's clock, so a deadline can be expressed on it.

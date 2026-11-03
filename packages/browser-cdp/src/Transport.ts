@@ -35,11 +35,7 @@ export interface Transport {
 /** Where a transport comes from: an existing browser, or a new one. */
 export interface Launcher {
 	/** Attach to a browser already listening at `endpoint`, bound to `url`. */
-	attach(
-		endpoint: string,
-		url: string,
-		options: OperationOptions,
-	): Promise<Transport>;
+	attach(endpoint: string, url: string, options: OperationOptions): Promise<Transport>;
 	/** Start a browser and open `url` in it. */
 	launch(url: string, options: OperationOptions): Promise<Transport>;
 }

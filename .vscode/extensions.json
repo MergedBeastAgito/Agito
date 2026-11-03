@@ -1,0 +1,7 @@
+{
+	"recommendations": [
+		"esbenp.prettier-vscode",
+		"editorconfig.editorconfig",
+		"rust-lang.rust-analyzer"
+	]
+}

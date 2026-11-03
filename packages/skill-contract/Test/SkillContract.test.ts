@@ -15,15 +15,7 @@
  *   node --test Test/*.test.ts
  */
 import assert from "node:assert/strict";
-import {
-	mkdir,
-	mkdtemp,
-	readFile,
-	rm,
-	symlink,
-	utimes,
-	writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
@@ -76,10 +68,7 @@ const Corpus = async (fixtures: Fixture[]): Promise<string> => {
 			await Write(join(directory, "Reference", file), text);
 		}
 		if (fixture.referenceIndex !== undefined) {
-			await Write(
-				join(directory, "Reference", "Index.md"),
-				fixture.referenceIndex,
-			);
+			await Write(join(directory, "Reference", "Index.md"), fixture.referenceIndex);
 		}
 		if (fixture.cited !== false) cited.push(fixture.name);
 	}
@@ -92,16 +81,14 @@ const Corpus = async (fixtures: Fixture[]): Promise<string> => {
 
 const ValidSkill = (): Fixture => ({
 	name: "Alpha",
-	frontmatter:
-		"name: alpha\ndescription: One honest skill, with its reference listed.",
+	frontmatter: "name: alpha\ndescription: One honest skill, with its reference listed.",
 	references: { "Notes.md": "# Notes\n" },
 	referenceIndex: "- [Notes.md](Notes.md)\n",
 });
 
 const UnlistedReferenceSkill = (): Fixture => ({
 	name: "Beta",
-	frontmatter:
-		"name: beta\ndescription: A skill whose index forgets one of its files.",
+	frontmatter: "name: beta\ndescription: A skill whose index forgets one of its files.",
 	references: { "Listed.md": "# Listed\n", "Unlisted.md": "# Unlisted\n" },
 	referenceIndex: "- [Listed.md](Listed.md)\n",
 });
@@ -118,8 +105,7 @@ const DescriptionlessSkill = (): Fixture => ({
 
 const UncitedSkill = (): Fixture => ({
 	name: "Epsilon",
-	frontmatter:
-		"name: epsilon\ndescription: A skill the corpus index forgets.",
+	frontmatter: "name: epsilon\ndescription: A skill the corpus index forgets.",
 	cited: false,
 });
 
@@ -139,8 +125,7 @@ const Discovered = async (root: string, name: string): Promise<Skill> => {
 	return skill;
 };
 
-const RulesOf = (findings: Finding[]): string[] =>
-	findings.map((finding) => finding.rule);
+const RulesOf = (findings: Finding[]): string[] => findings.map((finding) => finding.rule);
 
 test("discover returns every skill directory, ordered by name, whatever order they were created in", async () => {
 	const root = await Corpus([
@@ -196,10 +181,7 @@ test("a symlinked skill directory is discovered like a real one", async () => {
 
 test("a valid skill has no findings", async () => {
 	const root = await Corpus([ValidSkill()]);
-	assert.deepEqual(
-		await Create().validate(await Discovered(root, "Alpha")),
-		[],
-	);
+	assert.deepEqual(await Create().validate(await Discovered(root, "Alpha")), []);
 });
 
 test("a reference file the index does not name is one unlisted-reference finding", async () => {
@@ -214,16 +196,12 @@ test("a reference tree without an index reports each file as unlisted", async ()
 	const root = await Corpus([
 		{
 			name: "Loose",
-			frontmatter:
-				"name: loose\ndescription: A skill with files and no index.",
+			frontmatter: "name: loose\ndescription: A skill with files and no index.",
 			references: { "One.md": "# One\n", "Two.md": "# Two\n" },
 		},
 	]);
 	const findings = await Create().validate(await Discovered(root, "Loose"));
-	assert.deepEqual(RulesOf(findings), [
-		"unlisted-reference",
-		"unlisted-reference",
-	]);
+	assert.deepEqual(RulesOf(findings), ["unlisted-reference", "unlisted-reference"]);
 	assert.match(findings[0]?.detail ?? "", /there is no Reference\/Index\.md/);
 });
 
@@ -231,8 +209,7 @@ test("an index that names a longer file does not name the shorter one", async ()
 	const root = await Corpus([
 		{
 			name: "Prefix",
-			frontmatter:
-				"name: prefix\ndescription: An index that names the backup.",
+			frontmatter: "name: prefix\ndescription: An index that names the backup.",
 			references: { "Notes.md": "# Notes\n" },
 			referenceIndex: "- [Notes.md.bak](Notes.md.bak)\n",
 		},
@@ -248,10 +225,7 @@ test("a skill directory without a SKILL.md is unparsable and uncited, not an exc
 	const skill = await Discovered(root, "Bare");
 	const contract = Create();
 	await assert.doesNotReject(() => contract.validate(skill));
-	assert.deepEqual(RulesOf(await contract.validate(skill)), [
-		"unparsable",
-		"uncited",
-	]);
+	assert.deepEqual(RulesOf(await contract.validate(skill)), ["unparsable", "uncited"]);
 });
 
 test("unparsable frontmatter is a finding, not a rejection", async () => {
@@ -275,8 +249,7 @@ test("a frontmatter name that disagrees with the directory is unparsable", async
 	const root = await Corpus([
 		{
 			name: "Named",
-			frontmatter:
-				"name: somewhere-else\ndescription: A rename stopped halfway.",
+			frontmatter: "name: somewhere-else\ndescription: A rename stopped halfway.",
 		},
 	]);
 	const findings = await Create().validate(await Discovered(root, "Named"));
@@ -289,10 +262,7 @@ test("a corpus root that names its skills in AGENTS.md is read as well as one th
 	const root = await Corpus([ValidSkill()]);
 	await rm(join(root, "Index.md"));
 	await Write(join(root, "AGENTS.md"), "- [Alpha/](Alpha/)\n");
-	assert.deepEqual(
-		await Create().validate(await Discovered(root, "Alpha")),
-		[],
-	);
+	assert.deepEqual(await Create().validate(await Discovered(root, "Alpha")), []);
 });
 
 test("a skill the corpus index does not name is uncited", async () => {
@@ -327,10 +297,7 @@ test("validate is stateless: the same skill answers the same findings twice", as
 	const root = await Corpus([UnlistedReferenceSkill()]);
 	const skill = await Discovered(root, "Beta");
 	const contract = Create();
-	assert.deepEqual(
-		await contract.validate(skill),
-		await contract.validate(skill),
-	);
+	assert.deepEqual(await contract.validate(skill), await contract.validate(skill));
 });
 
 test("validate re-reads the directory, so a file added after the first call is reported by the second", async () => {
@@ -348,22 +315,17 @@ test("a skill with no Reference tree is valid", async () => {
 	const root = await Corpus([
 		{
 			name: "Solo",
-			frontmatter:
-				"name: solo\ndescription: A skill with no worked instance yet.",
+			frontmatter: "name: solo\ndescription: A skill with no worked instance yet.",
 		},
 	]);
-	assert.deepEqual(
-		await Create().validate(await Discovered(root, "Solo")),
-		[],
-	);
+	assert.deepEqual(await Create().validate(await Discovered(root, "Solo")), []);
 });
 
 test("a folded description is read as the description", async () => {
 	const root = await Corpus([
 		{
 			name: "Folded",
-			frontmatter:
-				"name: folded\ndescription: >\n  A description that\n  spans two lines.",
+			frontmatter: "name: folded\ndescription: >\n  A description that\n  spans two lines.",
 		},
 	]);
 	const skill = await Discovered(root, "Folded");
@@ -397,25 +359,16 @@ test("the digest changes when a name, a description, a reference or the order ch
 	const second = skills[1] as Skill;
 	const digest = contract.digest(skills);
 	assert.notEqual(contract.digest([second, first]), digest);
-	assert.notEqual(
-		contract.digest([{ ...first, name: "Omega" }, second]),
-		digest,
-	);
+	assert.notEqual(contract.digest([{ ...first, name: "Omega" }, second]), digest);
 	assert.notEqual(
 		contract.digest([{ ...first, description: "Something else." }, second]),
 		digest,
 	);
 	assert.notEqual(
-		contract.digest([
-			{ ...first, references: [...first.references, "Extra.md"] },
-			second,
-		]),
+		contract.digest([{ ...first, references: [...first.references, "Extra.md"] }, second]),
 		digest,
 	);
-	assert.equal(
-		contract.digest([{ ...first, directory: "/somewhere/else" }, second]),
-		digest,
-	);
+	assert.equal(contract.digest([{ ...first, directory: "/somewhere/else" }, second]), digest);
 });
 
 test("the digest of the valid skill is the recorded one", async () => {

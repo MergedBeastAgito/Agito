@@ -35,7 +35,24 @@ try {
 	writeFileSync(join(Work, "tree/Source/Big.rs"), "x".repeat(1500));
 
 	const Run = (Out) =>
-		execFileSync("node", [Bundle, join(Work, "tree"), "--out", join(Work, Out), "--max-files", "1", "--max-bytes", "1000", "--include", ".rs", "--exclude", "target"], { stdio: "pipe" });
+		execFileSync(
+			"node",
+			[
+				Bundle,
+				join(Work, "tree"),
+				"--out",
+				join(Work, Out),
+				"--max-files",
+				"1",
+				"--max-bytes",
+				"1000",
+				"--include",
+				".rs",
+				"--exclude",
+				"target",
+			],
+			{ stdio: "pipe" },
+		);
 
 	Run("first");
 	Run("second");
@@ -43,15 +60,31 @@ try {
 	const One = Manifest("first");
 	Check("files kept", One.totalFiles, 2);
 	Check("excluded directory", Read("first/tree.txt").includes("target/Skip.rs"), false);
-	Check("excluded directory, other case", Read("first/tree.txt").includes("Target/tmp/Scratch.rs"), false);
+	Check(
+		"excluded directory, other case",
+		Read("first/tree.txt").includes("Target/tmp/Scratch.rs"),
+		false,
+	);
 	Check("oversize recorded", One.leftOut[0]?.path, "Source/Big.rs");
-	Check("one file per batch", One.batches.every((Batch) => Batch.files.length === 1), true);
-	Check("file delimiter", Read("first/batch-01.txt").startsWith("--- FILE: Source/Fn/A.rs ---"), true);
+	Check(
+		"one file per batch",
+		One.batches.every((Batch) => Batch.files.length === 1),
+		true,
+	);
+	Check(
+		"file delimiter",
+		Read("first/batch-01.txt").startsWith("--- FILE: Source/Fn/A.rs ---"),
+		true,
+	);
 	Check("deterministic order", Read("first/batch-01.txt") === Read("second/batch-01.txt"), true);
 } finally {
 	rmSync(Work, { recursive: true, force: true });
 }
 
 for (const Problem of Problems) console.log(`FAIL  ${Problem}`);
-console.log(Problems.length === 0 ? "RESULT: the bundler is deterministic and splits as asked" : `RESULT: ${Problems.length} problem(s)`);
+console.log(
+	Problems.length === 0
+		? "RESULT: the bundler is deterministic and splits as asked"
+		: `RESULT: ${Problems.length} problem(s)`,
+);
 process.exit(Problems.length === 0 ? 0 : 1);

@@ -52,10 +52,7 @@
 			"id": "port-declares-its-errors",
 			"typescript": "the port declares exactly the errors the manifest promises",
 			"rust": "the_port_declares_exactly_the_errors_the_manifest_promises",
-			"skip": [
-				"typescript",
-				"rust"
-			],
+			"skip": ["typescript", "rust"],
 			"unported": "The scenario format has one vocabulary for what a call did - an answer, an error, a void - and no step for reading a package's own module.json. The case asserts that the four codes a package declares are the four its manifest names; there is no page to open and no question to ask, so the scenario run skips it on both sides. Both suites keep the equivalent assertion.",
 			"steps": [],
 			"expect": {
@@ -742,9 +739,7 @@
 					"code": "not-ready",
 					"observed": "the page never answered"
 				},
-				"effects": [
-					"open:https://chat.example.test/"
-				],
+				"effects": ["open:https://chat.example.test/"],
 				"note": "No release effect: a page that never opened is a page there is nothing to release.",
 				"reports": 0
 			}
@@ -1104,10 +1099,7 @@
 			"id": "options-absent",
 			"typescript": "refuses a call with no options as not-ready, not a TypeError",
 			"rust": null,
-			"skip": [
-				"typescript",
-				"rust"
-			],
+			"skip": ["typescript", "rust"],
 			"unported": "The case passes `undefined` where the TypeScript port declares an `OperationOptions`, and asserts that the driver's own guard turns the missing budget into `not-ready` rather than a `TypeError`. Rust has no `undefined`: a `Call` is a value the caller must construct, so there is no hole to fall into and nothing to prove. The scenario run skips it on both sides; `Chat.test.ts` is where it is proved.",
 			"steps": [],
 			"expect": {
@@ -1122,10 +1114,7 @@
 			"id": "question-absent",
 			"typescript": "refuses a call with no question as not-ready, not a TypeError",
 			"rust": null,
-			"skip": [
-				"typescript",
-				"rust"
-			],
+			"skip": ["typescript", "rust"],
 			"unported": "The case passes `undefined` where the TypeScript port declares a `Question`, and asserts the port's four-code contract survives a caller that is not a type checker. Rust's `Question` is a struct with no absent value, so the case has no counterpart. The scenario run skips it on both sides; `Chat.test.ts` is where it is proved.",
 			"steps": [],
 			"expect": {

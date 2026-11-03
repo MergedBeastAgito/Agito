@@ -55,8 +55,7 @@ const transportOf = (fixture, effects) => {
 				effects.push(`refused:evaluate:${fixture.endpoint}`);
 				throw new Error("WebSocket is already in CLOSING or CLOSED state");
 			}
-			if (state.behaviour === "throw")
-				throw new Error("ReferenceError: nothing is defined");
+			if (state.behaviour === "throw") throw new Error("ReferenceError: nothing is defined");
 			if (state.behaviour === "hang") return new Promise(() => {});
 			return state.answer;
 		},
@@ -188,7 +187,12 @@ export const runBrowse = async (entry) => {
 				throw new Error(
 					`${entry.id} step ${index} rejected with something that is not a BrowseError: ${String(error)}`,
 				);
-			result = { kind: "error", code: error.code, message: error.message, detail: error.detail };
+			result = {
+				kind: "error",
+				code: error.code,
+				message: error.message,
+				detail: error.detail,
+			};
 			break;
 		}
 	}

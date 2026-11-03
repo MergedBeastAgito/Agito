@@ -41,11 +41,7 @@ export interface Browse {
 	/** Open a page, returning the handle the session is bound to. */
 	open(url: string, options: OpenOptions): Promise<Target>;
 	/** Evaluate an expression in the page and return its value. */
-	evaluate<T>(
-		target: Target,
-		expression: string,
-		options: OperationOptions,
-	): Promise<T>;
+	evaluate<T>(target: Target, expression: string, options: OperationOptions): Promise<T>;
 	/** Release everything this session holds. Never throws. */
 	dispose(target: Target): Promise<void>;
 }
@@ -65,12 +61,7 @@ export class BrowseError extends Error {
 	/** What was observed, kept apart from the sentence shown to a human. */
 	readonly detail: string;
 
-	constructor(
-		code: ErrorCode,
-		message: string,
-		detail = "",
-		options?: { cause?: unknown },
-	) {
+	constructor(code: ErrorCode, message: string, detail = "", options?: { cause?: unknown }) {
 		super(message, options);
 		this.name = "BrowseError";
 		this.code = code;
@@ -78,22 +69,14 @@ export class BrowseError extends Error {
 	}
 
 	/** The transport is gone: a dead socket, not a slow page. */
-	static unavailable(
-		message: string,
-		detail = "",
-		cause?: unknown,
-	): BrowseError {
+	static unavailable(message: string, detail = "", cause?: unknown): BrowseError {
 		return new BrowseError(ErrorCode.Unavailable, message, detail, {
 			cause,
 		});
 	}
 
 	/** The page exists but could not be used: it failed to load, or threw. */
-	static navigation(
-		message: string,
-		detail = "",
-		cause?: unknown,
-	): BrowseError {
+	static navigation(message: string, detail = "", cause?: unknown): BrowseError {
 		return new BrowseError(ErrorCode.Navigation, message, detail, {
 			cause,
 		});

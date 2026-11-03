@@ -1,0 +1,1359 @@
+--- FILE: d900b22a.md ---
+---
+title: "Modelling the agentic system on SpacetimeDB"
+thread: d900b22a-f5b3-405c-b546-84fb25dd4483
+project: DELO
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/d900b22a-f5b3-405c-b546-84fb25dd4483
+captured: 2026-11-03T21:57:35
+segments: 1
+collapsed: false
+steps: 1
+sources: 27
+---
+
+# Modelling the agentic system on SpacetimeDB
+
+| Field         | Value                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Thread        | `d900b22a-f5b3-405c-b546-84fb25dd4483`                                |
+| Project       | DELO                                                                  |
+| Source        | https://www.perplexity.ai/search/d900b22a-f5b3-405c-b546-84fb25dd4483 |
+| Captured      | 2026-11-03T21:57:35                                                   |
+| Segments      | 1                                                                     |
+| Trace steps   | 1                                                                     |
+| Cited sources | 27                                                                    |
+| Characters    | 46704                                                                 |
+
+## Transcript
+
+DELO 6:09 PM
+
+Context: an agentic system is being modelled on SpacetimeDB. Below are the two
+real files of the existing module - Schema.ts is generated from a TypeScript
+declaration, index.ts holds the reducers. Read them as the current state, then
+design the complete database for the whole system.
+
+Schema.ts:
+
+```
+// Generated from Maintain/Source/Model/Schema/Entities.ts - do not edit.
+//
+// `pnpm run Schema` rewrites this file; `pnpm run check` fails while it is
+// stale. A field that needs to exist belongs in the declaration, never here.
+
+import { schema, t, table } from "spacetimedb/server";
+
+/**
+ * The archive's tables. Reducers live in `index.ts`: they encode
+ * behaviour, and behaviour is not derived from a field list.
+ */
+
+/** One row per post. Media and observations live in their own tables. */
+const post = table(
+	{ name: "post", public: true },
+	{
+		/** X status id - the same key the file store uses, and the filename it becomes. */
+		id: t.string().primaryKey(),
+		/** The permalink the page showed. */
+		url: t.string(),
+		/** The author's handle; the `author` table is keyed by it. */
+		author: t.string().index(),
+		/** The post's text, as the page rendered it. */
+		text: t.string(),
+		/** When the post was written, when the page showed it. Null when it did not. */
+		postedAt: t.string().optional(),
+		/** Reply count at `lastScrapedAt`. */
+		replies: t.u32(),
+		/** Repost count at `lastScrapedAt`. */
+		reposts: t.u32(),
+		/** Like count at `lastScrapedAt`. */
+		likes: t.u32(),
+		/** View count at `lastScrapedAt`. */
+		views: t.u32(),
+		/** When this pipeline first saw the post - never when it was saved. */
+		firstSeenAt: t.string(),
+		/** When the post's fields were last read from the page. */
+		lastScrapedAt: t.string(),
+		/** The only field that decides whether the post may reach the site. */
+		visibility: t.string().index(),
+		/** The list slugs as a JSON array, because their number is the person's. */
+		lists: t.string(),
+	},
+);
+
+/** One row per account seen in the archive. */
+const author = table(
+	{ name: "author", public: true },
+	{
+		/** The handle without its `@`. */
+		handle: t.string().primaryKey(),
+		/** The display name the page rendered. */
+		name: t.string(),
+		/** Whether the page marked the account verified. */
+		verified: t.bool(),
+		/** When this pipeline first saw the account. */
+		firstSeenAt: t.string(),
+		/** How many posts of this account the archive holds. */
+		postCount: t.u32(),
+	},
+);
+
+/** One row per attachment, keyed `<postId>:<url>` so a re-scrape rewrites nothing. */
+const media = table(
+	{ name: "media", public: true },
+	{
+		/** What the attachment is; a link card is media because it is part of the post's payload. */
+		kind: t.string(),
+		/** Where the attachment lives. */
+		url: t.string(),
+		/** `<postId>:<url>` - stable across scrapes. */
+		id: t.string().primaryKey(),
+		/** The post the attachment belongs to. */
+		postId: t.string().index(),
+		/** Where the attachment sits in the post, from zero. A gallery is ordered, so the table has to carry that order: sorting by key would reorder every multi-image post. */
+		position: t.u32(),
+	},
+);
+
+/** Append-only. One row per channel-showing, keyed `<postId>:<source>:<at>:<action>`. */
+const observation = table(
+	{ name: "observation", public: true },
+	{
+		/** When this source first showed the post - never when it was saved. */
+		at: t.string(),
+		/** The channel that showed it. */
+		source: t.string().index(),
+		/** The post this observation is about. */
+		postId: t.string().index(),
+		/** What happened: the archive saw it, published it, or withheld it. */
+		action: t.string(),
+		/** `<postId>:<source>:<at>:<action>`. */
+		id: t.string().primaryKey(),
+	},
+);
+
+/** Append-only log, keyed `<at>:<kind>:<subject>`. */
+const event = table(
+	{ name: "event", public: true },
+	{
+		/** When it happened. */
+		at: t.string(),
+		/** What happened. A closed set: a new kind is a schema change, not a string a caller may invent. */
+		kind: t.string().index(),
+		/** What it happened to - a status id, a source, a list slug. */
+		subject: t.string().index(),
+		/** Whatever the kind needs to say. Opaque, so a new event shape needs no migration. */
+		payload: t.string(),
+		/** `<at>:<kind>:<subject>`. */
+		id: t.string().primaryKey(),
+	},
+);
+
+/** One row per `(list, handle)`, keyed `<list>:<handle>`. */
+const membership = table(
+	{ name: "membership", public: true },
+	{
+		/** The configured list slug. */
+		list: t.string().index(),
+		/** The account that was filed. */
+		handle: t.string().index(),
+		/** Who decided: a weighted rule, the model pass, or the owner. */
+		by: t.string(),
+		/** How strongly the evidence supported it, 0 to 1. */
+		confidence: t.f32(),
+		/** The evidence the decision names, in prose. */
+		reason: t.string(),
+		/** When the decision was recorded. */
+		at: t.string(),
+		/** `<list>:<handle>` - the latest decision for that pair. */
+		id: t.string().primaryKey(),
+	},
+);
+
+export const spacetimedb = schema({
+	post,
+	author,
+	media,
+	observation,
+	event,
+	membership,
+});
+```
+
+index.ts:
+
+```
+import { t } from "spacetimedb/server";
+// This sub-package resolves imports the way the SpacetimeDB module bundler
+// does - without an extension - which is why it is the one place in the
+// repository that does not spell `.ts`.
+import { spacetimedb } from "./Schema";
+
+/**
+ * Timeline archive, live view.
+ *
+ * The tables are rendered from `Maintain/Source/Model/Schema/Entities.ts` into
+ * `Schema.ts`; this file holds only behaviour. Three rules survive from the file
+ * store, and each one is a reducer's job rather than a column's:
+ *
+ * 1. Observations and events are append-only. A re-scrape updates the post's
+ *    metrics in place but never rewrites history.
+ * 2. `visibility` is the only field that decides what may reach the public site.
+ * 3. Every derived row id is built from its content, so replaying the same
+ *    scrape is idempotent instead of duplicating rows.
+ *
+ * There is exactly one reducer that writes a post - `observe` - because a
+ * second write path is a second set of rules waiting to disagree with the first.
+ * `store publish`, `store hide` and the backfill all go through it.
+ */
+
+export default spacetimedb;
+
+export const init = spacetimedb.init((_ctx) => {
+	// Nothing to seed: the archive arrives through `observe`.
+});
+
+export const onConnect = spacetimedb.clientConnected((_ctx) => {});
+export const onDisconnect = spacetimedb.clientDisconnected((_ctx) => {});
+
+/**
+ * Write one post record and append the observation that produced it.
+ *
+ * The arguments are the record, not a page reading: a caller that has already
+ * folded a reading into the archive record (the scrape path) and a caller that
+ * is restoring a record it holds (the export path) send the same thing. That is
+ * what keeps the two paths from growing different rules.
+ *
+ * `at` is the observation's own moment, never the wall clock, so replaying a
+ * scrape rewrites the same row instead of appending a second one.
+ */
+export const observe = spacetimedb.reducer(
+	{
+		id: t.string(),
+		url: t.string(),
+		authorHandle: t.string(),
+		authorName: t.string(),
+		authorVerified: t.bool(),
+		text: t.string(),
+		postedAt: t.string().optional(),
+		firstSeenAt: t.string(),
+		lastScrapedAt: t.string(),
+		/** shadow | public | hidden */
+		visibility: t.string(),
+		/** The list slugs as a JSON array. */
+		lists: t.string(),
+		replies: t.u32(),
+		reposts: t.u32(),
+		likes: t.u32(),
+		views: t.u32(),
+		/** bookmark | like | history */
+		source: t.string(),
+		at: t.string(),
+		/** observed | published | hidden */
+		action: t.string(),
+	},
+	(ctx, args) => {
+		const existing = ctx.db.post.id.find(args.id);
+
+		if (existing === null) {
+			ctx.db.post.insert({
+				id: args.id,
+				url: args.url,
+				author: args.authorHandle,
+				text: args.text,
+				postedAt: args.postedAt,
+				replies: args.replies,
+				reposts: args.reposts,
+				likes: args.likes,
+				views: args.views,
+				firstSeenAt: args.firstSeenAt,
+				lastScrapedAt: args.lastScrapedAt,
+				visibility: args.visibility,
+				lists: args.lists,
+			});
+		} else {
+			// `firstSeenAt` is the archive's own fact and survives every fold.
+			ctx.db.post.id.update({
+				...existing,
+				url: args.url,
+				author: args.authorHandle,
+				text: args.text,
+				postedAt: args.postedAt,
+				replies: args.replies,
+				reposts: args.reposts,
+				likes: args.likes,
+				views: args.views,
+				lastScrapedAt: args.lastScrapedAt,
+				visibility: args.visibility,
+				lists: args.lists,
+			});
+		}
+
+		const known = ctx.db.author.handle.find(args.authorHandle);
+		if (known === null) {
+			ctx.db.author.insert({
+				handle: args.authorHandle,
+				name: args.authorName,
+				verified: args.authorVerified,
+				firstSeenAt: args.firstSeenAt,
+				postCount: existing === null ? 1 : 0,
+			});
+		} else {
+			ctx.db.author.handle.update({
+				...known,
+				name: args.authorName,
+				verified: args.authorVerified,
+				// A new post is a new count; re-observing one already held is not.
+				postCount: existing === null ? known.postCount + 1 : known.postCount,
+			});
+		}
+
+		// Append-only, keyed by content: replaying the same scrape writes nothing.
+		const observationId = `${args.id}:${args.source}:${args.at}:${args.action}`;
+		if (ctx.db.observation.id.find(observationId) === null) {
+			ctx.db.observation.insert({
+				id: observationId,
+				at: args.at,
+				source: args.source,
+				postId: args.id,
+				action: args.action,
+			});
+		}
+	},
+);
+
+/** Append one event. The payload is opaque JSON text. */
+export const record = spacetimedb.reducer(
+	{
+		kind: t.string(),
+		subject: t.string(),
+		payload: t.string(),
+		at: t.string(),
+	},
+	(ctx, args) => {
+		const id = `${args.at}:${args.kind}:${args.subject}`;
+		if (ctx.db.event.id.find(id) !== null) return;
+		ctx.db.event.insert({
+			id,
+			at: args.at,
+			kind: args.kind,
+			subject: args.subject,
+			payload: args.payload,
+		});
+	},
+);
+
+/** Record which curated list a handle belongs to. The latest decision for a pair wins. */
+export const classify = spacetimedb.reducer(
+	{
+		handle: t.string(),
+		list: t.string(),
+		by: t.string(),
+		confidence: t.f32(),
+		reason: t.string(),
+		at: t.string(),
+	},
+	(ctx, args) => {
+		const id = `${args.list}:${args.handle}`;
+		const row = {
+			id,
+			list: args.list,
+			handle: args.handle,
+			by: args.by,
+			confidence: args.confidence,
+			reason: args.reason,
+			at: args.at,
+		};
+		if (ctx.db.membership.id.find(id) === null) {
+			ctx.db.membership.insert(row);
+		} else {
+			ctx.db.membership.id.update(row);
+		}
+	},
+);
+
+/** Attach one media item to a post, at the position the page showed it. */
+export const attach = spacetimedb.reducer(
+	{ postId: t.string(), kind: t.string(), url: t.string(), position: t.u32() },
+	(ctx, args) => {
+		const id = `${args.postId}:${args.url}`;
+		const row = {
+			id,
+			postId: args.postId,
+			kind: args.kind,
+			url: args.url,
+			position: args.position,
+		};
+		if (ctx.db.media.id.find(id) === null) ctx.db.media.insert(row);
+		else ctx.db.media.id.update(row);
+	},
+);
+```
+
+Design the complete SpacetimeDB model for an agentic system whose local
+capabilities are: browsing (a CDP-driven browser session), research (asking a
+web chat product and reading the answer plus its step trace), design
+verification (measuring a built page), skill validation, and the agent's own
+task/lease lifecycle. Requirements:
+
+1. The database must be self-describing: the schema of the schema lives in
+   tables, so a running process can read the declared capabilities, their
+   versions, their state classes, and their admission rules without the
+   TypeScript source.
+2. The process that runs the database must be able to modify the schema based on
+   auth - so model identity, roles, and what a role may alter, as data rather
+   than code.
+3. Everything the agent needs locally should be answerable from this one
+   database: UI state, browser sessions and their leases, research threads and
+   their step traces, verification evidence, skill manifests.
+4. Keep the existing archive tables working; say which of them survive unchanged
+   and which must move. Give: the table list with columns and keys, the reducers
+   and what each enforces, the self-describing tables and their invariants, how
+   a lease is represented so two agents cannot claim one browser, and what you
+   would refuse to put in the database. Reason from SpacetimeDB's actual model
+   (tables, reducers, subscriptions, identity) and say where you are unsure.
+
+Use one SpacetimeDB database with three layers: a typed operational model, a
+versioned capability/schema catalog, and data-driven authorization. The
+essential distinction is between the logical schema that agents may change
+through authorized reducers and the physical schema compiled into the published
+module.
+
+SpacetimeDB does not turn a row inserted into a “table definition” table into a
+new native table. Physical table and reducer changes require publishing an
+updated module. Consequently, runtime schema modification needs either a
+bounded, interpreted logical-schema layer or an authorized build-and-publish
+controller—not a reducer executing arbitrary
+DDL.[spacetimedb](https://spacetimedb.com/docs/intro/faq)
+
+My recommendation is a **hybrid**: native tables for operational facts and
+concurrency; an interpreted schema for extensible capability state; and an
+explicitly privileged deployment path for physical changes.
+
+## 1. Execution and trust boundaries
+
+The database owns:
+
+- Declared capabilities, versions, input/output contracts, state classes,
+  admission policies.
+- Identities, roles, scoped grants, approvals, and audit history.
+- Tasks, execution attempts, resource leases, commands, and results.
+- Browser observations, research conversations and visible step traces,
+  verification evidence, skill manifests, and persisted UI state.
+- Your existing archive.
+
+An external worker owns the actual CDP connection, browser process, web-chat
+interaction, measurement tooling, and skill execution. Reducers cannot perform
+network requests or filesystem operations. Procedures can perform external I/O,
+but their external effects do not share the atomicity of a reducer transaction.
+A local CDP worker remains the appropriate boundary for your stated
+capabilities.spacetimedb+1
+
+Every exposed mutation authenticates using `ctx.sender`, not an identity
+supplied in arguments. SpacetimeDB provides caller identity; your module
+supplies the role and permission
+interpretation.[spacetimedb](https://spacetimedb.com/docs/intro/key-architecture)
+
+All new operational tables should be private. Expose caller-authorized views for
+subscriptions. A client-side `WHERE` filter is not authorization: public tables
+are readable by clients independently of the UI’s query choices. Views can
+filter private rows and omit sensitive
+columns.[spacetimedb](https://spacetimedb.com/docs/tables/access-permissions)
+
+## 2. Table conventions
+
+The following is a concrete proposed model, not a claim that SpacetimeDB
+supplies these application tables.
+
+Notation:
+
+- `PK`: native primary key.
+- `UQ`: native unique key where applicable.
+- `IX`: nonunique index.
+- `?`: optional.
+- IDs: opaque strings, except authenticated principals use native `Identity`.
+- Times: native `Timestamp`; durations: integer microseconds.
+- Counters/fencing epochs: `u64`; measurements: `f64`; ordinals: `u32`.
+- Enumerated statuses: declared algebraic types where fixed by the module, not
+  unrestricted strings.
+- `…Json`: bounded, validated canonical JSON, never executable code.
+- References are logical foreign keys checked by reducers. Do not assume
+  automatic SQL foreign-key enforcement; the transaction documentation
+  explicitly places foreign-key-like relationships in application
+  logic.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
+
+For tuple keys, store the component columns and derive one collision-safe key
+using a canonical encoding. Do not introduce more unescaped `${a}:${b}` keys.
+
+All operational rows carry `scopeId IX`. A scope is the local workspace/security
+boundary. All mutable current-state rows carry `revision:u64`, checked on
+updates. Immutable records instead carry their provenance and recording
+timestamp.
+
+## Authorization and ownership
+
+| Table          | Columns and keys                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scope`        | `id PK`, `name`, `status`, `createdAt`                                                                                                                       |
+| `principal`    | `identity PK`, `kind:human/agent/service`, `displayName`, `status`, `createdAt`                                                                              |
+| `scope_member` | `id PK(scopeId, identity)`, `scopeId IX`, `identity IX`, `status`                                                                                            |
+| `role`         | `id PK`, `scopeId IX`, `name`, `description`, `revision`                                                                                                     |
+| `role_binding` | `id PK`, `scopeId IX`, `identity IX`, `roleId IX`, `validFrom`, `validUntil?`, `grantedBy`, `revokedAt?`                                                     |
+| `permission`   | `id PK`, `roleId IX`, `action`, `resourceKind`, `resourceId?`, `fieldPaths:string[]`, `conditionPolicyId?`, `delegable`, `revision`                          |
+| `approval`     | `id PK`, `scopeId IX`, `requester`, `action`, `targetId`, `requestHash`, `policyVersionId`, `status`, `expiresAt`, `decidedBy?`, `decidedAt?`, `consumedBy?` |
+| `audit_record` | `id PK`, `scopeId IX`, `actor IX`, `action IX`, `targetKind`, `targetId IX`, `requestId`, `beforeHash?`, `afterHash?`, `detailJson`, `recordedAt IX`         |
+
+Example permissions:
+
+- `capability.version.create`
+- `capability.version.activate`
+- `schema.logical.alter`
+- `schema.physical.propose`
+- `schema.physical.publish`
+- `role.bind`
+- `permission.alter`
+- `browser.command.execute`
+- `archive.visibility.change`
+
+A permission to alter a capability is not a permission to grant oneself new
+permissions.
+
+Bootstrap a root identity from trusted deployment configuration. Never make the
+first connecting identity an administrator.
+
+## Self-describing schema and capabilities
+
+| Table                | Columns and keys                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema_release`     | `id PK`, `parentId?`, `status:draft/validated/active/retired`, `catalogHash`, `moduleHash?`, `createdBy`, `createdAt`, `activatedAt?`                                                                   |
+| `schema_head`        | `scopeId PK`, `activeReleaseId`, `revision`                                                                                                                                                             |
+| `type_def`           | `id PK`, `releaseId IX`, `name`, `kind:scalar/record/enum/array/optional/union`, `scalarKind?`, `elementTypeId?`, `description`                                                                         |
+| `field_def`          | `id PK(typeId,name)`, `typeId IX`, `name`, `typeIdOfValue`, `ordinal`, `required`, `defaultJson?`, `referenceTargetId?`, `sensitivity`                                                                  |
+| `variant_def`        | `id PK(typeId,tag)`, `typeId IX`, `tag`, `payloadTypeId?`, `ordinal`                                                                                                                                    |
+| `table_def`          | `id PK`, `releaseId IX`, `name`, `rowTypeId`, `storage:native/logical`, `nativeTableName?`, `stateClass`, `readPolicyId`, `writePolicyId`, `retentionPolicyJson`                                        |
+| `key_def`            | `id PK`, `tableDefId IX`, `name`, `kind:primary/unique/index`, `fieldPaths:string[]`                                                                                                                    |
+| `capability`         | `id PK`, `scopeId IX`, `name`, `description`, `activeVersionId?`, `status`, `revision`                                                                                                                  |
+| `capability_version` | `id PK`, `capabilityId IX`, `version`, `schemaReleaseId`, `inputTypeId`, `outputTypeId`, `adapterKind`, `adapterContractVersion`, `implementationDigest`, `status`, `createdAt`                         |
+| `state_class`        | `id PK`, `capabilityVersionId IX`, `name`, `storageDefId`, `semantics:current/append-only/leased/derived`, `initialState`, `revisionPolicy`, `description`                                              |
+| `operation_def`      | `id PK`, `capabilityVersionId IX`, `name`, `inputTypeId`, `outputTypeId`, `handlerKey`, `admissionPolicyId`, `requiredResourceKind?`, `effectClass:read/local-write/external-write`, `idempotencyMode`  |
+| `transition_def`     | `id PK`, `stateClassId IX`, `operationId IX`, `fromState`, `toState`, `guardPolicyId?`                                                                                                                  |
+| `policy_version`     | `id PK`, `scopeId IX`, `name`, `version`, `expressionJson`, `expressionHash`, `evaluatorVersion`, `createdBy`, `createdAt`                                                                              |
+| `logical_entity`     | `id PK`, `scopeId IX`, `tableDefId IX`, `schemaReleaseId`, `ownerIdentity`, `valueJson`, `revision`, `createdAt`, `updatedAt`                                                                           |
+| `logical_lookup`     | `id PK`, `scopeId IX`, `keyDefId IX`, `encodedValue IX`, `entityId IX`, `uniqueClaimKey? UQ`                                                                                                            |
+| `schema_change`      | `id PK`, `scopeId IX`, `kind:logical/physical`, `baseReleaseId`, `targetReleaseId`, `planJson`, `planHash`, `approvalId?`, `status`, `artifactDigest?`, `appliedModuleHash?`, `errorJson?`, `createdAt` |
+
+`logical_lookup` is a reducer-maintained search projection for declared logical
+indexes. A unique logical index gets a globally unique claim encoding the key
+definition and canonical value; nonunique entries do not claim uniqueness.
+
+Do not route native task, browser, and lease state through `logical_entity`.
+Those need explicit types, direct indexes, and carefully bounded update paths.
+
+## Catalog invariants
+
+1. The catalog describes its own tables and types. Bootstrap a finite set of
+   metatypes, then describe `type_def`, `field_def`, `table_def`, and the
+   remaining catalog using those types. References between definitions express
+   the recursion.
+2. An activated release is immutable. Changes create a new release.
+3. Capability versions pin exact schema and policy versions. Running work does
+   not silently adopt the latest contract.
+4. Native definitions must match the deployed module. Generate the initial
+   catalog manifest alongside `Schema.ts` from your declaration source, and
+   verify a catalog/module digest during activation.
+5. Describing a native table does not authorize altering its actual structure.
+6. Policies use a small, versioned, bounded expression language: role checks,
+   ownership, equality, membership, numeric bounds, status checks, and approval
+   requirements. No `eval`, arbitrary TypeScript, SQL fragments, or unrestricted
+   recursion.
+7. `handlerKey` selects an installed implementation. Declaring a new operation
+   does not create executable behavior.
+8. Fail closed on unknown types, unsupported evaluator versions, dangling
+   references, invalid transitions, or mismatched module hashes.
+9. Logical uniqueness, references, indexes, and document updates commit
+   together.
+10. Definitions distinguish durable state, append-only evidence, derived
+    projections, and leased resources. These are behavior contracts, not merely
+    descriptive labels.
+
+The interpreter and bootstrap trust rules necessarily remain code. Making
+permissions data-driven does not remove the need for a trusted enforcement
+mechanism.
+
+## 3. Tasks, workers, resources, and commands
+
+| Table                  | Columns and keys                                                                                                                                                                                                                                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent_instance`       | `id PK`, `scopeId IX`, `principalIdentity IX`, `workerBuild`, `status`, `startedAt`, `lastHeartbeatAt`, `revision`                                                                                                                                             |
+| `worker_capability`    | `id PK(agentInstanceId,capabilityVersionId)`, `agentInstanceId IX`, `capabilityVersionId IX`, `implementationDigest`, `status`                                                                                                                                 |
+| `task`                 | `id PK`, `scopeId IX`, `parentTaskId? IX`, `requestedBy IX`, `capabilityVersionId IX`, `operationId`, `inputJson`, `status IX`, `priority`, `notBefore`, `deadline?`, `attemptLimit`, `currentAttemptId?`, `resultJson?`, `createdAt`, `revision`              |
+| `task_dependency`      | `id PK(taskId,dependsOnTaskId)`, `taskId IX`, `dependsOnTaskId IX`, `requiredOutcome`                                                                                                                                                                          |
+| `task_attempt`         | `id PK`, `scopeId IX`, `taskId IX`, `attemptNumber`, `agentInstanceId IX`, `taskLeaseEpoch`, `status`, `startedAt`, `finishedAt?`, `errorJson?`                                                                                                                |
+| `resource`             | `id PK`, `scopeId IX`, `kind IX`, `ownerPrincipal`, `status`, `generation`, `revision`                                                                                                                                                                         |
+| `resource_lease`       | `resourceId PK`, `scopeId IX`, `holderAgentId? IX`, `attemptId? IX`, `epoch`, `acquiredAt?`, `renewedAt?`, `expiresAt?`, `status`                                                                                                                              |
+| `lease_history`        | `id PK`, `scopeId IX`, `resourceId IX`, `epoch`, `holderAgentId`, `attemptId?`, `action`, `recordedAt`, `reason?`                                                                                                                                              |
+| `command`              | `id PK`, `scopeId IX`, `attemptId IX`, `operationId`, `resourceId IX`, `resourceGeneration`, `leaseEpoch`, `sequence`, `argumentsJson`, `argumentsHash`, `status IX`, `approvalId?`, `createdAt`, `dispatchedAt?`, `completedAt?`, `resultJson?`, `errorJson?` |
+| `request_receipt`      | `id PK(identity,requestId)`, `identity IX`, `requestId`, `requestHash`, `outcomeRef`, `recordedAt`                                                                                                                                                             |
+| `execution_event`      | `id PK`, `scopeId IX`, `taskId IX`, `attemptId? IX`, `commandId? IX`, `kind IX`, `payloadJson`, `occurredAt?`, `recordedAt`                                                                                                                                    |
+| `maintenance_schedule` | `id PK`, `scheduledAt:ScheduleAt`, `jobKind`, `scopeId`, `cursor?`                                                                                                                                                                                             |
+
+Represent each task as a `resource(kind=task)` too. The same lease mechanism
+then fences task execution and browser ownership.
+
+Dependencies form an acyclic graph. Commands have unique logical
+`(resourceId, generation, sequence)` ordering, enforced in the issuing reducer.
+Events are durable regular-table rows, not transient notifications.
+
+## 4. Browser state and UI state
+
+| Table             | Columns and keys                                                                                                                                                                                                                                                                                                            |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser_session` | `id PK` referencing `resource.id`, `scopeId IX`, `workerAgentId IX`, `profileRef`, `connectionRef`, `status`, `browserVersion`, `generation`, `lastObservedAt?`, `revision`                                                                                                                                                 |
+| `browser_context` | `id PK`, `scopeId IX`, `sessionId IX`, `externalContextId`, `generation`, `status`, `revision`                                                                                                                                                                                                                              |
+| `browser_tab`     | `id PK`, `scopeId IX`, `sessionId IX`, `contextId IX`, `externalTargetId`, `url`, `title`, `status`, `navigationEpoch`, `lastSnapshotId?`, `lastObservedAt`, `revision`                                                                                                                                                     |
+| `page_snapshot`   | `id PK`, `scopeId IX`, `tabId IX`, `sessionGeneration`, `navigationEpoch`, `commandId?`, `url`, `title`, `capturedAt`, `recordedAt`, `viewportWidth`, `viewportHeight`, `deviceScaleFactor`, `scrollX`, `scrollY`, `documentHash`, `textArtifactId?`, `domArtifactId?`, `accessibilityArtifactId?`, `screenshotArtifactId?` |
+| `page_element`    | `id PK(snapshotId,elementRef)`, `scopeId IX`, `snapshotId IX`, `elementRef`, `frameRef`, `backendNodeRef?`, `selector?`, `role?`, `name?`, `text?`, `x`, `y`, `width`, `height`, `visible`, `enabled`, `attributesJson`                                                                                                     |
+| `ui_state`        | `id PK(scopeId,identity,clientId,panelKey)`, `scopeId IX`, `identity IX`, `clientId`, `panelKey`, `valueJson`, `updatedAt`, `revision`                                                                                                                                                                                      |
+
+Element handles belong to a snapshot/navigation epoch. A reducer must not admit
+a click using an element reference from an earlier document.
+
+`ui_state` stores selected task, tab, thread, panel layout, filters, and drafts.
+It does not own browser truth or duplicate operational status. Live UI reads the
+operational views.
+
+`connectionRef` identifies worker-local connection configuration; it is not a
+plaintext CDP endpoint with credentials.
+
+## 5. Research conversations and visible step traces
+
+| Table              | Columns and keys                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `research_thread`  | `id PK`, `scopeId IX`, `ownerIdentity IX`, `product`, `externalThreadId?`, `externalUrl?`, `browserSessionId`, `tabId?`, `title`, `status`, `createdAt`, `revision`                          |
+| `research_turn`    | `id PK`, `scopeId IX`, `threadId IX`, `ordinal`, `prompt`, `submittedCommandId?`, `status`, `submittedAt?`, `completedAt?`, `latestCaptureId?`, `revision`                                   |
+| `research_capture` | `id PK`, `scopeId IX`, `turnId IX`, `snapshotId`, `externalAnswerId?`, `answerText`, `answerHash`, `isComplete`, `traceAvailability:visible/partial/unavailable`, `capturedAt`, `recordedAt` |
+| `research_step`    | `id PK`, `scopeId IX`, `captureId IX`, `ordinal`, `externalStepId?`, `parentStepId?`, `kind`, `title`, `visibleText`, `status`, `reportedStartedAt?`, `reportedFinishedAt?`                  |
+| `research_source`  | `id PK`, `scopeId IX`, `captureId IX`, `stepId? IX`, `ordinal`, `citationLabel?`, `url`, `title?`, `quotedText?`                                                                             |
+
+Keep answer captures immutable because a web product may revise its displayed
+answer and trace during generation. The thread and turn are current-state
+summaries.
+
+This captures only the step trace the product actually exposes. Do not invent
+hidden reasoning or treat a displayed “research step” as independently verified
+execution evidence.
+
+## 6. Verification evidence and skill validation
+
+## Shared evidence
+
+| Table           | Columns and keys                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `artifact`      | `id PK`, `scopeId IX`, `sha256 IX`, `mediaType`, `byteLength`, `storageKind:inline/external`, `inlineText?`, `externalRef?`, `producerAttemptId?`, `createdAt`, `availability` |
+| `evidence_link` | `id PK`, `scopeId IX`, `subjectKind`, `subjectId IX`, `artifactId? IX`, `snapshotId?`, `researchCaptureId?`, `purpose`, `recordedAt`                                           |
+
+Small extracted text can live inline. Large binary artifacts normally live
+outside the database, with hashes and locators inside it. If offline access to
+those bytes is a requirement, the local artifact store must be explicitly
+included in the deployment contract.
+
+## Built-page verification
+
+| Table                      | Columns and keys                                                                                                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `verification_spec`        | `id PK`, `scopeId IX`, `name`, `version`, `targetContractJson`, `contentHash`, `createdAt`                                                                                                                                           |
+| `verification_check`       | `id PK`, `specId IX`, `ordinal`, `name`, `selectorOrLocatorJson`, `metric`, `expectedJson`, `toleranceJson`, `severity`                                                                                                              |
+| `verification_run`         | `id PK`, `scopeId IX`, `attemptId IX`, `specId`, `buildDigest`, `targetUrl`, `snapshotId`, `toolVersion`, `environmentJson`, `status`, `startedAt`, `finishedAt?`                                                                    |
+| `verification_measurement` | `id PK(runId,checkId,sampleOrdinal)`, `scopeId IX`, `runId IX`, `checkId IX`, `sampleOrdinal`, `elementRef?`, `actualNumber?`, `actualJson?`, `unit?`, `outcome:pass/fail/error/not-applicable`, `evidenceArtifactId?`, `recordedAt` |
+
+Pin measurements to the build, snapshot, viewport, device scale, tool version,
+and relevant environment, including font/readiness conditions. A passing result
+for one build or viewport is not an unqualified statement that “the design is
+verified.”
+
+## Skills
+
+| Table                     | Columns and keys                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skill`                   | `id PK`, `scopeId IX`, `name`, `ownerIdentity`, `activeVersionId?`, `status`, `revision`                                                      |
+| `skill_version`           | `id PK`, `skillId IX`, `version`, `manifestTypeId`, `manifestJson`, `manifestHash`, `packageArtifactId?`, `implementationDigest`, `createdAt` |
+| `skill_requirement`       | `id PK`, `skillVersionId IX`, `capabilityVersionId?`, `operationId?`, `permissionAction?`, `resourceKind?`, `requiredValidationSuiteId?`      |
+| `validation_suite`        | `id PK`, `scopeId IX`, `name`, `version`, `runnerDigest`, `createdAt`                                                                         |
+| `validation_case`         | `id PK`, `suiteId IX`, `ordinal`, `name`, `inputJson`, `expectedJson`, `checkPolicyId`                                                        |
+| `skill_validation_run`    | `id PK`, `scopeId IX`, `skillVersionId IX`, `suiteId`, `attemptId`, `environmentDigest`, `status`, `startedAt`, `finishedAt?`                 |
+| `skill_validation_result` | `id PK(runId,caseId)`, `scopeId IX`, `runId IX`, `caseId`, `outcome`, `actualJson`, `evidenceArtifactId?`, `recordedAt`                       |
+
+A manifest requirement requests authority; it does not grant authority.
+Activation requires exact-version validation and compatibility checks, but
+runtime admission still checks the caller’s current permissions.
+
+## 7. Reducers and their enforcement
+
+Every reducer begins with the same trusted checks: authenticated principal,
+active scope membership, permission evaluation, request-id collision detection,
+payload bounds, and reference validation.
+
+| Reducer family                                                                                  | What it enforces                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bootstrap`, `create_scope`, `register_principal`                                               | Trusted initial ownership; no first-client takeover; explicit principal activation.                                                                                    |
+| `bind_role`, `revoke_role`, `alter_permission`                                                  | Grant authority evaluated against pre-change permissions; delegation limits; no accidental removal of the last recovery administrator; audit in the same transaction.  |
+| `request_approval`, `decide_approval`                                                           | Exact action/target/content hash, eligible approver, expiry, separation of duties where required. Consumption occurs atomically with admission of the approved action. |
+| `create_schema_draft`, `put_definition`, `validate_schema`                                      | Draft-only editing, structural/type validity, supported policies/handlers, compatible references, bounded logical indexing.                                            |
+| `activate_schema`, `activate_capability_version`                                                | Expected head revision, complete validation, immutable activated definitions, installed implementation compatibility.                                                  |
+| `propose_physical_change`, `authorize_publish`, `record_publish_result`                         | Exact plan/artifact approval and trusted publisher identity. These record deployment authorization; they do not execute DDL.                                           |
+| `put_logical_entity`, `delete_logical_entity`                                                   | Type validation, field-level authority, revision match, declared retention/reference rules, atomic lookup maintenance. Append-only classes reject updates/deletes.     |
+| `register_agent`, `heartbeat_agent`, `advertise_capability`                                     | Principal owns the instance; advertised contract/build is admitted. Heartbeat is liveness evidence, not authorization.                                                 |
+| `create_task`, `add_dependency`, `cancel_task`                                                  | Pinned operation/input contract, dependency acyclicity, allowed transition, cancellation authority. Cancellation fences active work.                                   |
+| `claim_task_and_resources`                                                                      | Ready dependencies, attempt limit, compatible worker, all required leases acquired atomically; no partial task/browser claim.                                          |
+| `renew_lease`, `release_lease`, `revoke_lease`                                                  | Holder, epoch, instance, expiry, TTL bounds, and authorized revocation; immutable lease history.                                                                       |
+| `issue_command`, `dispatch_command`, `complete_command`                                         | Valid task/browser leases, operation admission, exact approval where needed, ordered dispatch, matching generation and epoch, immutable completed outcome.             |
+| `record_browser_snapshot`, `record_browser_tabs`                                                | Trusted reporting worker, current generation/lease where applicable, monotonic observation ordering, snapshot-scoped element references.                               |
+| `create_research_thread`, `submit_research_turn`, `record_research_capture`                     | Thread ownership, current browser authority, immutable captures, consistent ordered steps and sources, explicit completeness.                                          |
+| `create_verification_spec`, `start_verification`, `record_measurement`, `finish_verification`   | Immutable versioned specifications, exact build/snapshot provenance, complete check accounting; errors cannot become passes.                                           |
+| `publish_skill_version`, `start_skill_validation`, `record_validation_result`, `activate_skill` | Manifest validation, immutable version/digest, exact suite results, compatibility and activation policy.                                                               |
+| `register_artifact`, `link_evidence`                                                            | Scope access, provenance, size/hash format, permitted storage references. A submitted hash is not proof the bytes were inspected.                                      |
+| `set_ui_state`                                                                                  | Caller’s own UI key, bounded value, expected revision.                                                                                                                 |
+| `expire_work`, `retry_work`, `apply_retention`                                                  | Scheduled maintenance, fencing before retry, bounded batches, retention/legal-hold rules, protected evidence references.                                               |
+
+Each reducer’s writes commit together or roll back together. Therefore claim,
+attempt creation, lease changes, command admission, and audit insertion belong
+in the same transaction where their consistency depends on one
+another.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
+
+A rejected reducer cannot also preserve a newly inserted denial audit row if it
+throws: that insert rolls back. If durable denials are required, record a
+structured denial and return successfully without applying the requested
+mutation, or use a separate trusted audit
+channel.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
+
+## 8. How two agents cannot claim one browser
+
+The exclusivity unit is the browser session, not an individual tab, unless you
+deliberately implement stronger context isolation. Tabs can share
+authentication, profile state, and browser-level behavior.
+
+Use one persistent `resource_lease` row keyed by the browser resource ID. Never
+delete its epoch history by deleting and recreating the current lease row.
+
+Conceptually:
+
+```
+claim_task_and_resources(taskId, browserId, agentInstanceId, requestId):
+
+  authenticate sender and verify ownership of agentInstanceId
+  evaluate task and browser admission policies
+  now := database context timestamp
+
+  read task lease and browser lease
+  require each is released, revoked, or expiresAt <= now
+  require task is runnable
+
+  increment each lease epoch
+  assign both leases to this agent and new task attempt
+  set bounded server-derived expirations
+
+  insert task_attempt
+  set task.currentAttemptId and task.status
+  insert lease_history, execution_event, request_receipt
+  commit
+```
+
+The claim is one reducer transaction—not “read availability in a client, then
+write ownership.” SpacetimeDB’s transactional execution and key constraints
+provide the database-side foundation for this
+exclusion.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
+
+Every renewal, command dispatch, and result commit verifies:
+
+```
+sender owns holderAgentId
+attemptId matches
+lease epoch matches
+lease has not expired
+resource generation matches
+task attempt remains active
+```
+
+Important consequences:
+
+- An expired lease cannot be resurrected by renewal.
+- A new claim increments the epoch.
+- A reconnect does not restore ownership automatically.
+- Disconnect does not need to release ownership; expiry is the recovery
+  mechanism.
+- Timer cleanup is not a correctness prerequisite. Every use checks expiry.
+- Revocation increments the epoch immediately.
+
+## Database exclusion is not browser fencing
+
+The lease prevents two valid owners in the database. It cannot stop a paused old
+process from waking up and sending CDP commands directly.
+
+Require a single browser-owning gateway/worker to enforce generations, lease
+epochs, and command ordering. Agents must not possess independent unrestricted
+CDP connections. The gateway rejects stale tokens and drains or quarantines
+outstanding old-generation work before handing the browser to a new owner.
+
+Even this cannot undo a click or form submission that already happened. Treat
+external effects as a recoverable command protocol:
+
+1. Persist intent.
+2. Admit and dispatch under a valid lease.
+3. Execute outside the transaction.
+4. Record the outcome.
+5. Reconcile ambiguous outcomes before retrying.
+
+Do not promise exactly-once browser effects. In particular, a crash after
+submitting a web-chat prompt but before recording its external turn ID must
+trigger reconciliation, not blind resubmission. Procedures likewise cannot make
+multiple transactions and external effects one atomic operation.spacetimedb+1
+
+## 9. What happens to the existing archive
+
+Keep the archive as a domain, not as the universal storage format for agent
+state.
+
+| Existing table | Recommended treatment                                                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `post`         | Preserve its columns, primary key, and archive meaning. Move authoritative storage behind private visibility and expose a public projection containing only `visibility = public`. |
+| `author`       | Preserve columns/key. Expose publicly only as your publication policy permits; a count of all archived posts may itself disclose nonpublic archive activity.                       |
+| `media`        | Preserve columns/key and explicit `position`. Public projection must join through the parent post’s publication decision.                                                          |
+| `observation`  | Preserve columns/key and append-only meaning. Make private by default: bookmark/like/history provenance should not automatically be public.                                        |
+| `event`        | Preserve as an archive event log. Do not move browser commands, grants, task attempts, or research traces into it. Make private unless an explicitly safe projection is required.  |
+| `membership`   | Preserve columns/key as the latest archive classification projection. Keep its policy separate from IAM role membership. Make private unless intentionally published.              |
+
+Thus all six survive structurally; none should be repurposed. Their exposure and
+reducer enforcement need changes. Whether visibility can be changed in place on
+your deployed version must be verified before migration; if necessary, migrate
+into private successor tables and replace public reads with compatible
+projections.
+
+The critical existing issue is that `post.public: true` exposes hidden and
+shadow posts to direct clients. The `visibility` column currently governs
+application publication, not database read access. The same leak applies to
+media and observations. Public/private access is enforced at the table/view
+boundary.[spacetimedb](https://spacetimedb.com/docs/tables/access-permissions)
+
+## Harden the existing reducers
+
+Keep `observe` as the single exported archive post-write path, but correct these
+behaviors:
+
+- Authenticate callers and separately authorize publication/hiding. A scrape
+  worker must not gain publication authority merely by passing
+  `visibility: "public"`.
+- Validate the documented closed sets. Comments do not constrain `visibility`,
+  `source`, `action`, `kind`, or `by`.
+- Reject or explicitly merge stale readings. The current reducer can overwrite
+  newer text, metrics, and author details with an older replay.
+- Define idempotency as same request key plus same payload hash. Reusing an
+  observation key with different content must not silently mutate the post.
+- Define trusted backfill semantics for `firstSeenAt`. Preserving the stored
+  value is consistent with the existing contract; finding an earlier historical
+  observation is a separate reconciliation decision.
+- Reject changes to an established post’s author, or update both authors’ counts
+  atomically. The current code does neither.
+- Make `classify` compare decision order rather than arrival order. Currently
+  “latest” means the last reducer invocation, not greatest `at`.
+- Validate `confidence` as finite and within `[0,1]`, and validate list
+  existence.
+- Make `attach` require its parent post and recognized media kind. Add explicit
+  replace/remove semantics for attachments absent from a new complete scrape.
+- Keep `record` for archive events only; validate event kinds and payload
+  shapes.
+
+The existing key formats can remain for compatibility. New APIs should use safer
+IDs and receipts rather than propagate delimiter-based key construction.
+
+## 10. Runtime schema modification and physical deployment
+
+For logical changes, authorized reducers can create a draft, validate it, and
+atomically switch `schema_head`. Runtime workers can discover the new contracts
+through subscriptions without reading TypeScript.
+
+For physical changes, use this separate flow:
+
+1. Store a proposed migration and exact target manifest.
+2. Authorize it using current roles and an approval bound to the plan hash.
+3. A trusted external controller generates declarations, builds the module,
+   tests it, and publishes the exact approved artifact.
+4. The controller records the resulting module digest and migration outcome.
+5. Activate the corresponding catalog only after compatibility checks.
+
+Compatible changes may migrate automatically; more complicated changes can
+require successor tables and incremental migration. Publishing an updated
+module—not editing catalog rows—is the documented mechanism for physical schema
+evolution.[spacetimedb](https://spacetimedb.com/docs/intro/faq)
+
+There is a hard trust limit: the publisher can replace the authorization
+reducers themselves. Database roles can govern the cooperative deployment
+workflow, but they cannot constrain someone who independently controls the
+database owner credentials or host. Keep publisher credentials outside the
+agent’s authority; the database owner can bypass ordinary table visibility
+restrictions.[spacetimedb](https://spacetimedb.com/docs/1.12.0/databases)
+
+Also, publication and the preceding authorization transaction are not one atomic
+operation. Use a deployment lock/quiescence protocol and explicit recovery
+states.
+
+## 11. Subscriptions and local completeness
+
+Expose indexed, caller-authorized views such as:
+
+- `my_tasks`, `task_detail`, `task_events`.
+- `available_browser_sessions`, `browser_tabs`, `latest_page_snapshot`.
+- `research_threads`, `research_turn_captures`, `research_capture_steps`.
+- `verification_runs`, `verification_measurements`.
+- `skill_catalog`, `skill_validation_history`.
+- `capability_catalog`, `schema_release_detail`, `effective_permissions`.
+- `my_ui_state`.
+- Public archive projections.
+
+Views can be subscribed to and update when their underlying data changes.
+Procedural views need indexed access rather than unrestricted `.iter()` scans,
+which is why scope, identity, parent IDs, and lookup keys are indexed throughout
+this design.[spacetimedb](https://spacetimedb.com/docs/functions/views)
+
+“Everything locally answerable” should mean that current state, declared
+contracts, authority, outcomes, and evidence provenance can be read from this
+database. It must not mean that a database row is the actual browser connection
+or that an old page snapshot is current truth. Every external observation
+carries capture time and generation.
+
+## 12. What I would refuse to put in the database
+
+- Live CDP sockets, process handles, JavaScript execution contexts, closures, or
+  browser object instances.
+- Plaintext cookies, bearer tokens, private identity keys, browser-profile
+  secrets, or unrestricted credential-bearing endpoints. Store secret
+  references.
+- Arbitrary executable code disguised as policy, schema defaults, or skill
+  manifests.
+- Hidden model chain-of-thought. Store supplied answers and visible product
+  traces.
+- Unbounded screenshots, video, network dumps, duplicate DOMs, or large package
+  binaries by default. Store bounded extracts and content-addressed artifact
+  metadata.
+- Unsupported “verified” flags without a pinned specification, environment,
+  tool, and evidence.
+- Browser exactly-once guarantees that the external system cannot provide.
+- Parallel, contradictory sources of ownership such as `browser.claimedBy`,
+  `agent.currentBrowser`, and `lease.owner`. The lease is authoritative; other
+  fields are projections.
+- Raw secrets or operational state inside the existing public `event.payload`.
+
+## 13. Where I am unsure
+
+Your files do not identify the installed SpacetimeDB SDK or server version. The
+retrieved current documentation identifies itself as version 2.0.0, so I would
+verify the following against the lockfile and deployment before writing
+implementation code:
+
+- Exact TypeScript view, scheduling, index, and procedure APIs.
+- Supported in-place visibility and column migrations.
+- Transaction conflict behavior under competing claims, tested with concurrent
+  clients.
+- Subscription behavior when a role is revoked during an active subscription,
+  including view invalidation and removal of previously visible rows.
+- Practical limits for row sizes, logical-index fan-out, trace volume, retention
+  batches, and procedure execution.
+
+Those uncertainties affect API spelling and rollout, not the central design:
+native operational tables, an immutable versioned catalog, data-driven scoped
+authority, transactional claims with fencing epochs, and external workers whose
+effects are explicitly reconciled rather than mistaken for database
+transactions.
+
+Show me how to structure the logical schema table How should external workers
+interact with reducers Write the TypeScript reducer for task claims How does the
+deployment controller publish modules Show me the complete architecture code
+outline Ask a follow-up
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step
+inside a step is one level in.
+
+| Depth | Step     | Duration | Icon         | Expanded |
+| ----- | -------- | -------- | ------------ | -------- |
+| 0     | Finished | 8s       | chevron-down | true     |
+
+## Cited sources
+
+| Source                                                                | Label       |
+| --------------------------------------------------------------------- | ----------- |
+| https://spacetimedb.com/docs/intro/faq                                | spacetimedb |
+| https://spacetimedb.com/docs/intro/key-architecture                   | spacetimedb |
+| https://spacetimedb.com/docs/tables/access-permissions                | spacetimedb |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/        | spacetimedb |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/        | spacetimedb |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/        | spacetimedb |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/        | spacetimedb |
+| https://spacetimedb.com/docs/tables/access-permissions                | spacetimedb |
+| https://spacetimedb.com/docs/intro/faq                                | spacetimedb |
+| https://spacetimedb.com/docs/1.12.0/databases                         | spacetimedb |
+| https://spacetimedb.com/docs/functions/views                          | spacetimedb |
+| https://spacetimedb.com/docs/intro/faq                                | spacetimedb |
+| https://spacetimedb.com/docs/functions/reducers                       | spacetimedb |
+| https://spacetimedb.com/docs/functions/procedures/                    | spacetimedb |
+| https://spacetimedb.com/docs/intro/key-architecture                   | spacetimedb |
+| https://spacetimedb.com/docs/tables/access-permissions                | spacetimedb |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/        | spacetimedb |
+| https://spacetimedb.com/docs/1.12.0/databases                         | spacetimedb |
+| https://spacetimedb.com/docs/functions/views                          | spacetimedb |
+| https://spacetimedb.com/docs/clients/typescript                       | spacetimedb |
+| https://spacetimedb.com/docs/databases/inter-database-communication   | spacetimedb |
+| https://spacetimedb.com/docs/databases/cheat-sheet                    | spacetimedb |
+| https://spacetimedb.com/docs/how-to/unit-testing                      | spacetimedb |
+| https://spacetimedb.com/docs/1.12.0/tables/file-storage               | spacetimedb |
+| https://spacetimedb.com/docs/tables/event-tables                      | spacetimedb |
+| https://staging.spacetimedb.com/docs/1.12.0/tables/access-permissions | spacetimedb |
+| https://spacetimedb.com/docs/how-to/app-patterns/call-ai-model        | spacetimedb |
+
+--- FILE: e9b61659.md ---
+---
+title: "Auditing the repository: findings and remediation"
+thread: e9b61659-222b-4caf-9336-69487c7c1892
+project: DELO
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/e9b61659-222b-4caf-9336-69487c7c1892
+captured: 2026-11-03T21:57:37
+segments: 1
+collapsed: false
+steps: 1
+sources: 10
+---
+
+# Auditing the repository: findings and remediation
+
+| Field         | Value                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Thread        | `e9b61659-222b-4caf-9336-69487c7c1892`                                |
+| Project       | DELO                                                                  |
+| Source        | https://www.perplexity.ai/search/e9b61659-222b-4caf-9336-69487c7c1892 |
+| Captured      | 2026-11-03T21:57:37                                                   |
+| Segments      | 1                                                                     |
+| Trace steps   | 1                                                                     |
+| Cited sources | 10                                                                    |
+| Characters    | 13557                                                                 |
+
+## Transcript
+
+DELO Today 4:18 PM
+
+Next subsystem, and I want your reasoning rather than a checklist. Read
+Maintain/Source/Transport in TimeLine-DELO/TimeLine - how it drives the browser
+over CDP, how it posts and reads, and how it fails. Tell me which invariants the
+code assumes about the browser and the page, where each assumption can break in
+practice, and which of those breaks would be silent rather than loud. Cite the
+file and line for each claim, and say plainly where you are inferring rather
+than reading. If a claim needs a run to settle, say what you would run.
+
+The central assumption is that a successful browser interaction is evidence
+about the intended post. The code is strongest at detecting broken CDP
+connections, but weaker at proving **identity**, completeness, and persistence:
+a valid protocol response can describe the wrong article, incomplete content, or
+an optimistic UI change.
+
+I read the transport implementations and followed their calls into
+Browser/Session, Browser/Selector, and the CDP client. The references below are
+repository-relative file-and-line references to the versions retrieved in this
+pass. These are source findings and inferred failure scenarios—not browser
+reproductions.
+
+## Post identity is stable, but article position is not
+
+The selector explicitly acknowledges that the page recycles articles as you
+scroll; it provides ID-based lookup for that reason
+(`Maintain/Source/Browser/Selector/Post.ts:8–10, 94–96`). Initial resolution by
+`--id` uses that protection: `withTarget()` passes the requested ID into
+`snapshot()` (`Maintain/Source/Transport/CDP/Post.ts:63–64, 137`).
+
+But the first mutation does not preserve that identity. `toggle()` sends only
+the article index and control, and `settle()` also polls by index. The selector
+chooses by ID only when the request includes one; otherwise it selects the
+current article at that index
+(`Maintain/Source/Browser/Session/Post.ts:112–136`;
+`Maintain/Source/Browser/Selector/Post.ts:204–205`).
+
+The inference is a time-of-check/time-of-use failure: if article A occupied
+index 0 during the initial read, but article B occupies it when the click
+executes, the click can affect B. The returned post identity still comes from
+the original context, A (`Maintain/Source/Transport/CDP/Post.ts:196–203`).
+
+This can be silent. The code checks that an article and button were found, not
+that the clicked article has the original ID. A later read by A’s ID does not
+undo the click on B.
+
+To settle this, I would exercise the exported selector expression against a
+controlled page: snapshot A, reorder or replace the articles before the toggle
+expression, then record which button receives the click. This needs no
+live-account mutation.
+
+## A URL is treated as a locator, not an identity constraint
+
+For `--url`, validation merely checks whether `idFromHref()` finds
+`/status/<digits>` anywhere in the string. It does not validate the URL’s host
+or scheme (`Maintain/Source/Model/Post/Post.ts:24–26`;
+`Maintain/Source/Transport/CDP/Post.ts:69–74`).
+
+More importantly, `wanted` is populated only for the `id` target variant. A URL
+target therefore waits for any article and snapshots index 0, rather than
+selecting the ID embedded in the URL
+(`Maintain/Source/Transport/CDP/Post.ts:63–64, 116–137`).
+
+What I am reading: there is no requested-ID check on the URL path through
+`withTarget()`.
+
+What I am inferring: a redirect, an unexpected page layout, or a thread where
+another article appears first can produce a successful reading of another post.
+The same path is used for like/bookmark operations, so the assumption matters
+beyond extraction. Whether the current X detail page actually presents that
+ordering requires a run.
+
+I would test a controlled URL containing `/status/123` whose page contains
+articles 999 and 123 in that order. The expected invariant is that the resolved
+post is 123, regardless of article order.
+
+## “An article exists” is treated as “the post is ready”
+
+`withTarget()` waits up to 25 seconds for
+`document.querySelectorAll("article").length > 0`. Absence produces a named
+`no-post` failure; presence proceeds directly to the snapshot
+(`Maintain/Source/Transport/CDP/Post.ts:116–150`).
+
+That proves the existence of an article, not that its text, author, controls, or
+media have finished rendering. The selector supplies empty text, an empty author
+handle, null time, and empty media when the corresponding nodes are absent
+(`Maintain/Source/Browser/Selector/Post.ts:104–138`).
+
+Consequently:
+
+- No articles is loud: `no-post`.
+- A partially rendered article can be silent: a structurally successful reading
+  with missing fields.
+- With an ID target, an unrelated article can satisfy readiness before the
+  desired post arrives; the immediate ID snapshot can then fail loudly even
+  though the desired post would appear later.
+
+The last case is an inference about asynchronous rendering, not an observed
+live-page failure. I would run a fixture that inserts an unrelated article
+immediately, the target article later, and its media later still; then compare
+when the transport returns with when the fixture becomes complete.
+
+## Extraction assumes the DOM preserves specific meanings
+
+The reading depends on relative permalinks matching `/handle/status/digits`,
+specific `data-testid` values, and English metric keywords. These are not merely
+cosmetic selectors: they determine identity, control state, and numeric values
+(`Maintain/Source/Browser/Selector/Post.ts:55–79, 83–90, 104–123, 140–157, 208–235`).
+
+Some consequences are directly visible:
+
+- Unreadable counts become zero rather than unknown.
+- Missing controls have `present: false` and `active: false`.
+- Missing text becomes `""`.
+- A video without `src` can be represented using its poster URL while retaining
+  `kind: "video"`.
+
+Those behaviors are implemented at
+`Maintain/Source/Browser/Selector/Post.ts:55–65, 119–132, 208–235`.
+
+The inference is that a selector change, localized count format, or delayed
+rendering can turn “not observed” into apparently valid data. For example,
+parsing removes commas before interpreting the number, so a decimal-comma label
+can be misread; the views selector also specifically searches English
+“Views”/“views” (`Maintain/Source/Browser/Selector/Post.ts:58, 143`).
+
+These are predominantly silent failures. I would evaluate the actual exported
+`expression()` against DOM fixtures with missing controls, localized labels,
+absolute rather than relative permalinks, and video posters without playable
+sources. The test should distinguish unknown from zero/false/empty, rather than
+merely assert that extraction returns an object.
+
+## Background visibility is handled asymmetrically
+
+There is a deliberate workaround for lazy media: `reveal()` enables focus
+emulation and an active lifecycle state. But it is called only when the target
+was addressed by ID and the tool opened a temporary tab
+(`Maintain/Source/Transport/CDP/Post.ts:33–45, 63–64, 129–135`).
+
+A URL target can also open a temporary tab, but does not take that branch. An ID
+target that reuses an already-open background tab does not take it either
+(`Maintain/Source/Transport/CDP/Post.ts:82–85, 97–111`).
+
+The source itself explains that hidden detail tabs can otherwise report empty
+media. What remains an inference is how often current browser/page behavior
+exposes this discrepancy. In addition, both reveal commands swallow errors, so a
+failed workaround has no warning
+(`Maintain/Source/Transport/CDP/Post.ts:38–44`).
+
+I would compare the same photo post through `read({id})` and `read({url})`,
+first with no existing detail tab and then with a pre-existing background tab.
+That would establish whether the representations diverge in the current
+environment.
+
+## “Network idle” means no recent event—not no outstanding request
+
+The session updates one timestamp on request start, finish, or failure.
+`waitForIdle()` returns true once that timestamp has been quiet long enough; it
+does not maintain a set of in-flight requests
+(`Maintain/Source/Browser/Session/Session.ts:75–90, 139–147`).
+
+Therefore a request can start, remain pending longer than the quiet interval,
+and still satisfy this implementation’s idle condition. That follows from the
+algorithm; it does not require speculation about X.
+
+The practical consequence is inferred: a reload or tab close can occur while a
+mutation request remains outstanding. If the Network domain is unavailable, the
+session silently degrades further to a timed quiet window
+(`Maintain/Source/Browser/Session/Session.ts:81–89`).
+
+I would attach to a local fixture that starts a fetch whose server response is
+deliberately held open, then measure `waitForIdle({quiet: 600})`. If it resolves
+while the request remains pending, it proves the semantic gap.
+
+## A completed click is not consistently a verified write
+
+The mutation path contains useful safeguards: no click if the observed state
+already matches, named failures for missing article/button, and reload-based
+verification for temporary tabs
+(`Maintain/Source/Browser/Session/Post.ts:112–133, 64–97`).
+
+But it also contains several weaker assumptions:
+
+- The result of the six-second `settle()` is discarded.
+- If the post/control cannot be read afterward, `now` defaults to the desired
+  state.
+- Reload-based verification can return null; that leaves the earlier value in
+  place.
+- Existing user tabs are not reloaded for persistence verification.
+
+These behaviors are explicit in
+`Maintain/Source/Browser/Session/Post.ts:135–146`; the persistence fallback is
+at `:69–97`.
+
+Thus `now: true` need not mean “the server accepted and retained the change.” In
+the missing-control branch it can mean “the caller wanted true and verification
+no longer had a readable control.”
+
+A server rejection that remains visible as the opposite state can be returned as
+`now != want`, which is observable but not thrown as an error. A rejection
+masked by optimistic state or missing verification can be silent at the
+transport boundary. I have not traced the CLI’s treatment of that returned
+mismatch in this pass.
+
+I would test `toggle()` with a fake Session that reports a successful click,
+never settles, and then loses the control. A second test would make the
+temporary-tab reload fail. Neither requires clicking a real account.
+
+## CDP failures are usually loud; polling deliberately blurs their cause
+
+The underlying client rejects protocol errors, times out individual commands,
+and rejects pending calls when the socket closes. Those become `cdp-error` or
+`cdp-unreachable`, rather than indefinite pending operations
+(`Maintain/Source/Browser/CDP/Client.ts:107–136, 139–179`).
+
+Page evaluation also turns JavaScript exceptions into named `cdp-error` failures
+(`Maintain/Source/Browser/CDP/Command/Evaluate.ts:30–42`).
+
+However, `Session.waitFor()` catches every evaluation error and keeps
+polling—not only the transient execution-context destruction mentioned in its
+comment (`Maintain/Source/Browser/Session/Session.ts:149–163`).
+
+That is a reasonable navigation-recovery strategy with a diagnostic cost: a
+permanently invalid expression or dead connection can emerge as a generic
+readiness timeout instead of its original cause. In the post path this becomes
+“the page showed no posts”; other direct evaluations remain loud.
+
+I would inject a permanent evaluation error and compare it with a transient
+context-destruction error. The important assertion is not just that both
+terminate, but whether the permanent error’s cause remains available to the
+caller.
+
+## Cleanup assumes attachment succeeded and close failures are harmless
+
+`withTarget()` encloses attachment in its `try/finally`, so it attempts to close
+a temporary tab even if attachment fails
+(`Maintain/Source/Transport/CDP/Post.ts:68, 115, 162–172`).
+
+`withPage()` attaches before entering its cleanup `try`. If it has opened a tab
+and attachment rejects, that cleanup block is never reached
+(`Maintain/Source/Browser/Session/Page.ts:57–85, 113–123`).
+
+That is a source-confirmed cleanup gap. Its practical manifestation would be a
+leaked tab after an attachment failure. Both cleanup paths also suppress close
+errors on the assumption that the tab is already gone; an unreachable browser is
+another possible explanation, so cleanup failure can be silent.
+
+I would inject an attachment failure after successful tab creation and assert
+that the close operation is attempted. This should be a controlled test, not a
+run that deliberately leaves tabs in your browser.
+
+## The architectural distinction to preserve
+
+The transport correctly separates “live browser” from “shadow archive”: the view
+transport refuses browser operations and mutations, and requires an ID for
+archived reads (`Maintain/Source/Transport/View/Transport.ts:59–95`). Transport
+selection also rejects unsupported declared requirements before command
+execution (`Maintain/Source/Transport/Select.ts:47–58`).
+
+The weakness is not that the subsystem lacks failures. It is that its strongest
+failure signals concern connection and element availability, while its weakest
+signals concern the meaning of a successful result. The most valuable tests
+would therefore adversarially change identity, delay completeness, and reject
+persistence—not just disconnect CDP.
+
+Trace the failure modes when CDP execution races Examine how
+Maintain/Source/Browser handles selector drift Audit the next subsystem for
+identity and persistence risks Detail the persistence and state verification
+mechanisms Propose adversarial test scenarios for the CDP transport Ask a
+follow-up
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step
+inside a step is one level in.
+
+| Depth | Step     | Duration | Icon         | Expanded |
+| ----- | -------- | -------- | ------------ | -------- |
+| 0     | Finished | 37s      | chevron-down | true     |
+
+## Cited sources
+
+| Source                                                                                                                             | Label           |
+| ---------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| https://www.kenmuse.com/blog/how-to-handle-step-and-job-errors-in-github-actions/                                                  | kenmuse         |
+| https://docs.npmjs.com/cli/v12/using-npm/scripts                                                                                   | npmjs           |
+| https://docs.npmjs.com/cli/v8/using-npm/scripts/                                                                                   | npmjs           |
+| https://bun.com/docs/pm/lifecycle                                                                                                  | bun             |
+| https://docs.github.com/en/actions/reference/workflows-and-actions/expressions                                                     | github          |
+| https://notes.kodekloud.com/docs/GitHub-Actions/Continuous-Integration-with-GitHub-Actions/Using-continue-on-error-expression/page | notes.kodekloud |
+| https://www.nodejs-security.com/blog/npm-ignore-scripts-best-practices-as-security-mitigation-for-malicious-packages               | nodejs-security |
+| https://stackoverflow.com/questions/58858429/how-to-run-a-github-actions-step-even-if-the-previous-step-fails-while-still-f        | stackoverflow   |
+| https://stackoverflow.com/questions/62045967/is-there-a-way-to-continue-on-error-while-still-getting-correct-feedback              | stackoverflow   |
+| https://stackoverflow.com/questions/59471962/how-does-npm-behave-differently-with-ignore-scripts-set-to-true                       | stackoverflow   |
+
+--- FILE: Index.md ---
+# Captured conversations
+
+One record per research thread, shaped like a decision record: frontmatter, a
+metadata table, the transcript, the step trace and the cited sources. The thread
+id is the filename, because a title changes when a follow-up is asked.
+
+6 record(s), 188,743 characters. Generated by `catalog.mjs`; do not edit by
+hand.
+
+| Thread                                                | Title                                                          | Project         | Characters | Steps | Sources |
+| ----------------------------------------------------- | -------------------------------------------------------------- | --------------- | ---------- | ----- | ------- |
+| [`432b4991-2059-425c-a046-fcbe27dae492`](432b4991.md) | A single state chart reconciled across five domains            | DELO            | 27,959     | 1     | 16      |
+| [`4ffde6d5-a7d3-404f-96b5-e24f8009a76b`](4ffde6d5.md) | Converting the capability system to Rust                       | DELO            | 35,775     | 3     | 35      |
+| [`575cb198-6013-4389-a900-7deeb1e53199`](575cb198.md) | Design the smallest portable workflow for asking a web chat UI | Hermes Research | 41,679     | 3     | 20      |
+| [`57ca3694-a4fa-4e94-817f-f79f5e5e0854`](57ca3694.md) | Composability layer for a real codebase: the inventory brief   | Hermes Research | 18,751     | 1     | 18      |
+| [`d900b22a-f5b3-405c-b546-84fb25dd4483`](d900b22a.md) | Modelling the agentic system on SpacetimeDB                    | DELO            | 49,292     | 1     | 27      |
+| [`e9b61659-222b-4caf-9336-69487c7c1892`](e9b61659.md) | Auditing the repository: findings and remediation              | DELO            | 15,287     | 1     | 10      |

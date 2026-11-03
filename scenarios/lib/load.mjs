@@ -54,42 +54,63 @@ export const compare = (observed, expected) => {
 	} else if (want?.kind === "error") {
 		if (want.code !== got.code) wrong.push(`result code: wanted ${want.code}, got ${got.code}`);
 		if (want.message !== undefined && !String(got.message ?? "").includes(want.message))
-			wrong.push(`result message: wanted to contain ${JSON.stringify(want.message)}, got ${JSON.stringify(got.message)}`);
+			wrong.push(
+				`result message: wanted to contain ${JSON.stringify(want.message)}, got ${JSON.stringify(got.message)}`,
+			);
 		// `observed` is the one token that must survive somewhere in the failure.
 		// The two ports split a sentence and an observation differently - the
 		// TypeScript one writes its own sentence and keeps the reason in `detail`,
 		// the Rust one has a code and no room for a fourth kind of failure, so its
 		// launcher's sentence is the message - and what the port promises is that
 		// the observation is not lost, not which field it sits in.
-		if (want.observed !== undefined && !`${got.message ?? ""} ${got.detail ?? ""}`.includes(want.observed))
+		if (
+			want.observed !== undefined &&
+			!`${got.message ?? ""} ${got.detail ?? ""}`.includes(want.observed)
+		)
 			wrong.push(
 				`result observation: wanted ${JSON.stringify(want.observed)} in message or detail, got ${JSON.stringify(`${got.message ?? ""} / ${got.detail ?? ""}`)}`,
 			);
 	} else if (want?.kind === "target") {
 		for (const field of ["ownership", "url", "ws"])
 			if (want[field] !== got[field])
-				wrong.push(`result ${field}: wanted ${JSON.stringify(want[field])}, got ${JSON.stringify(got[field])}`);
+				wrong.push(
+					`result ${field}: wanted ${JSON.stringify(want[field])}, got ${JSON.stringify(got[field])}`,
+				);
 	} else if (want?.kind === "value") {
 		if (!same(want.value, got.value))
-			wrong.push(`result value: wanted ${JSON.stringify(want.value)}, got ${JSON.stringify(got.value)}`);
+			wrong.push(
+				`result value: wanted ${JSON.stringify(want.value)}, got ${JSON.stringify(got.value)}`,
+			);
 	} else if (want?.kind === "answer") {
 		for (const field of ["text", "model", "mode"])
 			if (want[field] !== undefined && want[field] !== got[field])
-				wrong.push(`result ${field}: wanted ${JSON.stringify(want[field])}, got ${JSON.stringify(got[field])}`);
+				wrong.push(
+					`result ${field}: wanted ${JSON.stringify(want[field])}, got ${JSON.stringify(got[field])}`,
+				);
 		for (const field of ["trace", "sources"])
 			if (want[field] !== undefined && !same(want[field], got[field]))
-				wrong.push(`result ${field}: wanted ${JSON.stringify(want[field])}, got ${JSON.stringify(got[field])}`);
+				wrong.push(
+					`result ${field}: wanted ${JSON.stringify(want[field])}, got ${JSON.stringify(got[field])}`,
+				);
 	} else if (want?.kind === "findings") {
 		if (!same(want.rules, got.rules))
-			wrong.push(`result rules: wanted ${JSON.stringify(want.rules)}, got ${JSON.stringify(got.rules)}`);
+			wrong.push(
+				`result rules: wanted ${JSON.stringify(want.rules)}, got ${JSON.stringify(got.rules)}`,
+			);
 	} else if (want?.kind === "names") {
 		if (!same(want.names, got.names))
-			wrong.push(`result names: wanted ${JSON.stringify(want.names)}, got ${JSON.stringify(got.names)}`);
+			wrong.push(
+				`result names: wanted ${JSON.stringify(want.names)}, got ${JSON.stringify(got.names)}`,
+			);
 	} else if (want?.kind === "digest") {
 		if (want.equals !== undefined && want.equals !== got.value)
-			wrong.push(`result digest: wanted ${JSON.stringify(want.equals)}, got ${JSON.stringify(got.value)}`);
+			wrong.push(
+				`result digest: wanted ${JSON.stringify(want.equals)}, got ${JSON.stringify(got.value)}`,
+			);
 		if (want.matches !== undefined && !new RegExp(want.matches).test(String(got.value)))
-			wrong.push(`result digest: wanted to match ${want.matches}, got ${JSON.stringify(got.value)}`);
+			wrong.push(
+				`result digest: wanted to match ${want.matches}, got ${JSON.stringify(got.value)}`,
+			);
 	}
 
 	if (expected.effects !== undefined && !same(expected.effects, observed.effects))

@@ -40,8 +40,7 @@ const At = (Name, Fallback) => {
 	return Index === -1 ? Fallback : Args[Index + 1];
 };
 const Flag = (Name) => Args.includes(Name);
-const WsUrl =
-	Args[0] !== undefined && !Args[0].startsWith("--") ? Args[0] : null;
+const WsUrl = Args[0] !== undefined && !Args[0].startsWith("--") ? Args[0] : null;
 const Thread = At("--thread", null);
 const Fixture = At("--fixture", null);
 const Expand = Flag("--expand");
@@ -59,9 +58,7 @@ if (WsUrl === null && Fixture === null && !SelfTest) {
 }
 
 if (WsUrl === null && Expand) {
-	console.error(
-		"blocker: --expand needs a page to click; a fixture has no DOM",
-	);
+	console.error("blocker: --expand needs a page to click; a fixture has no DOM");
 	process.exit(2);
 }
 
@@ -238,9 +235,7 @@ if (SelfTest) {
 		new Function(Extract);
 		new Function(Open);
 	} catch (Error) {
-		console.error(
-			`blocker: a page-side script does not parse: ${Error.message}`,
-		);
+		console.error(`blocker: a page-side script does not parse: ${Error.message}`);
 		process.exit(2);
 	}
 	console.error("page scripts parse: extract, expand");
@@ -282,9 +277,7 @@ const Emit = (Payload) => {
 	const Sources = Array.isArray(Payload.sources) ? Payload.sources : [];
 
 	for (const Step of Steps) {
-		console.log(
-			JSON.stringify({ at: At, thread: Thread, kind: "step", ...Step }),
-		);
+		console.log(JSON.stringify({ at: At, thread: Thread, kind: "step", ...Step }));
 	}
 	for (const Source of Sources) {
 		console.log(
@@ -306,8 +299,7 @@ const Emit = (Payload) => {
 	console.error(
 		`steps: ${Steps.length}  sources: ${Sources.length}  deepest: ${Deepest}  collapsed: ${Collapsed}`,
 	);
-	if (Payload.selector)
-		console.error(`headers: ${Payload.headers} via ${Payload.selector}`);
+	if (Payload.selector) console.error(`headers: ${Payload.headers} via ${Payload.selector}`);
 	if (Number(Payload.unread) > 0) {
 		console.error(
 			`warning: ${Payload.unread} step(s) have headers in their children container that were not read; the tree has a hole`,
@@ -331,9 +323,7 @@ if (Fixture !== null) {
 	try {
 		Payload = JSON.parse(readFileSync(Fixture, "utf8"));
 	} catch (Error) {
-		console.error(
-			`blocker: cannot read fixture ${Fixture}: ${Error.message}`,
-		);
+		console.error(`blocker: cannot read fixture ${Fixture}: ${Error.message}`);
 		process.exit(2);
 	}
 	Emit(Payload);
@@ -347,8 +337,7 @@ const Socket = new WebSocket(WsUrl);
 try {
 	await new Promise((Done, Fail) => {
 		Socket.onopen = Done;
-		Socket.onerror = (Event) =>
-			Fail(new Error(`cannot connect: ${Event.message ?? "error"}`));
+		Socket.onerror = (Event) => Fail(new Error(`cannot connect: ${Event.message ?? "error"}`));
 	});
 } catch (Error) {
 	console.error(`blocker: ${Error.message}`);
@@ -360,10 +349,7 @@ Socket.onmessage = (Event) => {
 	const Slot = Pending.get(Message.id);
 	if (Slot === undefined) return;
 	Pending.delete(Message.id);
-	if (Message.error)
-		Slot.Fail(
-			new Error(`${Message.error.message} (${Message.error.code})`),
-		);
+	if (Message.error) Slot.Fail(new Error(`${Message.error.message} (${Message.error.code})`));
 	else Slot.Done(Message.result);
 };
 
@@ -371,9 +357,7 @@ const Send = (Method, Params = {}) =>
 	new Promise((Done, Fail) => {
 		const Key = ++Id;
 		Pending.set(Key, { Done, Fail });
-		Socket.send(
-			JSON.stringify({ id: Key, method: Method, params: Params }),
-		);
+		Socket.send(JSON.stringify({ id: Key, method: Method, params: Params }));
 	});
 
 // A collapsed node has no rendered children, so its subtree does not exist to
@@ -386,9 +370,7 @@ if (Expand) {
 			returnByValue: true,
 		});
 		if (Result.exceptionDetails) {
-			console.error(
-				`blocker: expanding failed: ${Result.exceptionDetails.text}`,
-			);
+			console.error(`blocker: expanding failed: ${Result.exceptionDetails.text}`);
 			process.exit(2);
 		}
 		return Number(Result.result?.value ?? 0);
@@ -410,9 +392,7 @@ if (Expand) {
 		}
 		Opened += Before - After;
 	}
-	console.error(
-		`expanded: ${Opened} step header(s) over at most ${Passes} pass(es)`,
-	);
+	console.error(`expanded: ${Opened} step header(s) over at most ${Passes} pass(es)`);
 	if (Stuck > 0) {
 		console.error(
 			`warning: ${Stuck} step header(s) stayed collapsed after a click; their subtrees are not in the trace`,

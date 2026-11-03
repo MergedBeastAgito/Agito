@@ -41,9 +41,7 @@ const Described = (table: string) => {
 
 const Conforms = (table: string, column: Column, value: Value): void => {
 	const wrong = () => {
-		throw new Error(
-			`${table}.${column.name} is ${column.type}, got ${JSON.stringify(value)}`,
-		);
+		throw new Error(`${table}.${column.name} is ${column.type}, got ${JSON.stringify(value)}`);
 	};
 	switch (column.type) {
 		case "string":
@@ -67,13 +65,10 @@ const Conforms = (table: string, column: Column, value: Value): void => {
 
 const Check = (table: string, row: Row): void => {
 	const described = Described(table);
-	const columns = new Map(
-		described.columns.map((column) => [column.name, column]),
-	);
+	const columns = new Map(described.columns.map((column) => [column.name, column]));
 	for (const [name, value] of Object.entries(row)) {
 		const column = columns.get(name);
-		if (column === undefined)
-			throw new Error(`${table}.${name} is not a described column`);
+		if (column === undefined) throw new Error(`${table}.${name} is not a described column`);
 		Conforms(table, column, value);
 	}
 	for (const column of described.columns) {
@@ -107,8 +102,7 @@ export class Memory implements Context {
 		Check(table, row);
 		const id = this.#id(table, row);
 		const rows = this.#rows(table);
-		if (rows.has(id))
-			throw new Error(`insert of an existing row: ${table}/${id}`);
+		if (rows.has(id)) throw new Error(`insert of an existing row: ${table}/${id}`);
 		rows.set(id, row);
 		this.writes.push({ kind: "insert", table, id, row });
 	}
@@ -119,8 +113,7 @@ export class Memory implements Context {
 		Check(table, row);
 		const id = this.#id(table, row);
 		const rows = this.#rows(table);
-		if (!rows.has(id))
-			throw new Error(`update of a missing row: ${table}/${id}`);
+		if (!rows.has(id)) throw new Error(`update of a missing row: ${table}/${id}`);
 		rows.set(id, row);
 		this.writes.push({ kind: "update", table, id, row });
 	}
@@ -129,8 +122,7 @@ export class Memory implements Context {
 		if (Described(table).appendOnly)
 			throw new Error(`delete from an append-only table: ${table}`);
 		const rows = this.#rows(table);
-		if (!rows.delete(id))
-			throw new Error(`delete of a missing row: ${table}/${id}`);
+		if (!rows.delete(id)) throw new Error(`delete of a missing row: ${table}/${id}`);
 		this.writes.push({ kind: "delete", table, id, row: null });
 	}
 
@@ -143,8 +135,7 @@ export class Memory implements Context {
 	#id(table: string, row: Row): string {
 		const key = PrimaryKey(table);
 		const value = row[key];
-		if (typeof value !== "string")
-			throw new Error(`${table}.${key} is not a string key`);
+		if (typeof value !== "string") throw new Error(`${table}.${key} is not a string key`);
 		return value;
 	}
 

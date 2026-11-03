@@ -37,8 +37,7 @@ export type Result = { readonly ok: true } | Refusal;
  * here is assignable to the plain `{ ok: true }`, so a caller written against the
  * result type alone still type-checks.
  */
-export type ProbeResult =
-	{ readonly ok: true; readonly observation: Row } | Refusal;
+export type ProbeResult = { readonly ok: true; readonly observation: Row } | Refusal;
 
 const Ok: Result = { ok: true };
 const Refused: Refusal = { ok: false, reason: "admission-refused" };
@@ -79,11 +78,7 @@ export const Latest = (ctx: Context, generation: string): Row | null => {
  */
 const IsLive = (lease: Row, now: number): boolean => {
 	const expiresAt = lease["expiresAt"];
-	return (
-		lease["state"] === "held" &&
-		typeof expiresAt === "number" &&
-		expiresAt > now
-	);
+	return lease["state"] === "held" && typeof expiresAt === "number" && expiresAt > now;
 };
 
 /**
@@ -94,12 +89,7 @@ const IsLive = (lease: Row, now: number): boolean => {
  * fence is checked before expiry because a stale fence is the ordinary case -
  * the worker that woke up late - and the answer must not depend on how late.
  */
-const Fenced = (
-	ctx: Context,
-	generation: string,
-	resource: string,
-	fence: number,
-): Row | null => {
+const Fenced = (ctx: Context, generation: string, resource: string, fence: number): Row | null => {
 	if (Latest(ctx, generation) === null) return null;
 	const lease = ctx.find("lease", resource);
 	if (lease === null) return null;
@@ -141,8 +131,7 @@ export const bind = (ctx: Context, args: Bind): Result => {
 	if (args.manifest.digest.length === 0) return Refused;
 	const named = [...args.manifest.capabilities];
 	if (new Set(named).size !== named.length) return Refused;
-	for (const id of named)
-		if (ctx.find("capability", id) === null) return Refused;
+	for (const id of named) if (ctx.find("capability", id) === null) return Refused;
 
 	let sequence: number;
 	if (args.previous === null) {
@@ -278,8 +267,7 @@ export type Probe = {
 export const probe = (ctx: Context, args: Probe): ProbeResult => {
 	if (args.property.length === 0) return Refused;
 	if (!Number.isInteger(args.version) || args.version < 1) return Refused;
-	if (Fenced(ctx, args.generation, args.resource, args.fence) === null)
-		return Refused;
+	if (Fenced(ctx, args.generation, args.resource, args.fence) === null) return Refused;
 
 	const id = `${args.property}:${args.version}:${ctx.sender}`;
 	if (ctx.find("probe", id) !== null) return Exhausted;
@@ -323,8 +311,7 @@ export const recordTrace = (ctx: Context, args: Trace): Result => {
 	if (args.kind.length === 0 || args.subject.length === 0) return Refused;
 	const id = `${ctx.now}:${args.kind}:${args.subject}`;
 	const existing = ctx.find("trace", id);
-	if (existing !== null)
-		return existing["payload"] === args.payload ? Ok : Refused;
+	if (existing !== null) return existing["payload"] === args.payload ? Ok : Refused;
 	ctx.insert("trace", {
 		id,
 		at: ctx.now,

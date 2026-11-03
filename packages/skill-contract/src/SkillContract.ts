@@ -34,8 +34,7 @@ const CorpusIndexes = [IndexFile, "AGENTS.md"];
  * Code-unit order, not `localeCompare`: a digest and a sweep must not change
  * meaning with the machine's locale.
  */
-const Compare = (left: string, right: string): number =>
-	left < right ? -1 : left > right ? 1 : 0;
+const Compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 /**
  * The entries of a directory, or none.
@@ -88,12 +87,8 @@ type Frontmatter = {
 const Scalar = (lines: string[], literal: boolean): string => {
 	const indented = lines.filter((line) => line.trim() !== "");
 	if (indented.length === 0) return "";
-	const indent = Math.min(
-		...indented.map((line) => /^[ 	]*/.exec(line)?.[0].length ?? 0),
-	);
-	const stripped = lines.map((line) =>
-		line.slice(Math.min(indent, line.length)),
-	);
+	const indent = Math.min(...indented.map((line) => /^[ 	]*/.exec(line)?.[0].length ?? 0));
+	const stripped = lines.map((line) => line.slice(Math.min(indent, line.length)));
 	return literal
 		? stripped.join("\n").trim()
 		: stripped
@@ -183,9 +178,7 @@ const References = async (directory: string): Promise<string[]> => {
 };
 
 /** The first index a corpus root carries, and the name it was found under. */
-const CorpusIndex = async (
-	directory: string,
-): Promise<{ name: string; text: string } | null> => {
+const CorpusIndex = async (directory: string): Promise<{ name: string; text: string } | null> => {
 	for (const name of CorpusIndexes) {
 		const text = await Text(join(directory, name));
 		if (text !== null) return { name, text };
@@ -239,23 +232,14 @@ export const Create = (): SkillContract => ({
 		} else {
 			const { data, error } = SplitFrontmatter(body);
 			if (error !== null || data === null) {
-				report(
-					"unparsable",
-					`the frontmatter does not parse: ${error}`,
-				);
+				report("unparsable", `the frontmatter does not parse: ${error}`);
 			} else {
 				const description = data.description?.trim() ?? "";
 				if (description === "") {
-					report(
-						"unparsable",
-						"the frontmatter states no description",
-					);
+					report("unparsable", "the frontmatter states no description");
 				}
 				const name = data.name?.trim() ?? "";
-				if (
-					name !== "" &&
-					name.toLowerCase() !== skill.name.toLowerCase()
-				) {
+				if (name !== "" && name.toLowerCase() !== skill.name.toLowerCase()) {
 					report(
 						"unparsable",
 						`the frontmatter names ${JSON.stringify(name)} but the directory is ${JSON.stringify(skill.name)}`,
@@ -264,9 +248,7 @@ export const Create = (): SkillContract => ({
 			}
 		}
 
-		const index = await Text(
-			join(skill.directory, ReferenceDirectory, IndexFile),
-		);
+		const index = await Text(join(skill.directory, ReferenceDirectory, IndexFile));
 		const references = await References(skill.directory);
 		for (const reference of references) {
 			if (index === null) {
@@ -296,14 +278,8 @@ export const Create = (): SkillContract => ({
 	},
 
 	digest(skills) {
-		const canonical = skills.map((skill) => [
-			skill.name,
-			skill.description,
-			skill.references,
-		]);
-		const bytes = createHash("sha256")
-			.update(JSON.stringify(canonical), "utf8")
-			.digest("hex");
+		const canonical = skills.map((skill) => [skill.name, skill.description, skill.references]);
+		const bytes = createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex");
 		return `sha256:${bytes}`;
 	},
 });

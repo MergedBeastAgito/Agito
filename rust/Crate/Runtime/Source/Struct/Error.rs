@@ -12,7 +12,8 @@ use std::fmt;
 pub enum Code {
 	/// The request may not proceed: it is malformed, or its authority ended.
 	AdmissionRefused,
-	/// The resource is held under a newer fence, or an effect is still in it.
+	/// The resource is held under a newer fence, or a local future it admitted
+	/// has not settled.
 	LeaseHeld,
 	/// The run's own allowance is spent: its deadline passed or its count ran
 	/// out.
@@ -51,7 +52,7 @@ pub enum Error {
 		/// What was observed, kept apart from the sentence.
 		Detail:String,
 	},
-	/// The resource is held, or an effect is still in it.
+	/// The resource is held, or a local future it admitted has not settled.
 	LeaseHeld {
 		/// The sentence a human reads.
 		Message:String,

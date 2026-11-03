@@ -1,0 +1,31 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = tab
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yaml,yml}]
+indent_style = space
+indent_size = 2
+
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+
+[*.{ts,tsx,js,mjs,cjs,jsx,css}]
+indent_style = tab
+indent_size = 4
+
+# The Rust tree is tab-indented too, and by hand: there is no `rustfmt.toml`
+# setting `hard_tabs`, so `cargo fmt` would rewrite every crate to four spaces.
+# The editor follows the tree rather than the tool's default.
+[*.rs]
+indent_style = tab
+indent_size = 4

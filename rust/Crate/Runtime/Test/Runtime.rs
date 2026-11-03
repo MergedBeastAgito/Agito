@@ -3,6 +3,18 @@
 //! No tokio, no browser, no network and no sleeping: a lease expires because
 //! the test advances a clock, which is the whole reason the clock is a
 //! parameter of the port rather than a call to the system's.
+//!
+//! Two requirements meet in this file and they are not the same requirement:
+//!
+//! - **Authority** is decided where an effect lands. `Ledger::Record` re-reads
+//!   the table at the instant the effect arrives and refuses a stale fence, a
+//!   stale generation, a released lease or an expired record. The test that
+//!   proves it is `an_effect_that_outlives_its_lease_is_refused_where_it_lands`,
+//!   which is the counterexample from `docs/Review.md` executed.
+//! - **Accounting** is decided by the unsettled-future count, which says a local
+//!   future has not settled. `a_takeover_waits_for_an_unsettled_local_future`
+//!   encodes that and only that. It does not say authority survives a settled
+//!   future, and it is not the guarantee.
 
 use std::{
 	sync::{
@@ -30,6 +42,7 @@ use AgenticRuntime::{
 	Runtime,
 	StateClass,
 	States,
+	Ticket,
 };
 
 /// A clock that only moves when the test moves it.
@@ -78,6 +91,40 @@ fn PollOnce<Work:std::future::Future + ?Sized>(Work:std::pin::Pin<&mut Work>) ->
 	let Waker = std::task::Waker::noop();
 	let mut Context = std::task::Context::from_waker(Waker);
 	matches!(Work.poll(&mut Context), std::task::Poll::Ready(_))
+}
+
+/// A latch an effect waits on, so a test can hold it between "admitted" and
+/// "the write" without an executor.
+///
+/// `BlockOn` re-polls in a loop, so a latch opened without waking anyone is
+/// still observed on the next poll.
+#[derive(Clone)]
+struct Gate(Arc<AtomicBool>);
+
+impl Gate {
+	fn New() -> Self { Self(Arc::new(AtomicBool::new(false))) }
+
+	fn Open(&self) { self.0.store(true, Ordering::SeqCst); }
+
+	fn Wait(&self) -> Waiting { Waiting(self.0.clone()) }
+}
+
+/// The future half of a [`Gate`].
+struct Waiting(Arc<AtomicBool>);
+
+impl std::future::Future for Waiting {
+	type Output = ();
+
+	fn poll(
+		self:std::pin::Pin<&mut Self>,
+		_Context:&mut std::task::Context<'_>,
+	) -> std::task::Poll<()> {
+		if self.0.load(Ordering::SeqCst) {
+			std::task::Poll::Ready(())
+		} else {
+			std::task::Poll::Pending
+		}
+	}
 }
 
 #[test]
@@ -199,7 +246,7 @@ fn a_stale_fence_is_refused_and_the_write_never_lands() {
 	Clock.Advance(Span(200));
 	let _Current = Claimed(&Engine, "page", Span(100));
 	let Landed = AtomicBool::new(false);
-	let Outcome = BlockOn(Engine.WithLease(Stale, || {
+	let Outcome = BlockOn(Engine.WithLease(Stale, |_Ticket| {
 		Box::pin(async {
 			Landed.store(true, Ordering::SeqCst);
 			1
@@ -214,13 +261,156 @@ fn a_lease_that_expires_mid_run_refuses_the_next_write() {
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Lease = Claimed(&Engine, "page", Span(100));
-	let First = BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { 1 })));
+	let First = BlockOn(Engine.WithLease(Lease.clone(), |_Ticket| Box::pin(async { 1 })));
 	assert_eq!(First.unwrap(), 1);
 	Clock.Advance(Span(101));
-	let Second = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 2 })));
+	let Second = BlockOn(Engine.WithLease(Lease, |_Ticket| Box::pin(async { 2 })));
 	let Error = Second.unwrap_err();
 	assert_eq!(Error.Code(), Code::AdmissionRefused);
 	assert!(Error.Message().contains("expired"));
+}
+
+#[test]
+fn an_effect_that_outlives_its_lease_is_refused_where_it_lands() {
+	// `docs/Review.md`, executed step for step:
+	//
+	//   lease is live
+	//   WithLease admits the callback
+	//   callback waits
+	//   lease expires
+	//   callback performs the external write
+	//   WithLease returns success          <- what must no longer happen
+	//
+	// The admission happened while the lease was live and cannot be un-made.
+	// The write arrives after the lease ended, and the only party that can
+	// notice is the one it is presented to: the destination refuses it.
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Ledger = Engine.Ledger();
+	let Lease = Claimed(&Engine, "page", Span(100));
+	let Latch = Gate::New();
+	let Landed = Arc::new(AtomicBool::new(false));
+	let mut Effect = Engine.WithLease(Lease.clone(), |Ticket| {
+		let Wait = Latch.Wait();
+		let Landed = Landed.clone();
+		let Ledger = Ledger.clone();
+		Box::pin(async move {
+			Wait.await;
+			Ledger.Record(Ticket, "write").map(|_| Landed.store(true, Ordering::SeqCst))
+		})
+	});
+	assert!(!PollOnce(Effect.as_mut()), "the effect is admitted and waiting");
+	Clock.Advance(Span(101));
+	Latch.Open();
+	let Outcome = BlockOn(Effect);
+	// The destination's verdict is checked first, because it is the one that
+	// matters: whatever the caller reports afterwards, an effect that left a
+	// record behind landed.
+	assert!(Ledger.Records().is_empty(), "a refused effect left a record behind");
+	assert!(!Landed.load(Ordering::SeqCst), "the late write landed");
+	let Error = Outcome
+		.expect("the effect was admitted")
+		.expect_err("the destination recorded a write it should have refused");
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("outlived"), "{}", Error.Message());
+}
+
+#[test]
+fn a_ticket_from_a_superseded_fence_is_refused_where_it_lands() {
+	let Clock = TestClock::New();
+	let Engine = Engine(Clock.clone());
+	let Ledger = Engine.Ledger();
+	let Lease = Claimed(&Engine, "page", Span(100));
+	let Kept:Arc<Mutex<Option<Ticket>>> = Arc::new(Mutex::new(None));
+	let First = {
+		let Kept = Kept.clone();
+		BlockOn(Engine.WithLease(Lease.clone(), move |Ticket| {
+			let Kept = Kept.clone();
+			Box::pin(async move {
+				Kept.lock().unwrap().replace(Ticket);
+			})
+		}))
+	};
+	assert!(First.is_ok(), "the effect was admitted");
+	Clock.Advance(Span(101));
+	let Current = Claimed(&Engine, "page", Span(1_000));
+	assert_eq!(Current.Fence, Lease.Fence + 1);
+	let Stale = Kept.lock().unwrap().take().expect("the effect kept its ticket");
+	let Error = Ledger.Record(Stale, "late").expect_err("the destination refused it");
+	assert_eq!(Error.Code(), Code::LeaseHeld);
+	assert!(Error.Message().contains("fence 2, not fence 1"), "{}", Error.Message());
+	assert!(Ledger.Records().is_empty());
+}
+
+#[test]
+fn a_ticket_from_another_generation_is_refused_where_it_lands() {
+	let Engine = Engine(TestClock::New());
+	let Ledger = Engine.Ledger();
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	let Forged = Ticket {
+		Generation:8,
+		Resource:Lease.Resource.clone(),
+		LeaseId:Lease.Id.clone(),
+		Fence:Lease.Fence,
+		ExpiresAt:Lease.ExpiresAt,
+	};
+	let Error = Ledger.Record(Forged, "forged").expect_err("the destination refused it");
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("generation 8"), "{}", Error.Message());
+	assert!(Ledger.Records().is_empty());
+}
+
+#[test]
+fn a_ticket_this_runtime_never_issued_is_refused_where_it_lands() {
+	let Engine = Engine(TestClock::New());
+	let Ledger = Engine.Ledger();
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	let Forged = Ticket {
+		Generation:7,
+		Resource:"page".to_string(),
+		LeaseId:"r999#page#1".to_string(),
+		Fence:Lease.Fence,
+		ExpiresAt:Lease.ExpiresAt,
+	};
+	let Error = Ledger.Record(Forged, "forged").expect_err("the destination refused it");
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("was not the one issued"), "{}", Error.Message());
+}
+
+#[test]
+fn a_ticket_for_a_resource_no_longer_held_is_refused_where_it_lands() {
+	let Engine = Engine(TestClock::New());
+	let Ledger = Engine.Ledger();
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	let Kept:Arc<Mutex<Option<Ticket>>> = Arc::new(Mutex::new(None));
+	BlockOn(Engine.WithLease(Lease.clone(), |Ticket| {
+		Kept.lock().unwrap().replace(Ticket);
+		Box::pin(async {})
+	}))
+	.expect("the effect was admitted");
+	BlockOn(Engine.Release(Lease));
+	let Orphan = Kept.lock().unwrap().take().expect("the effect kept its ticket");
+	let Error = Ledger.Record(Orphan, "orphan").expect_err("the destination refused it");
+	assert_eq!(Error.Code(), Code::AdmissionRefused);
+	assert!(Error.Message().contains("no lease is live"), "{}", Error.Message());
+}
+
+#[test]
+fn a_recorded_effect_keeps_the_fence_and_generation_it_was_admitted_under() {
+	let Engine = Engine(TestClock::New());
+	let Ledger = Engine.Ledger();
+	let Lease = Claimed(&Engine, "page", Span(1_000));
+	let Receipt = BlockOn(Engine.WithLease(Lease.clone(), |Ticket| {
+		let Ledger = Ledger.clone();
+		Box::pin(async move { Ledger.Record(Ticket, "write") })
+	}))
+	.expect("the effect was admitted")
+	.expect("the destination recorded it");
+	assert_eq!(Receipt.Name, "write");
+	assert_eq!(Receipt.Resource, "page");
+	assert_eq!(Receipt.Fence, Lease.Fence);
+	assert_eq!(Receipt.Generation, 7);
+	assert_eq!(Ledger.Records(), vec![Receipt], "the receipt is the record");
 }
 
 #[test]
@@ -234,7 +424,7 @@ fn a_renewal_extends_the_lease_for_the_current_holder() {
 	assert_eq!(Renewed.Id, Lease.Id);
 	assert_eq!(Renewed.ExpiresAt, Lease.ExpiresAt + Span(450));
 	Clock.Advance(Span(400));
-	let Write = BlockOn(Engine.WithLease(Renewed, || Box::pin(async { 1 })));
+	let Write = BlockOn(Engine.WithLease(Renewed, |_Ticket| Box::pin(async { 1 })));
 	assert_eq!(Write.unwrap(), 1, "the extension is what kept it live");
 }
 
@@ -281,27 +471,33 @@ fn a_lease_from_another_runtime_is_not_this_runtimes_lease() {
 	// The second runtime issues its own first fence for the same resource name.
 	let Own = Claimed(&Two, "page", Span(1_000));
 	assert_eq!(Foreign.Fence, Own.Fence, "both are fence 1");
-	let Outcome = BlockOn(Two.WithLease(Foreign, || Box::pin(async { 1 })));
+	let Outcome = BlockOn(Two.WithLease(Foreign, |_Ticket| Box::pin(async { 1 })));
 	let Error = Outcome.unwrap_err();
 	assert_eq!(Error.Code(), Code::AdmissionRefused);
 	assert!(Error.Message().contains("was not the one issued"));
 }
 
 #[test]
-fn a_claim_during_an_effect_on_an_expired_lease_is_refused() {
+fn a_takeover_waits_for_an_unsettled_local_future() {
+	// This encodes the accounting rule and nothing more: a future this process
+	// admitted has not settled, so a local takeover does not begin under it.
+	// It is not the authority rule - that one is
+	// `an_effect_that_outlives_its_lease_is_refused_where_it_lands`, which lets
+	// the future settle and refuses the write anyway.
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Lease = Claimed(&Engine, "page", Span(100));
 	// The effect is admitted, and the lease expires while it is still running.
-	let mut Write = Engine.WithLease(Lease.clone(), || Box::pin(std::future::pending::<i32>()));
+	let mut Write = Engine.WithLease(Lease.clone(), |_Ticket| Box::pin(std::future::pending::<i32>()));
 	assert!(!PollOnce(Write.as_mut()), "the effect is admitted and waiting");
 	Clock.Advance(Span(200));
 	let Running = Engine.Claim("page", Span(1_000), None);
 	let Error = BlockOn(Running).unwrap_err();
 	assert_eq!(Error.Code(), Code::LeaseHeld);
-	assert!(Error.Message().contains("effect in flight"));
+	assert!(Error.Message().contains("unsettled local future"), "{}", Error.Message());
 	// Dropping the abandoned effect settles it, which is what frees the
-	// resource.
+	// resource. Dropping a future is not proof that the work behind it stopped;
+	// it is proof that this process is no longer counting it.
 	drop(Write);
 	assert_eq!(Claimed(&Engine, "page", Span(1_000)).Fence, 2);
 }
@@ -335,7 +531,7 @@ fn releasing_a_superseded_lease_does_not_free_the_new_holders_resource() {
 	Clock.Advance(Span(101));
 	let Second = Claimed(&Engine, "page", Span(1_000));
 	BlockOn(Engine.Release(First));
-	let Write = BlockOn(Engine.WithLease(Second, || Box::pin(async { 1 })));
+	let Write = BlockOn(Engine.WithLease(Second, |_Ticket| Box::pin(async { 1 })));
 	assert_eq!(Write.unwrap(), 1, "the new holder still holds it");
 }
 
@@ -344,7 +540,7 @@ fn release_during_an_effect_frees_the_resource_once_it_settles() {
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Lease = Claimed(&Engine, "page", Span(1_000));
-	let mut Write = Engine.WithLease(Lease.clone(), || Box::pin(std::future::pending::<i32>()));
+	let mut Write = Engine.WithLease(Lease.clone(), |_Ticket| Box::pin(std::future::pending::<i32>()));
 	assert!(!PollOnce(Write.as_mut()), "the effect is admitted and waiting");
 	// Released while the write is admitted but not yet settled.
 	BlockOn(Engine.Release(Lease));
@@ -374,9 +570,9 @@ fn a_budget_is_not_inherited_a_new_run_starts_from_the_callers_count() {
 	let Engine = Engine(TestClock::New());
 	let First = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
 		.expect("the first claim is admitted");
-	assert!(BlockOn(Engine.WithLease(First.clone(), || Box::pin(async { 1 }))).is_ok());
+	assert!(BlockOn(Engine.WithLease(First.clone(), |_Ticket| Box::pin(async { 1 }))).is_ok());
 	assert_eq!(
-		BlockOn(Engine.WithLease(First.clone(), || Box::pin(async { 2 })))
+		BlockOn(Engine.WithLease(First.clone(), |_Ticket| Box::pin(async { 2 })))
 			.unwrap_err()
 			.Code(),
 		Code::BudgetExhausted
@@ -385,7 +581,7 @@ fn a_budget_is_not_inherited_a_new_run_starts_from_the_callers_count() {
 	let Second = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
 		.expect("the second claim is admitted");
 	assert!(
-		BlockOn(Engine.WithLease(Second, || Box::pin(async { 3 }))).is_ok(),
+		BlockOn(Engine.WithLease(Second, |_Ticket| Box::pin(async { 3 }))).is_ok(),
 		"a retry never inherits a spent count"
 	);
 }
@@ -398,7 +594,7 @@ fn a_budgets_deadline_refuses_effects_past_it() {
 	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:Some(Deadline), Operations:10 })))
 		.expect("the claim is admitted");
 	Clock.Advance(Span(101));
-	let Error = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 1 }))).unwrap_err();
+	let Error = BlockOn(Engine.WithLease(Lease, |_Ticket| Box::pin(async { 1 }))).unwrap_err();
 	assert_eq!(Error.Code(), Code::BudgetExhausted);
 	assert!(Error.Message().contains("deadline passed"));
 }
@@ -410,9 +606,9 @@ fn an_effect_that_fails_still_spends_an_operation() {
 		.expect("the claim is admitted");
 	// The runtime never interprets the write: a write that failed is a value,
 	// and the charge happened before it ran.
-	let Failed = BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { Err::<(), ()>(()) })));
+	let Failed = BlockOn(Engine.WithLease(Lease.clone(), |_Ticket| Box::pin(async { Err::<(), ()>(()) })));
 	assert_eq!(Failed.expect("the effect was admitted"), Err(()));
-	let Spent = BlockOn(Engine.WithLease(Lease, || Box::pin(async { Ok::<(), ()>(()) })));
+	let Spent = BlockOn(Engine.WithLease(Lease, |_Ticket| Box::pin(async { Ok::<(), ()>(()) })));
 	assert_eq!(Spent.unwrap_err().Code(), Code::BudgetExhausted);
 }
 
@@ -421,7 +617,7 @@ fn a_run_with_no_budget_is_unbounded() {
 	let Engine = Engine(TestClock::New());
 	let Lease = Claimed(&Engine, "page", Span(1_000));
 	for _ in 0..25 {
-		assert!(BlockOn(Engine.WithLease(Lease.clone(), || Box::pin(async { 1 }))).is_ok());
+		assert!(BlockOn(Engine.WithLease(Lease.clone(), |_Ticket| Box::pin(async { 1 }))).is_ok());
 	}
 }
 
@@ -430,7 +626,7 @@ fn a_budget_of_no_operations_refuses_every_effect() {
 	let Engine = Engine(TestClock::New());
 	let Lease = BlockOn(Engine.Claim("page", Span(1_000), Some(Budget { Deadline:None, Operations:0 })))
 		.expect("a probe is admitted");
-	let Error = BlockOn(Engine.WithLease(Lease, || Box::pin(async { 1 }))).unwrap_err();
+	let Error = BlockOn(Engine.WithLease(Lease, |_Ticket| Box::pin(async { 1 }))).unwrap_err();
 	assert_eq!(Error.Code(), Code::BudgetExhausted);
 }
 
@@ -441,12 +637,12 @@ fn one_runs_budget_is_not_another_resources() {
 		.expect("the page claim is admitted");
 	let Tab = BlockOn(Engine.Claim("tab", Span(1_000), Some(Budget { Deadline:None, Operations:1 })))
 		.expect("the tab claim is admitted");
-	assert!(BlockOn(Engine.WithLease(Page.clone(), || Box::pin(async { 1 }))).is_ok());
+	assert!(BlockOn(Engine.WithLease(Page.clone(), |_Ticket| Box::pin(async { 1 }))).is_ok());
 	assert!(
-		BlockOn(Engine.WithLease(Tab, || Box::pin(async { 1 }))).is_ok(),
+		BlockOn(Engine.WithLease(Tab, |_Ticket| Box::pin(async { 1 }))).is_ok(),
 		"the tab has its own count"
 	);
-	assert!(BlockOn(Engine.WithLease(Page, || Box::pin(async { 1 }))).is_err());
+	assert!(BlockOn(Engine.WithLease(Page, |_Ticket| Box::pin(async { 1 }))).is_err());
 }
 
 #[test]

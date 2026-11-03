@@ -1,0 +1,2249 @@
+--- FILE: 432b4991.md ---
+---
+title: "A single state chart reconciled across five domains"
+thread: 432b4991-2059-425c-a046-fcbe27dae492
+project: DELO
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/432b4991-2059-425c-a046-fcbe27dae492
+captured: 2026-11-03T21:57:31
+segments: 1
+collapsed: false
+steps: 1
+sources: 16
+---
+
+# A single state chart reconciled across five domains
+
+| Field         | Value                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Thread        | `432b4991-2059-425c-a046-fcbe27dae492`                                |
+| Project       | DELO                                                                  |
+| Source        | https://www.perplexity.ai/search/432b4991-2059-425c-a046-fcbe27dae492 |
+| Captured      | 2026-11-03T21:57:31                                                   |
+| Segments      | 1                                                                     |
+| Trace steps   | 1                                                                     |
+| Cited sources | 16                                                                    |
+| Characters    | 25844                                                                 |
+
+## Transcript
+
+DELO 7:17 PM
+
+I need a single state chart for a system I have been designing across several
+sessions, and I want it to reconcile the domains rather than draw four separate
+diagrams.
+
+The system: an agentic capability layer, written in Rust, where capabilities
+(browser control over CDP, chat research, design verification, skill validation)
+are leased by a runtime, carry hidden properties that other actors can probe,
+and run against a SpacetimeDB database whose schema is self-describing and whose
+generations must stay coherent with what is enforced.
+
+Reconcile these five domains into one chart:
+
+1. EXECUTION LIFECYCLE. prepare reusable infrastructure -> lease an isolated
+   context -> bind identity and task -> validate credentials, connections and
+   versions -> execute within a fresh budget -> persist only authorised
+   artefacts -> destroy or prove a reset. State classes decide what may be
+   pre-warmed: stateless, holds-transport, holds-identity, holds-workspace.
+2. DISCLOSURE. A private property is hidden; an actor probes it; the probe
+   charges a cost and writes an audience-scoped immutable observation tied to a
+   property version; beliefs are derived and disposable. Before an authorised
+   reveal, two worlds differing only in the protected property must produce the
+   same observable transcript for an unauthorised actor.
+3. TIME. Four timestamps - event, ingest, scheduled, run - with three lags
+   between them, each a difference across clock authorities, stored signed.
+   Intervals do not yield an occurrence; one-shot rows do.
+4. SCHEMA GENERATIONS. A capability manifest is bound by a composition root; the
+   runtime may only report what it was bound with; a mutation must jointly
+   establish authorisation, validation, migration and publication for the new
+   generation; an update that changes the interpreter or the manifest language
+   must declare "policy changed" rather than claim preservation.
+5. FAILURE AND RECOVERY. A lease expires while its worker still runs (the fence
+   must refuse the late write). A warm transport is open but dead. A probe races
+   a one-use allowance. A schema generation is published while a lease is live.
+
+What I want back:
+
+- One Mermaid stateDiagram-v2 covering the union, with states named for the
+  layer they belong to, and the transitions that cross layers called out.
+- A transition table: source state, event, guard, target state, invariant that
+  must hold afterwards.
+- The places where two domains disagree about what a state means, and how you
+  would resolve each.
+- The states you think I have missed entirely. Do not restate the domains back
+  to me; the value is in the reconciliation, the guards and the invariants.
+
+Use a single **product-state** machine: execution, disclosure, scheduling, and
+generation are concurrent coordinates of one system—not successive phases of one
+workflow. Failure changes the authority of that combined state even when a
+worker, connection, or old-generation process remains physically alive.
+
+The crucial design choice is to put a shared admission predicate at every
+authoritative effect. “Validated earlier,” “still connected,” and “generation
+once published” are insufficient.
+
+Below is a proposed specification based on the requirements you supplied, not a
+claim about an implementation recovered from earlier sessions.
+
+## One reconciled state chart
+
+`X_*` names denote cross-layer events or admission points. The parallel regions
+are coordinates of the same machine. Cross-layer events are consumed by the
+affected regions atomically where they modify database authority; they are not
+ordinary arrows that exit one parallel region and enter another.
+
+```mermaid
+stateDiagram-v2
+    state "SYS_CoherentCapabilitySystem" as SYS {
+        state "EXEC_Lifecycle" as EXEC {
+            [*] --> ECold
+            state "EXEC_Cold" as ECold
+            state "EXEC_Prepared" as EPrepared
+            state "EXEC_LeasedIsolated" as ELeased
+            state "EXEC_IdentityTaskBound" as EBound
+            state "EXEC_Validated" as EValidated
+            state "EXEC_Running" as ERunning
+            state "EXEC_CommitPending" as ECommit
+            state "EXEC_Closing" as EClosing
+            state "EXEC_ResetVerified" as EReset
+            state "EXEC_Destroyed" as EDestroyed
+            state "EXEC_Quarantined" as EQuarantined
+            state "EXEC_AuthorityLost" as EFenced
+
+            ECold --> EPrepared: prepare [state-class warm contract]
+            EPrepared --> ELeased: X_LEASE [admitted generation, isolation, fence]
+            EPrepared --> EQuarantined: checkout health check fails
+            ELeased --> EBound: bind identity, task, audience, occurrence
+            EBound --> EValidated: X_VALIDATE [credentials, transport, versions]
+            EValidated --> ERunning: X_START [fresh attempt budget, authority live]
+            ERunning --> ECommit: stage authorised artefact candidates
+            ECommit --> ERunning: X_COMMIT [effect gate accepts]
+            ERunning --> EClosing: finish, cancel, or budget exhausted
+            ECommit --> EClosing: final X_COMMIT accepted
+            EBound --> EClosing: validation fails
+            EValidated --> EClosing: start admission fails
+            ELeased --> EClosing: binding fails
+            ERunning --> EQuarantined: transport lost or effect outcome unknown
+            ECommit --> EQuarantined: commit outcome unknown
+            ELeased --> EFenced: X_REVOKE or expiry
+            EBound --> EFenced: X_REVOKE or expiry
+            EValidated --> EFenced: X_REVOKE or expiry
+            ERunning --> EFenced: X_REVOKE or expiry
+            ECommit --> EFenced: X_REVOKE or expiry
+            EFenced --> EFenced: late effect / reject
+            EFenced --> EClosing: stop or isolate worker
+            EQuarantined --> EClosing: reconcile outcomes, revoke authority
+            EClosing --> EReset: prove class-specific reset
+            EClosing --> EDestroyed: destroy
+            EClosing --> EQuarantined: cleanup cannot be proved
+            EReset --> EPrepared: return allowed reusable substrate
+        }
+
+        --
+        state "DISC_PropertyVersionAndProbe" as DISC {
+            [*] --> DHidden
+            state "DISC_Hidden" as DHidden
+            state "DISC_ProbePending" as DPending
+            state "DISC_ObservationCommitted" as DObserved
+            state "DISC_BeliefDerived" as DBelief
+            state "DISC_DeniedOpaque" as DDenied
+
+            DHidden --> DPending: X_PROBE [request admitted]
+            DPending --> DObserved: X_DISCLOSE [atomic charge, allowance, observation]
+            DPending --> DDenied: deny, stale version, or allowance race lost
+            DDenied --> DHidden: opaque completion
+            DObserved --> DBelief: derive audience-local belief
+            DBelief --> DObserved: discard belief
+            DObserved --> DPending: another permitted probe
+            DBelief --> DPending: another permitted probe
+            DHidden --> DHidden: new property version / new hidden instance
+            DObserved --> DHidden: new property version / retain old observation
+            DBelief --> DHidden: new property version / invalidate current belief
+        }
+
+        --
+        state "TIME_ScheduleAndOccurrence" as TIME {
+            [*] --> TDefinition
+            state "TIME_ScheduleDefinition" as TDefinition
+            state "TIME_EventRecorded" as TEvent
+            state "TIME_IngestRecorded" as TIngest
+            state "TIME_OneShotOccurrence" as TOccurrence
+            state "TIME_Due" as TDue
+            state "TIME_RunRecorded" as TRun
+            state "TIME_OutcomeRecorded" as TOutcome
+
+            TDefinition --> TDefinition: interval tick / materialise explicit one-shot row
+            TDefinition --> TEvent: receive event / capture event authority
+            TEvent --> TIngest: ingest / record signed ingest lag
+            TIngest --> TOccurrence: assign scheduled timestamp and occurrence ID
+            TOccurrence --> TDue: scheduling authority declares due
+            TDue --> TRun: X_START [claim occurrence, record actual run]
+            TRun --> TOutcome: X_COMPLETE [durable attempt outcome]
+            TRun --> TDue: X_RETRY [new attempt, explicit retry policy]
+        }
+
+        --
+        state "GEN_CompositionAndPublication" as GEN {
+            [*] --> GBound
+            state "GEN_BoundAndPublished" as GBound
+            state "GEN_Candidate" as GCandidate
+            state "GEN_CandidateValidated" as GValidated
+            state "GEN_MigrationStaged" as GStaged
+            state "GEN_ActivationReady" as GReady
+            state "GEN_RecoveryRequired" as GRecovery
+
+            GBound --> GCandidate: propose successor; old generation stays active
+            GCandidate --> GValidated: authorise and validate candidate
+            GValidated --> GStaged: migrate staged data or enter controlled cutover
+            GStaged --> GReady: prove schema, enforcement, manifest coherence
+            GReady --> GBound: X_PUBLISH [atomic activation; mark policy change if needed]
+            GCandidate --> GBound: reject candidate / retain old generation
+            GValidated --> GBound: abort before effective migration
+            GStaged --> GRecovery: migration or activation outcome uncertain
+            GReady --> GRecovery: activation outcome uncertain
+            GRecovery --> GBound: recover one coherent generation
+        }
+    }
+
+    note right of SYS
+        X_START joins EXEC, TIME, and GEN.
+        X_PROBE and X_DISCLOSE join EXEC, DISC, and GEN.
+        X_COMMIT joins EXEC, GEN, and artefact policy.
+        X_PUBLISH changes admission and live-lease compatibility.
+        X_REVOKE removes authority, not physical process existence.
+        Every authoritative effect checks the shared effect gate.
+    end note
+```
+
+`DISC` represents one property-version/probe interaction; `TIME` represents one
+occurrence and its attempts; `GEN` represents a generation lineage. These are
+parameterised state families, not singleton global objects. Multiple leases and
+probes instantiate the same chart.
+
+The generation region deliberately leaves the predecessor active during
+candidate preparation. Its state names describe the publication operation, not
+permission to expose a half-migrated database.
+
+## Shared guards and invariants
+
+## Effect admission is the reconciliation point
+
+For every durable write, disclosure, allowance consumption, and externally
+mediated effect, evaluate at the authoritative boundary:
+
+$$ \begin{aligned}
+\operatorname{admit}(x) ={}&
+\operatorname{leaseLive}(x.\ell,\operatorname{authorityNow})\\
+&\land x.f=\operatorname{currentFence}(x.\operatorname{scope})\\
+&\land \operatorname{generationAdmitted}(x.g,x.\operatorname{operation})\\
+&\land \operatorname{bindingMatches}(x.\operatorname{identity},x.\operatorname{task})\\
+&\land \operatorname{authorisedNow}(x)\\
+&\land \operatorname{budgetAdmitted}(x)\\
+&\land \operatorname{expectedVersionsMatch}(x).
+\end{aligned}$$
+
+The version checks are operation-specific: property version for a probe, object version for a conditional update, and schema/interpreter identity for generation-sensitive operations.
+
+Check and mutate in one serialised transaction or equivalent conditional operation. Do not check, return to the worker, and later trust the result.
+
+A monotonically increasing fence alone does not prove that a lease remains live: an expired worker can arrive before any newer token has reached the destination. Your requirement therefore needs authoritative expiry/revocation checking as well as fence enforcement, or an equivalent atomic invalidation mechanism. Resource-side fencing is necessary; “highest token seen” alone is insufficient for immediate expiry rejection.atlasofengineering+1
+
+## A generation is more than a schema number
+
+Use a generation identity that commits to at least:
+
+```
+generation_id
+schema_digest
+manifest_digest
+interpreter_digest
+policy_digest
+migration_provenance
+composition_root_binding
+```
+
+A runtime reports its immutable binding, not whatever generation the publication registry currently calls “latest.” Store the generation attached to each effect so the enforced interpretation remains auditable.
+
+## Time is evidence, not lease authority
+
+For a fully populated occurrence:
+
+$$L_{EI}=t_{\mathrm{ingest}}-t_{\mathrm{event}},\qquad
+L_{IS}=t_{\mathrm{scheduled}}-t_{\mathrm{ingest}},\qquad
+L_{SR}=t_{\mathrm{run}}-t_{\mathrm{scheduled}}.$$
+
+Store signed differences and the authority/clock-domain identifiers for both operands. Preserve negative values; do not silently clamp them or infer causal impossibility from them. Before run admission, $t_{\mathrm{run}}$ and $L_{SR}$ are absent, not zero.
+
+These fields must not determine lease validity. Lease validity uses its designated authority; local budget timing uses a suitable monotonic clock. Define $t_{\mathrm{run}}$ as authoritative start admission, unless you explicitly need a separately evidenced worker-start timestamp.
+
+## Transition table
+
+`Gate` below means the shared effect-admission predicate. “Atomic” means observers cannot see a partial successful transition.
+
+| Source state | Event | Guard | Target state | Invariant afterwards |
+| --- | --- | --- | --- | --- |
+| `EXEC_Cold` | Prepare | Declared state class and verified warm contract | `EXEC_Prepared` | Only approved reusable substrate exists; no inherited task authority or budget. |
+| `EXEC_Prepared` | `X_LEASE` | Fresh isolation; generation admits new leases; authoritative fence issued | `EXEC_LeasedIsolated` | Lease identifies context, generation, fence scope, expiry and owner. |
+| `EXEC_Prepared` | Checkout fails | Transport is open but does not pass bounded application-level liveness check | `EXEC_Quarantined` | Resource cannot be leased merely because its handle is open. |
+| `EXEC_LeasedIsolated` | Bind | Identity, task, audience and occurrence are explicitly selected | `EXEC_IdentityTaskBound` | Binding is immutable for this attempt; rebinding requires a new attempt/context contract. |
+| `EXEC_IdentityTaskBound` | `X_VALIDATE` | Credentials, connection liveness and bound version tuple agree | `EXEC_Validated` | Validation evidence is scoped and time-stamped, not perpetual authority. |
+| `EXEC_Validated` + `TIME_Due` | `X_START` | Gate; atomic occurrence claim; admitted generation | `EXEC_Running` + `TIME_RunRecorded` | Fresh attempt budget; one admitted claimant; actual run time and third lag recorded. |
+| `EXEC_Running` | Stage artefact | Candidate permitted in lease-local staging | `EXEC_CommitPending` | Staging is not publication; provenance and intended audience remain attached. |
+| `EXEC_CommitPending` | `X_COMMIT` | Gate; artefact policy; idempotency key; applicable conditional versions | `EXEC_Running` or `EXEC_Closing` | Only authorised artefacts become durable/visible; duplicate delivery cannot duplicate the logical commit. |
+| `DISC_Hidden` or an existing observation state | `X_PROBE` | Request shape and public admission checks pass | `DISC_ProbePending` | No protected-dependent result has yet become visible. |
+| `DISC_ProbePending` | `X_DISCLOSE` | Gate; authorised reveal scope; matching property version; allowance and cost available | `DISC_ObservationCommitted` | Charge, one-use consumption and immutable audience-scoped observation commit together. |
+| `DISC_ProbePending` | Competing probe wins | Conditional allowance consumption fails | `DISC_DeniedOpaque` | Losing request creates no successful observation and no success charge; retry cannot replay the winner’s authority. |
+| `DISC_ObservationCommitted` | Derive belief | Actor may read referenced observations | `DISC_BeliefDerived` | Belief records provenance; it grants no authority and can be rebuilt or discarded. |
+| Any property-version state | Property changes | Authorised versioned mutation | New `DISC_Hidden` instance | Old observations remain true as historical records, not assertions about the new version. |
+| `TIME_ScheduleDefinition` | Interval tick | Explicit materialisation policy | Same definition, plus one-shot instance | Interval remains a rule; only a concrete one-shot row has occurrence identity. |
+| `TIME_EventRecorded` | Ingest | Timestamp and clock authority captured | `TIME_IngestRecorded` | Event/ingest values and signed $L_{EI}$ are retained. |
+| `TIME_IngestRecorded` | Schedule | Explicit one-shot occurrence ID and timestamp | `TIME_OneShotOccurrence` | $L_{IS}$ is retained; scheduled time is not evidence of execution. |
+| `TIME_RunRecorded` | `X_RETRY` | Retry permitted; prior attempt terminal or authority revoked; deduplication applied | `TIME_Due` for a new attempt | Previous attempt remains historical; retry has a new budget, not replenished global allowance. |
+| `GEN_BoundAndPublished` | Propose | Authorised proposal; predecessor identified | `GEN_Candidate` | Predecessor remains the active coherent generation. |
+| `GEN_Candidate` | Validate | Candidate authorisation, schema, manifest, interpreter and migration plan verified | `GEN_CandidateValidated` | Evidence refers to one immutable candidate digest. |
+| `GEN_CandidateValidated` | Migrate | Isolation or controlled cutover prevents mixed-generation access | `GEN_MigrationStaged` | Partial migration is not advertised as published capability. |
+| `GEN_MigrationStaged` | Establish readiness | Data, enforcement, introspection and binding agree | `GEN_ActivationReady` | Candidate is complete but not yet authoritative. |
+| `GEN_ActivationReady` | `X_PUBLISH` | Activation atomically checks authorisation, validation, migration and publication evidence | `GEN_BoundAndPublished` for successor | New generation is coherent; existing leases are explicitly retained-compatible or revoked. |
+| Any live execution state | Expiry or `X_REVOKE` | Authoritative deadline passed or revocation committed | `EXEC_AuthorityLost` | Worker may still run, but all subsequent authoritative effects fail admission. |
+| `EXEC_AuthorityLost` | Late write | Gate fails | Same state | No artefact, observation, allowance consumption or protected mutation commits. |
+| Running/committing | Transport or acknowledgement lost | Effect outcome cannot be established | `EXEC_Quarantined` | Outcome is unknown, not automatically failed; blind replay is prohibited. |
+| `EXEC_Closing` | Reset | Class-specific reset evidence passes | `EXEC_ResetVerified` | No prior identity, workspace, authority, observation cache or budget escapes its allowed scope. |
+| `EXEC_Closing` | Destroy | Destruction/isolation evidence accepted | `EXEC_Destroyed` | Context cannot return to the pool; unresolved external effects remain reconciliation obligations. |
+
+For probe charging, the table chooses “charge successful disclosure atomically.” If attempts themselves cost money, model an additional idempotent attempt charge explicitly; its amount, visibility and failure behaviour must not depend on the hidden value before permitted disclosure.
+
+## Where the domains disagree—and the resolution
+
+## 1. “Hidden” versus “successfully probed”
+
+An observation can reveal a property even if no UI labels it a reveal. Therefore `X_DISCLOSE`, not some later presentation action, is the declassification boundary.
+
+A paid probe is not automatically an authorised probe. An actor lacking reveal authority must receive the same observable transcript in the two protected-property worlds—including permitted observations of errors, charges, timing, retries, termination and output size. Timing and termination are recognised information-flow channels, not merely implementation details.arxiv+1
+
+Resolve this by making each probe contract specify the actor, audience, property version, permitted information function and disclosure point. Everything before that point must be secret-independent within the stated threat model.
+
+## 2. “Expired” versus “still running”
+
+Execution state and authority state are different coordinates. Expiry does not prove termination; cancellation does not prove revocation.
+
+Resolve this with `EXEC_AuthorityLost`: revoke admission first, then stop or isolate the worker. Do not wait for cooperative cancellation to protect data. Where an external endpoint cannot enforce fencing or equivalent authority checks, put an enforcing adapter in front of it—or explicitly exclude that endpoint from the strong guarantee.atlasofengineering+1
+
+## 3. “Warm” versus “safe to reuse”
+
+Warmth describes retained substrate; safety describes retained state and authority.
+
+| State class | Permitted warm substrate |
+| --- | --- |
+| `stateless` | Code, immutable configuration and non-sensitive caches. |
+| `holds-transport` | Transport only after bounded health/protocol checks; prove it carries no inherited identity or session authority. |
+| `holds-identity` | Identity-bearing resources only inside an explicit principal-scoped pool; never treat them as anonymous infrastructure. |
+| `holds-workspace` | Workspace only within an explicit tenant/task scope, or after a verified reset to a declared baseline. |
+
+Treat these as cumulative retention hazards, not necessarily an exclusive enum: a browser context can hold transport, identity and workspace simultaneously. If an enum is required, apply the strongest contract plus retained-resource metadata.
+
+## 4. “Published” versus “what this live lease enforces”
+
+A registry publishing $g+1$ cannot transform a $g$-bound runtime into a $g+1$ runtime.
+
+Choose one explicit publication mode:
+
+- Retain compatible leases: old enforcement and data interpretation remain available and addressable for $g$.
+- Revoke incompatible leases: activation invalidates them, and their next effect fails admission.
+- Drain before cutover: block new leases, finish or revoke existing ones, then activate.
+
+If two interpretations cannot safely coexist over the same mutable database, compatibility mode is unavailable. Pinning a manifest string alone does not solve that.
+
+An interpreter or manifest-language change must produce a “policy changed” declaration. Behavioural equivalence tests may accompany that declaration; they do not justify relabelling it preservation.
+
+## 5. “Atomic mutation” versus a long migration
+
+Authorisation, validation, migration and publication need one jointly established outcome, not necessarily one long database transaction.
+
+Resolve this with staged work plus an atomic activation boundary. If migration modifies the live predecessor’s data in ways it cannot interpret, staging is no longer isolated: enter controlled cutover and block incompatible access. A migration failure then requires recovery, not an unconditional “return to old.”
+
+SpacetimeDB exposes module/schema introspection and migration-validation diagnostics, but those facilities do not themselves establish your composition-root and live-lease coherence contract. That remains an application-level invariant.[spacetimedb](https://spacetimedb.com/changelog/v2.11.0)
+
+## 6. “Fresh budget” versus “fresh allowance”
+
+Execution budget belongs to an attempt. A one-use disclosure allowance belongs to its declared actor/task/property scope.
+
+A retry gets a new execution budget only under retry admission. It does not restore a consumed allowance, erase a charge or create a second occurrence. Persist the allowance ledger outside disposable worker state.
+
+## 7. “Occurrence” versus “interval”
+
+An interval specifies recurrence; it does not identify a particular execution. Materialise a one-shot row before claiming work. Use separate identifiers for schedule definition, occurrence, attempt and effect.
+
+That separation makes missed ticks, catch-up, retries and duplicate delivery explicit instead of hiding them behind one overloaded “scheduled” state.
+
+## States missing from the original lifecycle
+
+The chart includes the most consequential omissions; these deserve explicit implementation states or substates:
+
+1. Admission blocked / draining. Needed when publication must stop new leases without immediately destroying existing work.
+2. Revoked but physically alive. Distinct from failed, stopped and expired; it is the essential stale-worker state.
+3. Outcome unknown / reconciling. A lost acknowledgement cannot establish whether an effect committed. Resolve through durable effect IDs, receipts or inspection before replay.
+4. Budget reserved / exhausted. Reservations prevent parallel actions from each independently passing the same remaining-budget check.
+5. Disclosure reserved / aborted. Needed if probing requires costly external work before the final atomic observation commit. Specify reservation expiry and whether the allowance is held or spent.
+6. Generation incompatible / recovery required. “Migration failed” is not equivalent to “predecessor is intact.”
+7. Credential revoked / renewal pending. Connection liveness and credential validity can diverge after initial validation.
+8. Reset unproven / quarantined. Cleanup returning successfully is not reset evidence; an unproved context never re-enters the pool.
+9. Occurrence cancelled / skipped / dead-lettered. Not every one-shot reaches a run, and not every failed attempt should retry forever.
+10. Evidence unavailable. If audit or provenance persistence is mandatory, inability to write it must block the protected effect rather than silently downgrade the guarantee.
+
+The unifying boundary is admission to an effect: it is where lease authority, generation interpretation, budget, disclosure permission, property version and occurrence identity must agree. Physical resource states and derived beliefs can lag behind that boundary; authority cannot.
+
+Show the rest of the mermaid state diagram
+Walk through how an agentic loop moves through these regions
+How do cross layer events handle fencing and race conditions
+Show the disclosure and scheduling regions in detail
+Explain the cross-layer atomic transition rules
+Ask a follow-up
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step inside a step is one level in.
+
+| Depth | Step | Duration | Icon | Expanded |
+| --- | --- | --- | --- | --- |
+| 0 | Finished | 8s | chevron-down | true |
+
+## Cited sources
+
+| Source | Label |
+| --- | --- |
+| https://spacetimedb.com/changelog/v2.11.0 | spacetimedb |
+| https://atlasofengineering.com/computer-engineering/distributed-lock/ | atlasofengineering |
+| https://systemdesignacademy.com/blog/distributed-locks-leader-election | systemdesignacademy |
+| https://arxiv.org/html/2005.01977v2 | arxiv |
+| http://profs.sci.univr.it/~giaco/download/AVAS07/NonInt.pdf | profs.sci.univr |
+| https://spacetimedb.com/changelog/v2.11.0 | spacetimedb |
+| https://www.cs.ru.nl/~erikpoll/ss/2022/slides/11_InformationFlow.pdf | ru |
+| https://www.cse.chalmers.se/~dave/papers/SS-FAST09.pdf | cse.chalmers |
+| https://benjamindickman.com/blog/distributed-locks-leases-and-fencing-tokens-preventing-stale-workers-from-corrupting-data/ | benjamindickman |
+| https://spacetimedb.com/docs/1.12.0/sdks/api | spacetimedb |
+| https://spacetimedb.com/docs/how-to | spacetimedb |
+| https://prachub.com/resources/distributed-lock-interview-questions-leases-fencing-tokens-and-failure-modes | prachub |
+| https://brf.sh/en/blog/dagitik-kilit-cit-jetonu-kira-suresi-redis-postgresql-etcd | brf |
+| https://www.c-sharpcorner.com/article/use-fencing-tokens-to-prevent-stale-distributed-locks-from-writing-data | c-sharpcorner |
+| https://hackernoon.com/the-fencing-gap-why-your-distributed-lock-isnt-safe-and-how-to-fix-it | hackernoon |
+| https://dev.to/sertaoseracloud/engineering-multicloud-consensus-implementing-distributed-locking-with-fencing-tokens-31c | dev |
+$$
+
+--- FILE: 4ffde6d5.md ---
+---
+title: "Converting the capability system to Rust"
+thread: 4ffde6d5-a7d3-404f-96b5-e24f8009a76b
+project: DELO
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b
+captured: 2026-11-03T21:57:33
+segments: 1
+collapsed: false
+steps: 3
+sources: 35
+---
+
+# Converting the capability system to Rust
+
+| Field         | Value                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Thread        | `4ffde6d5-a7d3-404f-96b5-e24f8009a76b`                                |
+| Project       | DELO                                                                  |
+| Source        | https://www.perplexity.ai/search/4ffde6d5-a7d3-404f-96b5-e24f8009a76b |
+| Captured      | 2026-11-03T21:57:33                                                   |
+| Segments      | 1                                                                     |
+| Trace steps   | 3                                                                     |
+| Cited sources | 35                                                                    |
+| Characters    | 31499                                                                 |
+
+## Transcript
+
+DELO 7:02 PM
+
+I am converting a TypeScript capability system into Rust and I need a workspace
+design, not a survey. Here is the system and the house style it must fit.
+
+THE SYSTEM (currently TypeScript, five packages, each with a package.json and a
+module.json manifest):
+
+- @agentic/browser-cdp (adapter): browser execution substrate - attach versus
+  launch, bounded evaluation, disposal. state: holds-transport. errors:
+  browser-unavailable, navigation-failed, timeout.
+- @agentic/chat-driver (capability): ask a chat product, correlate turns, verify
+  mode and model, read the answer and its step trace. requires the browse port.
+  state: holds-transport.
+- @agentic/design-verification (capability): measure a built page and produce
+  evidence; the site's own expectations stay outside. requires the browse port.
+  state: stateless.
+- @agentic/skill-contract (capability): discover, validate and package a skill
+  corpus. state: stateless.
+- @agentic/runtime (runtime): admission, leases, budgets, cancellation, cleanup,
+  telemetry. state: holds-workspace. Four layers: capability (a use case plus
+  the port it needs), adapter (one port against one provider), workflow (a
+  composition), composition root (the only place that names concrete adapters).
+  Arrows point inward; nothing imports a root; a capability importing an adapter
+  is a defect. Ports are owned by their consumers, not by a central crate. Every
+  package carries a manifest whose state class decides what a pre-warm harness
+  may prepare (stateless / holds-transport / holds-identity / holds-workspace)
+  and what it must revalidate at admission.
+
+THE HOUSE STYLE it must mimic, from github.com/PlayForm/Run (Rust, branch
+Current), verbatim:
+
+- .cargo/config.toml sets build.target-dir = "Target", and release profile
+  opt-level 3, codegen-units 1, debug false, lto true, panic "abort", strip
+  true.
+- Cargo.toml declares [lib] name = "Library", path = "Source/Library.rs",
+  crate-type = ["staticlib", "cdylib", "rlib"], and several [[bin]] entries
+  (PRun, Run, Inn, InnKeeper) all pointing at that same Source/Library.rs.
+- Source/Library.rs begins with #![allow(non_snake_case)] and
+  #![allow(clippy::upper_case_acronyms)], then `mod Fn; mod Struct;`, and its
+  main is #[tokio::main] delegating to Struct::Binary::Command::Struct::Fn().Fn.
+- Modules live under Source/Fn/Binary/Command/Index.rs,
+  Source/Fn/Binary/Command/Parallel/GPG/Git.rs,
+  Source/Struct/Binary/Command.rs - PascalCase directories and files, functions
+  under Fn, types under Struct.
+- Dependencies in that repo include tokio (full), clap (derive), rayon,
+  crossbeam-queue, ratatui, crossterm, walkdir, globset, once_cell, futures.
+- CI is Build.yml, Check.yml, Publish.yml, Rust.yml, Auto.yml, Dependabot.yml,
+  GitHub.yml.
+
+QUESTIONS, in the order I need them answered:
+
+1. Crate boundaries: which of the five should be separate crates in one
+   workspace, and which should be modules inside one crate? Apply the rule that
+   ports belong to consumers - what does that mean concretely in Cargo terms,
+   where a shared `ports` crate is exactly the dependency magnet to avoid?
+2. The CDP question: can browser-cdp be Rust (chromiumoxide, headless_chrome, or
+   raw CDP over a websocket), or does it have to stay TypeScript? Compare
+   against the option of keeping a small TS sidecar process that Rust drives
+   over stdio JSON-RPC. Give the failure modes of each and a recommendation.
+3. How do the manifest and the four state classes survive into Rust - a build
+   script generating static data, a serde-loaded JSON file per crate, or const
+   data in the crate itself? Which of those keeps the "no build at launch"
+   promise and still lets a harness read it?
+4. Where do the async runtime, cancellation and budgets live so that a
+   capability does not have to know about tokio directly? Show the trait shape
+   for a port with cancellation and a deadline.
+5. How do I express "the arrows point inward" as something a compiler or CI can
+   enforce in a Cargo workspace, given that Cargo itself permits any dependency
+   direction?
+6. Map the TypeScript manifest fields (name, kind, version, provides, requires,
+   artefact with a hash, state, cost with cold/warm ms, verify command) onto
+   Rust idioms without losing the harness's ability to decide what to pre-warm.
+   Be concrete: give crate names, module paths in the house style, trait
+   signatures, and the CI check. Say where you are unsure, and flag anything in
+   the house style that fights the design.
+
+chromiumoxide handler poll browser connect launch rust headless_chrome rust
+browser synchronous thread websocket cargo metadata forbid dependencies
+workspace architecture
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html)
+
+Browser in headless_chrome - Rust - Docs.rs docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-lang/cargo/issues/10636)
+
+default features always resolved for dependency in workspace mode github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/mattsse/chromiumoxide/issues/49)
+
+Chrome stays idle infinitely #49 - mattsse/chromiumoxide - GitHub github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://lib.rs/crates/headless_chrome_fork)
+
+headless_chrome_fork — WebSocket library in Rust // Lib.rs lib
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/headless_chrome_fork/latest/headless_chrome/browser/struct.Browser.html)
+
+Browser in headless_chrome::browser - Rust - Docs.rs docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://dev.to/vhub_systems_ed5641f65d59/headless-browsers-in-rust-chromiumoxide-vs-headlesschrome-vs-the-python-alternative-25e5)
+
+Headless Browsers in Rust: Chromiumoxide vs headless_chrome vs ... dev
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-headless-chrome/rust-headless-chrome/blob/master/src/browser/process.rs)
+
+rust-headless-chrome/src/browser/process.rs at main - GitHub github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://www.browsercat.com/docs/connect-with/headless-chrome)
+
+Getting Started with Rust Headless Chrome - BrowserCat browsercat
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://lib.rs/crates/spider_chromiumoxide_types)
+
+spider_chromiumoxide_types — Rust web dev library // Lib.rs lib
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-lang/cargo/issues/11133)
+
+Allow publishing with path dependencies without a version (RFC2906) github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/oxide-browser-sh)
+
+oxide_browser_sh - Rust - Docs.rs docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://crates.io/crates/cargo-workspace-deps)
+
+cargo-workspace-deps - crates.io: Rust Package Registry crates
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://github.com/rust-lang/cargo/issues/5332)
+
+Allow to share versions of dependencies between unrelated Cargo ... github
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/)
+
+Announcing the Headless Chrome crate ("Puppeteer for Rust") reddit
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/fob-browser-test)
+
+fob_browser_test - Rust - Docs.rs docs
+https://github.com/PlayForm/Run/tree/Current
+https://docs.rs/chromiumoxide/latest/chromiumoxide/
+https://doc.rust-lang.org/cargo/commands/cargo-metadata.html
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://docs.rs/chromiumoxide/latest/chromiumoxide/)
+
+chromiumoxide - Rust docs
+
+![](https://www.google.com/s2/favicons?sz=128&domain=https://doc.rust-lang.org/cargo/commands/cargo-metadata.html)
+
+cargo metadata - The Cargo Book doc.rust-lang
+
+Keep **all five** as separate crates. Add a composition-root crate and, when you
+have an actual reusable composition, a workflow crate. Keep consumer-owned
+browse traits inside the two capabilities—not in a shared `ports` crate—and put
+the concrete adapter-to-port bindings in the composition root.
+
+That is the design I would implement. It preserves the five existing admission
+units, fits the PascalCase source layout, and gives CI meaningful boundaries to
+enforce.
+
+I could not retrieve the `Current` branch of PlayForm/Run, so I am treating your
+verbatim description as the house-style specification, not claiming independent
+verification of that repository.
+
+## 1. Crate boundaries and consumer-owned ports
+
+## Workspace
+
+```
+Cargo.toml
+Cargo.lock
+.cargo/Config.toml             # Actual Cargo filename must be config.toml
+Crate/
+  BrowserCDP/
+    Cargo.toml
+    module.json
+    Source/
+      Library.rs
+      Fn.rs
+      Struct.rs
+      Fn/Session/Attach.rs
+      Fn/Session/Launch.rs
+      Fn/Session/Dispose.rs
+      Struct/Session.rs
+      Struct/Error.rs
+
+  ChatDriver/
+    Cargo.toml
+    module.json
+    Source/
+      Library.rs
+      Fn.rs
+      Struct.rs
+      Fn/Ask.rs
+      Fn/Verify.rs
+      Struct/Port/Browse.rs
+      Struct/Call.rs
+      Struct/Turn.rs
+      Struct/Error.rs
+
+  DesignVerification/
+    Cargo.toml
+    module.json
+    Source/
+      Library.rs
+      Fn.rs
+      Struct.rs
+      Fn/Measure.rs
+      Struct/Port/Browse.rs
+      Struct/Call.rs
+      Struct/Evidence.rs
+
+  SkillContract/
+    Cargo.toml
+    module.json
+    Source/
+      Library.rs
+      Fn.rs
+      Struct.rs
+      Fn/Discover.rs
+      Fn/Validate.rs
+      Fn/Package.rs
+      Struct/Corpus.rs
+
+  Runtime/
+    Cargo.toml
+    module.json
+    Source/
+      Library.rs
+      Fn.rs
+      Struct.rs
+      Fn/Admission.rs
+      Fn/Cleanup.rs
+      Struct/Lease.rs
+      Struct/Budget.rs
+      Struct/Workspace.rs
+
+  Workflow/                    # Add when there is a real composition
+    Cargo.toml
+    module.json
+    Source/Library.rs
+    Source/Fn/VerifySkillPage.rs
+
+  Agentic/                     # Composition root, including CLI entry points
+    Cargo.toml
+    module.json
+    Source/Library.rs
+    Source/Main.rs
+    Source/Fn/Composition/Build.rs
+    Source/Fn/Binding/ChatBrowse.rs
+    Source/Fn/Binding/DesignBrowse.rs
+    Source/Struct/Binding/Browser.rs
+    Source/Struct/Binary/Command.rs
+```
+
+Use `.cargo/config.toml` in the actual tree; the capitalized placeholder above
+is not a proposed filename change.
+
+| Package name                  | Library crate name          | Responsibility                                        |
+| ----------------------------- | --------------------------- | ----------------------------------------------------- |
+| `agentic-browser-cdp`         | `AgenticBrowserCDP`         | Concrete browser substrate                            |
+| `agentic-chat-driver`         | `AgenticChatDriver`         | Chat use case and its browse contract                 |
+| `agentic-design-verification` | `AgenticDesignVerification` | Measurement/evidence use case and its browse contract |
+| `agentic-skill-contract`      | `AgenticSkillContract`      | Corpus discovery, validation, packaging               |
+| `agentic-runtime`             | `AgenticRuntime`            | Execution policy and resource ownership               |
+| `agentic-workflow`            | `AgenticWorkflow`           | Adapter-independent compositions                      |
+| `agentic`                     | `Agentic`                   | Wiring and executable entry points                    |
+
+The five existing packages should not become modules of one crate. Doing that
+would turn import-direction rules into conventions inside a single compiler
+boundary. Keep their internal operations—attach/launch/dispose, ask/verify/read,
+discover/validate/package—as modules.
+
+## Dependency graph
+
+Here, `A → B` means “A declares a Cargo dependency on B.”
+
+```
+Agentic composition root
+  → Runtime
+  → BrowserCDP
+  → ChatDriver
+  → DesignVerification
+  → SkillContract
+  → Workflow
+
+Workflow
+  → ChatDriver
+  → DesignVerification
+  → SkillContract
+
+BrowserCDP              → no other domain workspace crate
+ChatDriver              → no other domain workspace crate
+DesignVerification      → no other domain workspace crate
+SkillContract           → no other domain workspace crate
+Runtime                 → no other domain workspace crate
+```
+
+Runtime is a policy engine, not a registry importing every capability. The root
+registers capability invocations and cleanup operations with it.
+
+## What “ports belong to consumers” means here
+
+There are two distinct traits:
+
+```
+AgenticChatDriver::Struct::Port::Browse::Browse
+AgenticDesignVerification::Struct::Port::Browse::Browse
+```
+
+They need not have identical methods. Chat might require turn observation;
+design verification might require screenshots and layout measurements. Neither
+should grow operations merely because the other needs them.
+
+`BrowserCDP` exports concrete substrate operations using its own types. The root
+owns a wrapper and implements both consumer traits:
+
+```
+// Agentic/Source/Struct/Binding/Browser.rs
+pub struct Browser {
+    pub Session: std::sync::Arc<AgenticBrowserCDP::Struct::Session::Session>,
+}
+
+// Agentic/Source/Fn/Binding/ChatBrowse.rs
+impl AgenticChatDriver::Struct::Port::Browse::Browse
+    for crate::Struct::Binding::Browser::Browser
+{
+    // Convert the consumer's requests/results to/from substrate operations.
+}
+```
+
+The wrapper is local to the root; this avoids trying to implement a foreign
+trait for a foreign adapter type.
+
+This introduces small amounts of translation code deliberately. Do not replace
+it with a shared “universal browser request” type that quietly becomes the
+forbidden ports crate.
+
+An alternative would let `BrowserCDP` depend on the capabilities and implement
+their traits directly. That is inward-pointing, but couples your generic
+substrate to every consumer. I would not choose it for this system. Root-owned
+bindings keep the substrate independent and keep concrete adapter references
+confined to wiring.
+
+## 2. CDP: use Rust, with a sidecar only as a migration bridge
+
+Browser CDP does not have to stay TypeScript. `chromiumoxide` provides an async
+Rust CDP API; its documented example launches Chrome and continuously polls a
+handler task. `headless_chrome` exposes browser launch and connection APIs,
+including connection to an externally launched browser.docs+1
+
+My recommendation: implement `agentic-browser-cdp` in Rust using
+`chromiumoxide`, behind your own small session API. Keep a TS sidecar only if
+existing browser behavior cannot yet pass equivalent Rust conformance tests.
+
+| Choice                         | Fit                                                         | Failure modes you must handle                                                                                                                         |
+| ------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chromiumoxide`                | Best fit for an async runtime                               | Handler stops or is not polled; browser disconnects; pending commands outlive callers; target/session disappears; Chrome/protocol mismatch            |
+| `headless_chrome`              | Reasonable for predominantly synchronous automation         | Blocking calls consume workers; cancellation does not necessarily interrupt an in-progress call; reconnect/idle behavior must match your lease policy |
+| Raw CDP over WebSocket         | Appropriate only for a very narrow, stable protocol surface | You own request-ID correlation, event routing, session attachment, pending-request failure, protocol negotiation, reconnect and shutdown              |
+| TS sidecar over stdio JSON-RPC | Lowest migration risk when preserving proven TS behavior    | Child death; framing errors; stdout contamination; pipe backpressure; version skew; orphan browser processes; uncertain outcome after timeout         |
+
+The handler requirement is an explicit part of `chromiumoxide`’s usage model.
+`headless_chrome`’s documented connection behavior also includes an
+idle-disconnect policy, which you must account for rather than treating a warmed
+connection as indefinitely valid.docs+1
+
+## Session semantics to specify before implementation
+
+```
+pub enum Ownership {
+    Attached, // Never terminate the externally owned browser.
+    Launched, // Root/runtime owns eventual browser-process cleanup.
+}
+```
+
+For both backends:
+
+- Attach and launch are separate operations, not a boolean hidden in a
+  constructor.
+- Disposal of an attached session closes owned targets/contexts and transport
+  according to the lease, not the whole browser.
+- Disposal of a launched session includes an explicit browser-process
+  termination policy.
+- A disconnected session invalidates its warm readiness.
+- Map provider failures into your stable `BrowserUnavailable`,
+  `NavigationFailed`, and `Timeout` categories; keep provider details as
+  diagnostic information.
+- Represent cancellation distinctly from a navigation failure. Preserve existing
+  external error codes if needed, but add a structured cancellation reason.
+
+“Bounded evaluation” needs two bounds: how long the caller waits and how long
+the browser operation may continue. Dropping a Rust future or timing out a
+JSON-RPC request is not proof that JavaScript stopped. Define escalation:
+protocol-level interruption where available, close an owned target, then
+terminate an owned browser if necessary. An attached shared browser may not
+permit the strongest escalation.
+
+## If you retain the sidecar
+
+Use versioned, framed JSON-RPC with:
+
+- A startup handshake reporting protocol version and supported operations.
+- Request IDs and explicit cancellation messages.
+- A local deadline established by Rust; transmit remaining duration, not a
+  process-local `Instant`.
+- stdout reserved exclusively for protocol traffic; logs on stderr.
+- Bounded message sizes and bounded outstanding requests.
+- A shutdown acknowledgement followed by forced termination after a cleanup
+  grace period.
+- No automatic replay of mutating operations after an ambiguous timeout.
+- Prebuilt JS plus a pinned runtime distributed with the release—no
+  `npm install`, transpilation or browser download at launch.
+
+I cannot establish parity between your current TS implementation and either Rust
+library from the package description. Make attach/launch, navigation races,
+evaluation timeout, disconnect, disposal and shared-browser ownership the
+acceptance suite before removing the sidecar.
+
+## 3. Manifest: checked-in JSON, embedded unchanged, finalized at packaging
+
+Use a checked-in `module.json` per crate as the canonical descriptor. Embed
+those exact bytes when the crate needs introspection:
+
+```
+pub const ManifestJSON: &str = include_str!("../module.json");
+```
+
+The harness reads the packaged JSON without loading the library or starting the
+application.
+
+| Approach                               | Decision                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------- |
+| `build.rs` generating static data      | Optional later for typed access; unnecessary initially                             |
+| `serde`-loaded JSON                    | Yes: validate in CI and read in the harness                                        |
+| Hand-maintained Rust `const` structure | No as the only source: the external harness would need an export step or execution |
+| JSON plus `include_str!`               | Recommended: one descriptor source, readable externally and embedded internally    |
+
+All three can satisfy “no build at launch” if compilation happens before
+deployment. The operational rule matters more than the representation: never
+launch through `cargo run`, and never use `cargo test` as an admission
+verification command.
+
+## Separate descriptor identity from artifact identity
+
+A final binary cannot generally embed the hash of its own final bytes without
+creating a self-reference problem.
+
+Use two stages:
+
+1. Source `module.json`: name, kind, version, contracts, state, cost model and
+   verification specification.
+2. Release packaging: emit a finalized external descriptor/catalog containing
+   artifact path, target triple, size and SHA-256.
+
+The embedded JSON is the source descriptor. The external release descriptor
+binds that descriptor to the executable or bundle actually delivered.
+
+For statically linked capabilities, several module entries can legitimately
+reference the same root executable hash. Separate crates do not require
+separately loadable runtime plugins.
+
+## 4. Runtime, cancellation and budgets
+
+Put Tokio in `agentic-runtime`, `agentic-browser-cdp`, and the root entry point.
+Keep capabilities executor-independent: `std::future::Future`,
+`std::time::Instant`, and consumer-owned traits.
+
+The root starts one Tokio runtime. `agentic-runtime` owns admission queues,
+lease records, cancellation sources, deadline timers, budget accounting,
+telemetry and cleanup supervision. The browser adapter owns its transport task,
+supervised through runtime/root wiring.
+
+## A consumer-owned port
+
+For example, in `ChatDriver/Source/Struct/Call.rs`:
+
+```
+use std::{
+    future::Future,
+    pin::Pin,
+    time::Instant,
+};
+
+pub type FutureBox<'a, T> =
+    Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub trait Cancellation: Send + Sync {
+    fn IsCancelled(&self) -> bool;
+
+    // Must be race-safe and resolve immediately if already cancelled.
+    fn Cancelled(&self) -> FutureBox<'_, ()>;
+}
+
+pub struct Call<'a> {
+    pub Deadline: Instant,
+    pub Cancellation: &'a dyn Cancellation,
+}
+```
+
+In `ChatDriver/Source/Struct/Port/Browse.rs`:
+
+```
+use crate::Struct::Call::{Call, FutureBox};
+
+pub struct Evaluation {
+    pub Script: String,
+    pub MaximumResultBytes: usize,
+}
+
+pub struct EvaluationResult {
+    pub JSON: String,
+}
+
+pub enum BrowseError {
+    BrowserUnavailable,
+    NavigationFailed(String),
+    Timeout,
+    Cancelled,
+    ResultTooLarge,
+}
+
+pub trait Browse: Send + Sync {
+    fn Evaluate<'a>(
+        &'a self,
+        Request: Evaluation,
+        Context: Call<'a>,
+    ) -> FutureBox<'a, Result<EvaluationResult, BrowseError>>;
+}
+```
+
+This is an object-safe, boxed-future shape; it permits `Arc<dyn Browse>` without
+putting Tokio types in the capability API.
+
+The design-verification capability owns its equivalent contract. Small context
+definitions may initially be duplicated. Extract a tiny execution-primitives
+crate only if duplication becomes a demonstrated problem; it must never acquire
+browse traits, capability DTOs, registrations or adapter discovery.
+
+## Who enforces what?
+
+- Runtime: admission, overall deadline, lease and resource ceilings.
+- Capability: algorithmic bounds, such as maximum turns or measurement count.
+- Binding/adapter: operation deadline, cancellation observation and bounded
+  result size.
+- Runtime supervisor: cleanup even after the caller abandons the invocation.
+
+Before each externally visible operation, the binding checks cancellation and
+deadline, reserves the appropriate budget, and invokes the adapter. It then
+observes completion, cancellation or timeout.
+
+Capabilities can simply `await` the port. They do not need `tokio::select!`.
+
+Cancellation is cooperative, not a guarantee of rollback. Cleanup must be an
+explicit async operation with its own short deadline; do not rely on `Drop` to
+perform asynchronous disposal. Also distinguish reservation from charging: a
+timed-out browser action may already have consumed its budget.
+
+## 5. Enforce inward arrows with Cargo boundaries plus CI
+
+Cargo metadata exposes declared dependencies, their kinds, optional status,
+target conditions and renames. Use the declared package dependency lists for the
+architecture policy, not only the currently enabled resolved graph. That catches
+dormant optional edges as
+well.[doc.rust-lang](https://doc.rust-lang.org/cargo/commands/cargo-metadata.html)
+
+## Concrete architecture check
+
+Place this in `Tool/CheckArchitecture.py`:
+
+```
+import json
+import subprocess
+
+metadata = json.loads(subprocess.check_output([
+    "cargo", "metadata", "--format-version", "1",
+    "--no-deps", "--locked"
+]))
+
+packages = {p["name"]: p for p in metadata["packages"]}
+members = {
+    p["name"]
+    for p in metadata["packages"]
+    if p["id"] in metadata["workspace_members"]
+}
+
+allowed = {
+    "agentic-browser-cdp": set(),
+    "agentic-chat-driver": set(),
+    "agentic-design-verification": set(),
+    "agentic-skill-contract": set(),
+    "agentic-runtime": set(),
+    "agentic-workflow": {
+        "agentic-chat-driver",
+        "agentic-design-verification",
+        "agentic-skill-contract",
+    },
+    "agentic": {
+        "agentic-browser-cdp",
+        "agentic-chat-driver",
+        "agentic-design-verification",
+        "agentic-skill-contract",
+        "agentic-runtime",
+        "agentic-workflow",
+    },
+}
+
+errors = []
+
+for name in sorted(members):
+    if name not in allowed:
+        errors.append(f"{name}: missing architecture policy")
+        continue
+
+    for dependency in packages[name]["dependencies"]:
+        target = dependency["name"]
+        if target in members and target not in allowed[name]:
+            errors.append(
+                f"{name} -> {target}: forbidden "
+                f"({dependency['kind'] or 'normal'} dependency)"
+            )
+
+capabilities = {
+    "agentic-chat-driver",
+    "agentic-design-verification",
+    "agentic-skill-contract",
+}
+
+for name in capabilities & members:
+    for dependency in packages[name]["dependencies"]:
+        if dependency["name"] in {"tokio", "tokio-util"}:
+            errors.append(f"{name}: executor-specific dependency")
+
+if errors:
+    raise SystemExit("\n".join(errors))
+```
+
+Apply the same direction rule to normal, build and dev dependencies.
+Browser-backed capability integration tests belong in the root’s test targets,
+not in a capability’s dev dependency on the adapter.
+
+In `.github/workflows/Check.yml`:
+
+```
+- name: Check architecture
+  run: python3 Tool/CheckArchitecture.py
+
+- name: Check workspace
+  run: cargo check --workspace --all-targets --all-features --locked
+
+- name: Test workspace
+  run: cargo test --workspace --all-features --locked
+```
+
+Also check each capability independently with `--no-default-features` to expose
+accidental reliance on workspace-wide feature activation.
+
+Add a second policy pass for external dependency allowlists. Otherwise someone
+can evade the intended abstraction by adding `chromiumoxide` directly to a
+capability without creating a forbidden workspace edge.
+
+The compiler enforces access through declared dependencies and module
+visibility; CI enforces which declarations are permitted. Neither a source grep
+nor a Cargo feature is an adequate replacement for that policy.
+
+## 6. Manifest field mapping and pre-warm admission
+
+Keep logical capability contracts distinct from Rust crate names.
+
+| TS field                       | Rust/workspace representation                                       | Harness interpretation                                      |
+| ------------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `name`                         | Preserve `@agentic/...` as logical name; add Cargo package identity | Stable module identity across migration                     |
+| `kind`                         | JSON enum; optionally mirrored in `[package.metadata.agentic]`      | Capability, adapter, workflow, runtime/root                 |
+| `version`                      | Cargo package version, checked against descriptor in CI             | Module release version—not automatically port compatibility |
+| `provides`                     | Versioned logical contract IDs                                      | What can be satisfied by this component                     |
+| `requires`                     | Versioned required contracts, with consumer semantics               | What root wiring must supply                                |
+| `artefact`                     | Final release catalog entry with path, target, format and SHA-256   | Exact deployed executable/bundle identity                   |
+| `state`                        | Serialized four-case enum                                           | Allowed pre-warm scope and required admission validation    |
+| `cost.cold_ms`, `cost.warm_ms` | Measured estimates with provenance                                  | Scheduling estimates, not permission or hard budgets        |
+| `verify`                       | Executable plus argument array and timeout                          | Prebuilt readiness/verification operation                   |
+
+For your two browse consumers, `requires` can retain a common logical browse
+family, but record the consumer profile or contract version. A shared string
+does not mean the Rust traits must be shared. The root explicitly binds each
+required profile and translates its types.
+
+## State policy
+
+| State             | Harness may prepare                                  | Admission must revalidate                                                     |
+| ----------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `stateless`       | Immutable code/data caches, schemas, indexes         | Artifact/config/input identity; no hidden live session assumption             |
+| `holds-transport` | Permitted transport/session resources                | Liveness, endpoint, ownership, target/context validity and lease exclusivity  |
+| `holds-identity`  | Only explicitly authorized identity-scoped resources | Principal, tenant/account, credential/session validity and intended authority |
+| `holds-workspace` | Workspace-scoped resources under policy              | Workspace identity, locks, lease, mutable revision and isolation              |
+
+Apply them as follows:
+
+- BrowserCDP: `holds-transport`; record attach/launch ownership separately.
+- ChatDriver: `holds-transport`; additionally verify the expected
+  product/session, mode and model on admission or use as appropriate.
+- DesignVerification: `stateless`; borrow a leased browse port per invocation,
+  retain no session afterward.
+- SkillContract: `stateless`; immutable corpus caches must be keyed by corpus
+  identity/hash.
+- Runtime: `holds-workspace`; owns workspace-scoped policy state and cleanup
+  records.
+
+A material uncertainty: if ChatDriver retains an authenticated product session,
+`holds-transport` alone may understate its admission requirements. Preserve your
+existing class if necessary, but add explicit identity revalidation
+requirements. The class is a preparation ceiling, not an exhaustive readiness
+checklist.
+
+Cost measurements should carry their basis—browser version, attach versus
+launch, platform, sample statistic and measurement date. “Warm” is meaningful
+only when the cached state passes admission again.
+
+Verification should look like:
+
+```
+{
+  "verify": {
+    "executable": "Agentic",
+    "args": ["verify", "--module", "@agentic/chat-driver"],
+    "timeout_ms": 5000
+  }
+}
+```
+
+That is a proposed schema, not an inferred existing CLI. The release harness
+invokes the shipped executable directly. Verification should report structured
+readiness without silently doing an unbudgeted warm-up.
+
+## House-style choices I would preserve—and exceptions I would make
+
+## Preserve
+
+```
+# .cargo/config.toml
+[build]
+target-dir = "Target"
+```
+
+```
+# Workspace Cargo.toml
+[workspace]
+resolver = "2"
+members = ["Crate/*"]
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+debug = false
+lto = true
+panic = "abort"
+strip = true
+```
+
+Use an explicit member list if your final directory nesting differs from the
+sketch.
+
+Keep `Source/Library.rs`, PascalCase paths, `Fn` for operations and `Struct` for
+data/contracts:
+
+```
+#![allow(non_snake_case)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+```
+
+Use `#[path = "Index.rs"]` where needed; `Index.rs` is a house convention, not
+automatic Rust module discovery.
+
+## Exceptions worth making explicitly
+
+1. Do not name every library `Library`. Use unique library target names such as
+   `AgenticChatDriver`. Preserve the path, not an ambiguous crate identity.
+2. Do not make each capability’s library root an executable entry point. Keep
+   Tokio startup in `Agentic/Source/Main.rs`, delegating to the house-style
+   command path. Multiple binary names may share that entry point if genuinely
+   needed.
+3. Do not emit `staticlib` and `cdylib` for every crate. Use `rlib` for internal
+   crates. Add native-library outputs only for an actual FFI consumer; those
+   outputs do not by themselves define a stable plugin ABI.
+4. Treat `panic = "abort"` as incompatible with in-process panic recovery.
+   Ordinary error and cancellation cleanup still works, but a panic cannot be
+   recovered by a runtime supervisor in that process. If crash cleanup is
+   mandatory, use an external supervisor and explicit child-process ownership
+   records.
+5. Do not inherit the entire dependency list. Capabilities should not acquire
+   Tokio, Clap, Ratatui or browser libraries merely because the reference
+   repository uses them.
+
+These exceptions preserve the recognizable house layout while avoiding the parts
+that would collapse your architectural boundaries or weaken the runtime’s
+lifecycle guarantees.
+
+Show the Cargo.toml for the workspace and crates Show how adapter-to-port
+bindings look in the root Show how a capability crate implements a port Explain
+how module.json fits into this design Show the file layout for the composition
+root Ask a follow-up
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step
+inside a step is one level in.
+
+| Depth | Step                                                                   | Duration | Icon         | Expanded |
+| ----- | ---------------------------------------------------------------------- | -------- | ------------ | -------- |
+| 0     | Finished                                                               | 13s      | chevron-down | true     |
+| 1     | Researching Rust browser integration patterns for the workspace design | -        | world        | true     |
+| 1     | Checking Rust browser integration and Cargo metadata patterns          | -        | book         | true     |
+
+## Cited sources
+
+| Source                                                                                                                            | Label                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html                                                | Browser in headless_chrome - Rust - Docs.rs                         |
+| https://github.com/rust-lang/cargo/issues/10636                                                                                   | default features always resolved for dependency in workspace mode   |
+| https://github.com/mattsse/chromiumoxide/issues/49                                                                                | Chrome stays idle infinitely #49 - mattsse/chromiumoxide - GitHub   |
+| https://lib.rs/crates/headless_chrome_fork                                                                                        | headless_chrome_fork — WebSocket library in Rust // Lib.rs          |
+| https://docs.rs/headless_chrome_fork/latest/headless_chrome/browser/struct.Browser.html                                           | Browser in headless_chrome::browser - Rust - Docs.rs                |
+| https://dev.to/vhub_systems_ed5641f65d59/headless-browsers-in-rust-chromiumoxide-vs-headlesschrome-vs-the-python-alternative-25e5 | Headless Browsers in Rust: Chromiumoxide vs headless_chrome vs ...  |
+| https://github.com/rust-headless-chrome/rust-headless-chrome/blob/master/src/browser/process.rs                                   | rust-headless-chrome/src/browser/process.rs at main - GitHub        |
+| https://www.browsercat.com/docs/connect-with/headless-chrome                                                                      | Getting Started with Rust Headless Chrome - BrowserCat              |
+| https://lib.rs/crates/spider_chromiumoxide_types                                                                                  | spider_chromiumoxide_types — Rust web dev library // Lib.rs         |
+| https://github.com/rust-lang/cargo/issues/11133                                                                                   | Allow publishing with path dependencies without a version (RFC2906) |
+| https://docs.rs/oxide-browser-sh                                                                                                  | oxide_browser_sh - Rust - Docs.rs                                   |
+| https://crates.io/crates/cargo-workspace-deps                                                                                     | cargo-workspace-deps - crates.io: Rust Package Registry             |
+| https://github.com/rust-lang/cargo/issues/5332                                                                                    | Allow to share versions of dependencies between unrelated Cargo ... |
+| https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/                                     | Announcing the Headless Chrome crate ("Puppeteer for Rust")         |
+| https://docs.rs/fob-browser-test                                                                                                  | fob_browser_test - Rust - Docs.rs                                   |
+| https://docs.rs/chromiumoxide/latest/chromiumoxide/                                                                               | chromiumoxide - Rust                                                |
+| https://doc.rust-lang.org/cargo/commands/cargo-metadata.html                                                                      | cargo metadata - The Cargo Book                                     |
+| https://doc.rust-lang.org/cargo/commands/cargo-metadata.html                                                                      | doc.rust-lang                                                       |
+| https://docs.rs/chromiumoxide/latest/chromiumoxide/                                                                               | docs                                                                |
+| https://docs.rs/headless_chrome/latest/headless_chrome/browser/struct.Browser.html                                                | docs                                                                |
+| https://doc.rust-lang.org/cargo/commands/cargo-metadata.html                                                                      | doc.rust-lang                                                       |
+| https://github.com/rust-lang/cargo/issues/10636                                                                                   | github                                                              |
+| https://github.com/mattsse/chromiumoxide/issues/49                                                                                | github                                                              |
+| https://lib.rs/crates/headless_chrome_fork                                                                                        | lib                                                                 |
+| https://docs.rs/headless_chrome_fork/latest/headless_chrome/browser/struct.Browser.html                                           | docs                                                                |
+| https://dev.to/vhub_systems_ed5641f65d59/headless-browsers-in-rust-chromiumoxide-vs-headlesschrome-vs-the-python-alternative-25e5 | dev                                                                 |
+| https://github.com/rust-headless-chrome/rust-headless-chrome/blob/master/src/browser/process.rs                                   | github                                                              |
+| https://www.browsercat.com/docs/connect-with/headless-chrome                                                                      | browsercat                                                          |
+| https://lib.rs/crates/spider_chromiumoxide_types                                                                                  | lib                                                                 |
+| https://github.com/rust-lang/cargo/issues/11133                                                                                   | github                                                              |
+| https://docs.rs/oxide-browser-sh                                                                                                  | docs                                                                |
+| https://crates.io/crates/cargo-workspace-deps                                                                                     | crates                                                              |
+| https://github.com/rust-lang/cargo/issues/5332                                                                                    | github                                                              |
+| https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/                                     | reddit                                                              |
+| https://docs.rs/fob-browser-test                                                                                                  | docs                                                                |
+
+--- FILE: 575cb198.md ---
+---
+title: "Design the smallest portable workflow for asking a web chat UI"
+thread: 575cb198-6013-4389-a900-7deeb1e53199
+project: Hermes Research
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/575cb198-6013-4389-a900-7deeb1e53199
+captured: 2026-11-03T20:05:18
+segments: 1
+steps: 3
+sources: 20
+---
+
+# Design the smallest portable workflow for asking a web chat UI
+
+| Field         | Value                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Thread        | `575cb198-6013-4389-a900-7deeb1e53199`                                |
+| Project       | Hermes Research                                                       |
+| Source        | https://www.perplexity.ai/search/575cb198-6013-4389-a900-7deeb1e53199 |
+| Captured      | 2026-11-03T20:05:18                                                   |
+| Segments      | 1                                                                     |
+| Trace steps   | 3                                                                     |
+| Cited sources | 20                                                                    |
+| Characters    | 39405                                                                 |
+
+## Transcript
+
+Hermes Research Share Finished 12s
+
+HIGH — Architectural boundary (reasoned recommendation, not
+repository-verified): keep the CDN shell public and independently useful; put
+authentication, private data, subscription state, and mutations inside one
+client island. The tension is not static versus realtime rendering, but
+build-time HTML versus user-specific truth that arrives later. Astro explicitly
+supports separately hydrated islands; a realtime island need not turn the rest
+of the site into an application. Check: block the realtime backend and load
+every public route—the public content must remain
+usable.[astro](https://docs.astro.build/en/concepts/islands/) HIGH — Hydration
+(factual basis plus inference): prerendered HTML cannot contain the visiting
+user’s request-time authenticated state. Nothing inherently breaks if both the
+HTML and the island’s initial render say “Checking session”; problems arise when
+the HTML implies current/private data, or the first client render assumes a
+session or subscription result it does not yet have. Depending on the framework,
+this can produce hydration disagreement, replacement, or misleading flashes.
+Prefer a deterministic initial placeholder; client-only rendering avoids
+reconciling prerendered component markup but still needs a useful static
+fallback. Check: load with JavaScript disabled, then with delayed authentication
+and socket establishment.astro+1 HIGH — First-paint socket failure (reasoned
+failure model): the shell can paint successfully while the authenticated surface
+never receives its first result. Treating “no result yet” as an empty collection
+falsely reports “you have no records”; waiting forever produces an apparently
+broken application. Distinguish checking session, signed out, connecting,
+live-with-result, stale-with-snapshot, and unavailable-without-snapshot; an
+authenticated empty result is a separate successful state. Check: block only the
+WebSocket endpoint while allowing HTML, JavaScript, and authentication to load.
+HIGH — Readiness (reasoned recommendation): an open socket is transport
+readiness, not proof that the user is authenticated or the required subscription
+has returned. Declare the surface ready only after authenticated data arrives;
+put a deadline on the initial waiting experience, not necessarily on background
+reconnection. Convex exposes connection-state observation and token handling,
+which are useful inputs but do not replace the application’s data-readiness
+condition. Check: separately delay token acquisition and the first query result,
+and confirm neither displays a false empty
+state.[convex](https://docs.convex.dev/api/classes/browser.ConvexClient) HIGH —
+Service-worker boundary (factual): a service worker can serve cached HTML and
+assets, but it is not a cache/proxy for WebSocket frames; the WebSocket
+handshake specifies service-workers mode “none.” Its lifecycle is also
+event-driven and browsers may terminate it, so it is not a dependable
+always-running connection owner. Keep the database client in the page/island by
+default; worker shutdown should not govern its socket. Check: stop the service
+worker in browser tooling while the page is connected, then separately
+disconnect the socket.w3+1 MEDIUM — Offline boot (reasoned consequence): caching
+the shell solves “can the application open?”, not “does it know the current
+database state?” A previously installed service worker can make an offline
+revisit fast, but cannot bootstrap a genuinely uncached first-ever visit. Ensure
+the island’s versioned JavaScript is cached too; cached HTML pointing to
+unavailable chunks yields a shell that never starts. Check: after a successful
+online visit, close the tab, disable networking, and reopen the authenticated
+route—not merely disconnect an already-running
+page.[developer.mozilla](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation)
+HIGH — Offline honesty (reasoned recommendation): without a persisted,
+authorized snapshot, show “Data unavailable offline,” not fabricated emptiness.
+With one, label it “Saved locally; freshness unverified” with its last
+successful sync time, partition it by account, and clear or quarantine it on
+logout/account changes. A cached private snapshot is a privacy decision, not an
+automatic benefit of a service worker. Convex explicitly distinguishes
+reconnecting through network blips from providing full offline sync; verify the
+chosen database client’s persistence guarantees rather than assuming
+equivalence. Check: reload offline, switch accounts, and confirm no previous
+account’s records appear.[convex](https://www.convex.dev/sync) HIGH — Mutations
+(reasoned trade-off): for this single surface, default to disabling
+authoritative writes until synchronization is available. Offline editing is
+possible, but adds a separate contract for durable pending operations,
+deduplication, conflict resolution, authorization after reconnect, and an honest
+“pending—not saved” display. A reconnecting socket alone does not settle any of
+those questions. Check: interrupt a write before acknowledgment, reload, and
+reconnect; the UI must not claim success without confirmation or silently
+execute the operation twice. MEDIUM — Cold-load placement (reasoned
+recommendation): load the realtime/auth bundle only on the authenticated
+surface; hydrate promptly there, but do not make public navigation or first
+paint await it. Use one client/provider for that surface rather than independent
+connections per widget. If authenticated content must be present in the initial
+HTML, change that route to request-time rendering or add an authenticated
+snapshot endpoint; that is a deliberate departure from the fully
+prerendered-only premise, not something hydration can manufacture. Check:
+inspect public-route network traces for unwanted auth/database bundles, and
+measure shell paint separately from first authenticated result.astro+1
+
+Today 5:03 PM
+
+I am designing a module taxonomy so that capabilities in a monorepo can become
+project-agnostic and reusable across workflows. My sketch is: ports at the
+centre, each with a contract test and data shapes but no provider or transport
+knowledge; adapters co-located with the provider they wrap; a composition root
+as the only place that names concrete adapters; and an import-graph check that
+fails when a capability imports an adapter or an adapter imports another
+adapter. Providers declare the ports they need rather than registering
+themselves into a service bus. Critique this against established practice -
+hexagonal architecture and the dependency rule, service locator versus
+constructor injection, contract testing, and monorepo versus polyrepo federation
+of many small packages. Tell me where the sketch is wrong, under-specified, or
+will fail at scale, and what you would add or remove. Reason from sources where
+the claim is factual and say where you are reasoning from principle. I care most
+about the failure modes: what does this design look like after two years and
+forty modules.
+
+Read less Finished 14s
+
+HIGH — Design review, not repository findings: the sketch has the right
+dependency direction, but “ports at the centre” risks making interfaces the
+product. Put domain policy and use cases at the centre; let those consumers own
+the ports they need. Cockburn’s goal is an application independently testable
+from external devices, not a universal catalogue of interchangeable providers.
+Verification: run capability tests without provider SDKs, network access, or
+application
+bootstrap.[alistair.cockburn](https://alistair.cockburn.us/hexagonal-architecture)
+HIGH — Port ownership is under-specified: a central ports package can become the
+forty-module dependency magnet, accumulating optional fields and provider-shaped
+methods. Recommendation from principle: keep ports local to the consuming
+capability; extract a shared contract only when consumers genuinely share
+semantics and evolution policy. Verification: change one capability’s
+requirement and inspect the affected build/test set; unrelated capabilities
+should not need coordinated edits. HIGH — “No provider or transport knowledge”
+is correct, but “data shapes” alone are insufficient: the dependency rule also
+excludes provider-generated types from inner layers. Specify domain errors,
+ordering, pagination, cancellation, idempotency, consistency, and resource
+ownership where relevant; otherwise two adapters type-check while behaving
+differently. Verification: inspect exported signatures for SDK types, then run
+the same behavioral cases against both
+implementations.[cleancoder](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+HIGH — Interchangeability must be bounded, not asserted: inferred two-year
+failure is a lowest-common-denominator port plus provider-specific escape
+hatches. A transactional store and an eventually consistent service cannot
+promise identical behavior merely because both implement save(). Declare minimum
+guarantees; split meaningfully different capabilities rather than passing
+arbitrary provider options. Verification: test failure/retry and
+read-after-write behavior against each advertised guarantee. HIGH — Dependency
+declaration is not necessarily injection: a constructor or factory taking narrow
+port values exposes requirements; accepting a registry and calling
+resolve("store") hides them again. Fowler explicitly distinguishes
+constructor-visible dependencies from locator lookups. Keep resolution in
+assembly code and inject the actual dependencies; reserve dynamic discovery for
+a genuine plugin requirement. Verification: search capability code for
+container/registry access and test construction using only explicit
+arguments.[martinfowler](https://martinfowler.com/articles/injection.html)
+MEDIUM — A service bus and a service locator are different concerns:
+recommendation from principle—remove self-registration side effects, not
+legitimate messaging. An event bus can itself be an injected port, but delivery,
+ordering, retry, and subscription lifetime need contracts. Inferred failure
+after forty modules: implicit event chains become invisible control flow even
+though the import graph is clean. Verification: trace one workflow end-to-end
+and test duplicate delivery and subscriber failure. HIGH — “Only the composition
+root names adapters” needs scope: production assembly should name concrete
+implementations, but adapter tests and adapter definitions necessarily do too.
+Recommendation from principle: permit one root per executable/deployment plus
+private assembly helpers; prohibit application logic from selecting concrete
+providers. Inferred failure otherwise: one enormous root with every workflow’s
+configuration and lifecycle. Verification: assemble each workflow independently
+and check that unused providers need not initialize. MEDIUM — The
+adapter-to-adapter ban is a useful default, not a hexagonal law: tracing,
+caching, and retry decorators legitimately wrap another implementation through a
+port; concrete adapter imports usually need not follow. Allow reusable
+outer-layer technical helpers, and let assembly inject decorated
+implementations. Verification: construct a caching wrapper around an in-memory
+port implementation without importing a concrete database adapter; this
+preserves inward dependency direction.aws.amazon+1 HIGH — Provider co-location
+needs an ownership boundary: recommendation from principle—keep integration
+translation beside the provider integration, but keep the provider SDK wrapper
+separate from each consumer-specific adapter when meanings differ. Otherwise
+“the provider package” gradually imports every domain and becomes a hub.
+Verification: inspect its transitive dependencies; a low-level provider client
+should not pull in workflow policy or unrelated capability packages. HIGH — One
+contract test is not a contract-testing strategy: use a reusable conformance
+suite for in-process port semantics, run against real adapters as well as fakes.
+For independently deployed HTTP/message boundaries, consumer-driven contracts
+verify the interactions consumers actually use; Pact describes that separate
+purpose. Neither substitutes for production-representative integration tests.
+Verification: deliberately break serialization, authorization, or error
+translation and establish which test detects each
+break.[pact](https://docs.pact.io/) HIGH — Add lifecycle and operational policy
+before scaling: recommendation from principle—declare who opens/closes clients,
+owns transactions, sets deadlines, retries, and carries tenant/request context.
+Inferred two-year failure: nested retries multiply attempts, singleton adapters
+leak tenant state, and tests pass with fakes that never disconnect.
+Verification: inject timeouts and partial failures, count attempts, run
+concurrent tenant requests, and assert shutdown releases resources. HIGH — The
+import checker is necessary but incomplete: recommendation from principle—check
+resolved package exports, re-exports, aliases, dynamic imports, cycles, and
+transitive boundary violations; distinguish production from test dependencies.
+Also test runtime composition, because two modules can form a call cycle
+entirely through ports. Verification: maintain intentionally forbidden
+dependency fixtures that must fail CI, plus a smoke test for every supported
+assembly. MEDIUM — Forty modules need not mean forty published packages:
+recommendation from principle—separate logical boundaries from release
+boundaries. Keep modules together when they change and ship together; publish
+packages when independent consumers, ownership, or compatibility commitments
+justify it. Otherwise every small refactor becomes release choreography.
+Verification: audit recent changes for packages that always move together and
+for “independent” packages that only work with workspace source aliases. MEDIUM
+— Monorepo versus polyrepo is a coordination trade-off, not an architectural
+purity test: Google documents a common source of truth supported by substantial
+tooling, alongside its trade-offs. Inference for your scale: a monorepo makes
+coordinated contract migrations easier but can conceal lockstep coupling;
+polyrepos expose version skew but add release and compatibility work.
+Verification: test built package artifacts against explicitly supported
+dependency versions, not only the current monorepo
+checkout.[research](https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/)
+HIGH — Add contract ownership and retirement rules: recommendation from
+principle—name an owner, supported consumers, compatibility policy, and
+migration path for each public port. Inferred year-two failure is not “too many
+adapters”; it is abandoned interfaces, divergent near-duplicates, and nobody
+authorized to remove old versions. Verification: generate an inventory of ports,
+implementations, consumers, owners, and supported versions; investigate every
+orphan or unexplained duplicate. MEDIUM — Smallest useful revision: keep inward
+dependencies, explicit injection, adapter-local translation, behavioral
+conformance tests, and automated boundaries; remove universal-port ambitions and
+mandatory package-per-module splitting. Add per-workflow assembly, lifecycle
+guarantees, compatibility ownership, and artifact-level consumer tests.
+Verification: add a second workflow and replace one provider without modifying
+the original capability’s policy; record every exception—that exercise tests
+actual reuse rather than architectural vocabulary.
+
+5:06 PM
+
+Your answer was cut off mid-sentence at 'unrelated capabilities should not need
+coordination'. Please carry on from exactly there and finish the review - I
+still want the failure modes at two years and forty modules, what you would
+remove from the sketch, and how composition roots and the import-graph check
+should be shaped so they do not rot. Take the space you need.
+
+Finished 3s
+
+HIGH — …unrelated capabilities should not need coordination. The failure to
+watch for is a shared ports package that becomes everybody’s dependency: adding
+one workflow requirement forces changes through otherwise unrelated modules.
+Recommendation from principle: let the consuming capability own its ports;
+promote a contract to shared ownership only when consumers share semantics, not
+merely similarly shaped methods. Verification: change one use case and inspect
+which packages must change, rebuild, or release. HIGH — Domain policy belongs at
+the centre, not an interface catalogue: hexagonal architecture separates an
+application from the technologies driving it and serving it; the dependency rule
+makes source dependencies point toward policy. Ports are boundaries around
+meaningful application behavior, not an end in themselves. Verification: run the
+capability’s policy tests without provider SDKs, network access, or the
+production composition root.alistair.cockburn+1 HIGH — The likely two-year
+failure is semantic leakage behind clean types: forty modules can agree on a
+Storage interface while disagreeing about ordering, atomicity, missing records,
+authorization, and whether retries duplicate writes. Recommendation from
+principle: document and test observable guarantees, not only data shapes.
+Verification: run identical failure, concurrency, and retry cases against every
+implementation advertised as interchangeable. HIGH — Remove the ambition to make
+every port universal: recommendation from principle—a port should express what a
+consumer needs, not everything a provider offers. If one workflow requires
+transactional writes and another only best-effort delivery, do not conceal that
+difference behind optional flags and provider-specific options. Verification:
+inspect contracts for arbitrary option bags, unsupported-operation exceptions,
+and branches on provider identity. HIGH — Keep constructor or factory injection,
+but distinguish it from dependency declarations: accepting a list of service
+names and resolving them later is still locator-style access. Fowler’s
+distinction is useful because explicit constructor dependencies reveal
+requirements without searching implementation code. Verification: construct a
+capability with ordinary test doubles; it must not need a registry, global
+container, or bootstrap side
+effect.[martinfowler](https://martinfowler.com/articles/injection.html) MEDIUM —
+Remove self-registration as the default, not messaging as a legitimate
+abstraction: recommendation from principle—a service bus routes messages; a
+service locator finds dependencies. Either can become hidden coupling, but they
+are not the same mechanism. An injected event publisher can be a sound port if
+delivery and failure semantics are explicit. Verification: trace a workflow’s
+subscribers, duplicate handling, and failure propagation without relying on
+import order. HIGH — Shape composition roots per executable or deployment, not
+per repository: recommendation from principle—each application, CLI, worker, or
+test harness owns the assembly it actually runs. A repository-wide root tends to
+accumulate unrelated configuration and initialize unused providers.
+Verification: start each entry point independently and confirm it neither
+requires credentials for nor opens connections to providers it does not use.
+HIGH — Allow private assembly helpers beneath each root: recommendation from
+principle—“only the root names concrete adapters” should describe the assembly
+boundary, not demand one enormous file. Helpers may construct a coherent
+subsystem, but should accept configuration and explicit dependencies rather than
+reach into a global container. Verification: import each helper in isolation and
+assert that importing it performs no network I/O or registration. HIGH — Keep
+workflow decisions out of roots: recommendation from principle—assembly decides
+which implementation satisfies a requirement; application policy decides what a
+workflow does. A root full of tenant rules, fallback decisions, or business
+branches is an application hiding in configuration. Verification: change a
+business rule and check whether the root must change; if so, identify whether
+policy has escaped its capability. HIGH — Give roots explicit lifecycle
+responsibility: recommendation from principle—assembly must establish who owns
+startup, readiness, disposal, and failure cleanup. Otherwise forty modules each
+create their own connection pools, retry loops, and shutdown handlers.
+Verification: fail startup halfway through, then assert previously acquired
+resources close; run shutdown twice and verify safe behavior. MEDIUM — Relax the
+absolute adapter-to-adapter prohibition into a precise dependency policy: a
+decorator may wrap another implementation through its port without importing
+that implementation. Hexagonal architecture requires separation and inward
+dependencies, not a blanket prohibition on all outer-layer cooperation.
+Recommendation: share technical helpers where appropriate, but keep concrete
+implementation selection in assembly. Verification: wrap an in-memory adapter
+with tracing or caching without importing the production database
+adapter.docs.aws.amazon+1 HIGH — Define module categories in machine-readable
+metadata: recommendation from principle—classify capabilities, contracts,
+provider clients, adapters, assembly, and tests, then maintain a small explicit
+allowed-dependency matrix. Directory naming alone becomes unreliable after
+moves, aliases, and re-exports. Verification: generate the resolved dependency
+graph and reject unclassified modules as well as forbidden edges. HIGH — Check
+the graph that the compiler and runtime actually resolve: recommendation from
+principle—include package exports, workspace aliases, re-exports, dynamic
+imports where statically resolvable, and transitive SDK leakage. A capability
+importing a “shared” barrel that re-exports adapters is still coupled to
+adapters. Verification: add deliberately forbidden fixtures for each supported
+import mechanism and require the architecture check to reject them. HIGH —
+Prevent the checker itself from becoming ceremonial: recommendation from
+principle—make exceptions narrow, owned, justified, and time-bounded; do not
+permit broad ignore directories. Review changes to the dependency policy
+separately from code that would violate it. Verification: report exception count
+and age in CI, and demonstrate that removing each exception exposes the specific
+intended violation. HIGH — Accept what an import graph cannot prove:
+recommendation from principle—ports can conceal runtime call cycles,
+incompatible lifetimes, hidden service discovery, and event feedback loops.
+Supplement static checks with assembly smoke tests and representative workflow
+traces, rather than claiming the graph proves architectural independence.
+Verification: boot every supported assembly and exercise a complete workflow
+with dependency failures injected. HIGH — Split testing into distinct
+obligations: reusable conformance tests establish port behavior; adapter
+integration tests establish translation against the actual provider; assembly
+tests establish wiring. Consumer-driven contract tests address interactions
+across independently deployed HTTP or message boundaries, which is Pact’s stated
+scope—not a substitute for all three. Verification: intentionally break one
+guarantee in each layer and identify the test that
+fails.[docs.pact](https://docs.pact.io/) HIGH — Do not let a fake certify
+itself: recommendation from principle—run the same conformance suite against
+production adapters, and include cases the convenient in-memory implementation
+tends to omit: cancellation, duplicates, partial failure, pagination, and
+concurrent callers. Verification: demonstrate at least one real-provider
+behavior that originally differed from the fake and retain it as a regression
+case. MEDIUM — Remove package-per-module as an implicit goal: recommendation
+from principle—logical boundaries, publication boundaries, and deployment
+boundaries solve different problems. Forty capabilities do not automatically
+justify forty independently versioned packages. Verification: inspect which
+packages always change together and which have actual external consumers; merge
+release boundaries that create coordination without providing independence.
+MEDIUM — Monorepo federation does not eliminate versioning; polyrepo federation
+does not create independence: Google’s monorepo account describes a common
+source of truth supported by substantial infrastructure, not a free scaling
+property. Inference for this design: a monorepo can hide lockstep assumptions,
+while polyrepos turn them into delayed compatibility failures. Verification:
+build package artifacts and test supported consumer/provider version
+combinations outside workspace source
+resolution.[research](https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/)
+HIGH — Assign ownership to public contracts before forty modules arrive:
+recommendation from principle—each contract needs an owner, known consumers,
+compatibility expectations, and a retirement process. Otherwise near-duplicate
+ports proliferate because nobody can safely change the original, while obsolete
+versions remain forever. Verification: generate an inventory linking every
+public port to its implementations, consumers, owner, and supported versions.
+HIGH — The two-year warning signs are operational, not aesthetic: inferred
+indicators include roots that require every provider’s credentials, contract
+changes touching unrelated workflows, adapter-specific flags in capabilities,
+growing checker exceptions, and tests that pass only inside the workspace. These
+are hypotheses, not findings about your repository. Verification: measure those
+indicators periodically and investigate changes rather than counting interfaces
+as evidence of reuse. MEDIUM — The revised minimum is smaller than a framework:
+consumer-owned ports with behavioral guarantees; explicit constructor/factory
+injection; adapters that translate rather than dictate policy; per-entry-point
+assembly with lifecycle ownership; and a resolved import-policy check backed by
+negative fixtures. Remove universal interfaces, automatic registration, a
+repository-wide super-root, and compulsory independent publishing. Verification:
+add a second workflow and substitute one provider without editing the original
+capability’s policy; every required edit reveals where the claimed boundary is
+incomplete.
+
+6:49 PM
+
+Three connected questions, and I want the mechanisms rather than the vocabulary.
+(1) SpacetimeDB's execution model: is it reactor-style - an event loop where
+transactions are scheduled and reducers are handlers - and what does the
+documentation actually say about concurrency, ordering, and where the word
+reactor appears in the architecture? (2) I want each worker or capability in an
+agent system to carry properties that are hidden at first and become known over
+time, revealed by traces or by other actors, with a probabilistic element - the
+model I have in mind is Android: Netrunner, where cards are face down, HQ and
+R&D hold hidden information, and the runner learns by acting. What is the right
+formal frame for that - POMDP belief states, epistemic logic with knowledge
+operators, hidden Markov models - and what does Netrunner specifically teach
+about disclosure rules that are fair, legible and not degenerate? (3) The hard
+part: if hidden properties live in a relational database whose subscriptions
+push rows to clients, how do you represent them without leaking through the
+subscription itself? Give the table design and the reducer-level rule, and say
+where the leak is unavoidable. Cite documentation where factual and mark
+inference.
+
+Read less Finished 24s
+
+HIGH — (1) Execution model: “reactor-style” is a reasonable analogy for
+requests/system events invoking handlers, but the documented architectural
+description is more precise: each database is a single-threaded actor, with
+transactions in that database executed serially; different databases can execute
+concurrently. The September 2026 architecture article explicitly contrasts this
+with earlier parallel MVCC execution. Established from the architecture article,
+not reproduced; check: distinguish per-database reducer execution from
+networking, procedures, replication, and execution in other
+databases.[spacetimedb](https://spacetimedb.com/blog/how-does-spacetime-scale)
+HIGH — Transaction guarantees are not scheduling guarantees: every reducer
+invocation is an atomic transaction; it cannot observe partially committed
+changes from another reducer. Neither those guarantees nor single-threaded
+execution establishes a global FIFO order matching requests from different
+clients, or a guaranteed dispatch order for overdue scheduled reducers. Do not
+derive either from the word “reactor.” Established from transaction
+documentation; the caution about inferring ordering is reasoning from principle.
+Check: make application ordering explicit with sequence/version preconditions
+where it
+matters.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
+MEDIUM — Where “reactor” appears: I found no architectural use of that word in
+the official transaction documentation or the architecture article inspected;
+the latter says “actor.” Search did find an official example described as a
+“reactor game,” referring to an energy-generating game object, not the server
+architecture. This is a bounded search finding, not proof that the word never
+appears anywhere in the repository. Check: search the pinned
+documentation/source revision before claiming a specifically named Reactor
+implementation.spacetimedb+1 HIGH — (2) Formal frame: use an action-conditioned
+partially observable model for discovery, and a separate disclosure policy for
+authorization. A belief state is a distribution over possible hidden states;
+actions produce observations that update that distribution. This matches “learn
+by probing” better than an ordinary HMM when the actor chooses informative
+actions. If properties remain fixed and actions only reveal them, an epistemic
+MDP is a particularly close special case. Established mathematical model; its
+application to your capabilities is
+inference.[lamsade.dauphine](https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf)
+MEDIUM — The mechanism is Bayesian filtering: $b_{t+1}(s')\propto O(o_{t+1}\mid
+s',a_t)\sum_s T(s'\mid s,a_t)b_t(s)$. Here $s$ includes latent capability
+properties, $a_t$ is a probe/invocation, and $o_{t+1}$ is the authorized
+observation. For fixed properties, the transition can be the identity. Unknown
+observation likelihoods require estimation or explicit uncertainty; merely
+storing a confidence number does not establish a calibrated probabilistic model.
+Equation established in the cited treatment; capability interpretation
+inferred.[lamsade.dauphine](https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf)
+MEDIUM — Epistemic logic answers a different question: use it to express what
+each actor knows and what they know about others’ knowledge; use probabilities
+for degrees of belief rather than equating “likely” with “known.” The two
+approaches can be combined. If other actors strategically choose what to
+disclose or how to behave, a single-agent POMDP with a fixed environment model
+may be insufficient; your model must represent those choices or declare its
+approximation. Established distinction with an inferred modeling
+recommendation.[hal](https://hal.science/hal-05109660/document) HIGH — Separate
+three things in your implementation: latent truth, authorized evidence, and
+actor belief. Reasoning from principle—a worker may actually be unreliable, a
+trace may provide one failure observation, and an actor may infer a 30% failure
+probability; these are different records with different authority. Another
+actor’s statement is testimony, not automatically a mutation of truth. Check:
+ensure a reported claim can be disputed without overwriting either the
+underlying property or the original evidence. MEDIUM — Netrunner’s concrete
+lesson is rule-governed access, not simply face-down storage: hidden information
+includes cards in HQ/R&D and face-down cards, and players cannot inspect it
+without an applicable rule, effect, or communication. HQ/R&D access is
+constrained by breach/access rules, rather than allowing arbitrary inspection of
+a chosen secret. Established from the current community-maintained
+continuation’s comprehensive rules; application to your design is analogy.
+Check: every reveal must name the rule authorizing its target, audience, and
+extent.[rules.nullsignal](https://rules.nullsignal.games/) HIGH — Fair
+disclosure, inferred from that structure: make existence, public metadata,
+inspection costs, legal targets, audiences, and reveal consequences legible
+before an actor commits. Bound repeated probing, or cheap repeatable
+observations can eliminate the hidden-information mechanic. Do not secretly
+reroll a persistent property whenever someone examines it; distinguish
+discovering a pre-existing trait from sampling a fresh stochastic outcome.
+Check: calculate what repeated probes reveal and whether one action strictly
+dominates all alternatives. HIGH — “Hidden again” cannot mean “unknown again”:
+Netrunner distinguishes current hidden status from information a player can
+derive after seeing a card, while identity tracking can be disrupted by movement
+into an unknown position. For software, assume recipients can retain every byte.
+Revoking access or removing a subscription row cannot erase prior knowledge;
+stable identifiers can make old evidence linkable indefinitely. Established game
+distinction plus security inference. Check: model shuffle/identity changes
+explicitly rather than clearing a UI field and calling it forgotten.nullsignal+1
+HIGH — (3) Never publish a secret-bearing row and rely on client-side
+concealment: SpacetimeDB subscriptions synchronize authorized rows into the
+client cache. Private tables are inaccessible to clients, while server-side
+views can filter by caller and project only permitted columns. A client’s chosen
+subscription predicate is not your security boundary. Established from
+documentation; check: connect as an adversarial client and request every public
+table/view, ignoring the intended UI.spacetimedb+1 HIGH — Proposed relational
+design, inferred: CapabilityPublic(capability_id, public_kind, public_status)
+contains only intentionally public facts; CapabilitySecret(capability_id,
+property_key, property_version, value) is private; Observation(observation_id,
+audience_identity, capability_id, property_key, property_version,
+disclosed_value_or_evidence, observed_at, rule_id) is private and indexed by
+audience_identity. Keep disclosure policy and any secret random state private
+too. If even capability existence is hidden, CapabilityPublic must also become
+an audience-filtered private source rather than a public table. Check: inspect
+each field for whether its existence, not only its value, is disclosable. HIGH —
+Subscription surface: expose my_observations through a caller-aware ViewContext,
+fetching Observation rows by ctx.sender and returning only an approved
+projection. Do not make Observation public merely because it has an audience
+column; that column does not itself enforce access. SpacetimeDB documents
+precisely this private-table plus caller-indexed-view pattern. Established
+mechanism; proposed schema inferred. Check: subscribe as identities A and B and
+verify neither receives the other’s
+observations.[spacetimedb](https://spacetimedb.com/docs/tables/access-permissions/)
+HIGH — Reducer-level rule, inferred: observe(target, action) authenticates
+ctx.sender, checks target visibility and the action’s prerequisites/budget,
+reads the private property, computes only the permitted disclosure, and inserts
+the audience-specific Observation in the same transaction as charging the
+cost/updating probe state. Never trust a caller-supplied recipient identity as
+authorization. Atomic reducer transactions make “pay and reveal” all-or-nothing.
+Check: race two probes against a one-use allowance and verify the configured
+allowance cannot be
+exceeded.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
+HIGH — Prefer recorded disclosure over a live join to secret truth: reasoning
+from principle—if a view joins an old grant to the current secret value, that
+grant may silently authorize future changes too. A recorded observation tied to
+property_version states exactly what was learned when; continued visibility of
+current truth should be a separate, explicit entitlement. Check: change the
+secret after a one-time reveal and verify the old observer receives no new
+value. HIGH — Traces are another subscription surface: reasoning from
+principle—do not emit private property values into globally readable step
+titles, source labels, error strings, result sizes, or audit events. Keep raw
+evidence private and produce audience-specific trace projections using the same
+disclosure rules. The earlier append-only trace design makes accidental
+publication especially consequential because hiding a later projection does not
+undo delivery. Check: plant a secret canary and inspect every client-visible
+row, trace, failure response, and exported artifact. HIGH — Nonleakage target,
+proposed formally: before an authorized reveal, two database states differing
+only in a protected property should induce the same observable subscription
+transcript for an unauthorized actor, or the same distribution when randomness
+is involved. “Same visible values” is insufficient if row existence, update
+timing, counts, IDs, or success/failure differ. This is an inferred security
+specification, not a documented SpacetimeDB guarantee. Check: run paired worlds
+with different secrets and compare complete client-observable transcripts. HIGH
+— Where leakage is unavoidable: authorized observations intentionally reveal
+information; observable behavior may also reveal traits by inference. Timing,
+traffic size, shared-resource contention, and a trusted server/operator’s access
+are outside a simple row-filtering guarantee. You must either accept those
+channels, constrain the threat model, or add batching/padding/isolation and
+verify their costs. Even perfect filtering cannot stop an authorized recipient
+sharing information with another actor. Check: document allowed leakage
+explicitly rather than claiming the relational schema provides total secrecy.
+MEDIUM — Bottom line, design judgment: use SpacetimeDB as the trusted
+transactional disclosure authority; use private truth plus audience-scoped
+immutable evidence as the data model; use beliefs as derived, actor-specific
+interpretations. Netrunner supplies useful disclosure discipline, not a database
+security mechanism, and POMDPs supply inference/planning semantics, not
+authorization. Check: demonstrate one end-to-end probe that changes the
+observer’s evidence and belief without changing what an uninvolved subscriber
+can observe.
+
+How does SpacetimeDB handle transaction rollbacks What is the exact concurrency
+model across modules How are scheduled reducers sequenced internally What are
+the formal guarantees of client subscriptions How does state replication affect
+determinism ⠸ Ask a follow-up Search Computer GPT-6.1 Sol
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step
+inside a step is one level in.
+
+| Depth | Step     | Duration | Icon          | Expanded |
+| ----- | -------- | -------- | ------------- | -------- |
+| 0     | Finished | 12s      | chevron-right | false    |
+| 0     | Finished | 14s      | chevron-right | false    |
+| 0     | Finished | 24s      | chevron-right | false    |
+
+## Cited sources
+
+| Source                                                                                                    | Label             |
+| --------------------------------------------------------------------------------------------------------- | ----------------- |
+| https://docs.astro.build/en/concepts/islands/                                                             | astro             |
+| https://docs.convex.dev/api/classes/browser.ConvexClient                                                  | convex            |
+| https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation | developer.mozilla |
+| https://www.convex.dev/sync                                                                               | convex            |
+| https://alistair.cockburn.us/hexagonal-architecture                                                       | alistair.cockburn |
+| https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html                              | cleancoder        |
+| https://martinfowler.com/articles/injection.html                                                          | martinfowler      |
+| https://docs.pact.io/                                                                                     | pact              |
+| https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/          | research          |
+| https://martinfowler.com/articles/injection.html                                                          | martinfowler      |
+| https://docs.pact.io/                                                                                     | docs.pact         |
+| https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/          | research          |
+| https://spacetimedb.com/blog/how-does-spacetime-scale                                                     | spacetimedb       |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/                                            | spacetimedb       |
+| https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf                                               | lamsade.dauphine  |
+| https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf                                               | lamsade.dauphine  |
+| https://hal.science/hal-05109660/document                                                                 | hal               |
+| https://rules.nullsignal.games/                                                                           | rules.nullsignal  |
+| https://spacetimedb.com/docs/tables/access-permissions/                                                   | spacetimedb       |
+| https://spacetimedb.com/docs/databases/transactions-atomicity/                                            | spacetimedb       |
+
+--- FILE: 57ca3694.md ---
+---
+title: "Composability layer for a real codebase: the inventory brief"
+thread: 57ca3694-a4fa-4e94-817f-f79f5e5e0854
+project: Hermes Research
+kind: research
+date: 2026-11-03
+status: captured
+source: https://www.perplexity.ai/search/57ca3694-a4fa-4e94-817f-f79f5e5e0854
+captured: 2026-11-03T21:57:29
+segments: 1
+collapsed: false
+steps: 1
+sources: 18
+---
+
+# Composability layer for a real codebase: the inventory brief
+
+| Field         | Value                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Thread        | `57ca3694-a4fa-4e94-817f-f79f5e5e0854`                                |
+| Project       | Hermes Research                                                       |
+| Source        | https://www.perplexity.ai/search/57ca3694-a4fa-4e94-817f-f79f5e5e0854 |
+| Captured      | 2026-11-03T21:57:29                                                   |
+| Segments      | 1                                                                     |
+| Trace steps   | 1                                                                     |
+| Cited sources | 18                                                                    |
+| Characters    | 16418                                                                 |
+
+## Transcript
+
+Hermes Research 5:42 PM
+
+I am designing a composability layer for a real codebase and I need your design
+judgement, not a summary. Here is the actual inventory, read from disk.
+
+REPOSITORY (a static Astro site plus a TypeScript tool layer, pnpm workspace,
+esbuild via @playform/build into Target/):
+
+- 13 documentation skills, each a folder with SKILL.md, Reference/Index.md and
+  scripts: Chat-Research (web chat UI over CDP), Design-Verification (prove a
+  built page matches a design), Figma-MCP (read a Figma file into code),
+  Parallel-Epic-Execution (defer builds to the end of an epic),
+  Progressive-Enhancement (paint before JS runs), RFC-Board (read/compare/sync
+  an RFC issue board), Skill-Authoring (a lesson becomes a skill),
+  SpacetimeDB-Local (run a SpacetimeDB module locally), Timeline-Bookmarks
+  (read/scrape/publish a saved-post archive), Timeline-Browser-Transport
+  (relaunch a CDP browser), Timeline-Hermes-Maintenance (gateway, kanban,
+  workers), Timeline-Site-Build (site build failures), Tool-Archive (keep a
+  working script).
+- 17 reference scripts in those skills: cdp-open/cdp-send/cdp-click/cdp-read.mjs
+  (chat UI drivers), verify-composition/verify-showcase/verify-spread.mjs
+  (geometry verifiers driving a browser), no-js-audit.mjs (launch its own
+  Chromium, audit 9 routes), workspace-store-audit.mjs, session-audit.mjs,
+  SkillContract.mjs (validates every skill), TokenContract.mjs (design tokens),
+  rfc_board.py + two test files (plan/render/verify/sync an issue board through
+  gh), mcp_call.py, archive_tool.py.
+- 125 TypeScript modules under Maintain/Source in 13 areas: Browser (16: CDP,
+  Selector, Session, Target), Command (35: Author, Config, Context, Event, Page,
+  Post, Store, Tab), Model (19: Author, Event, Generated, Inference, List, Post,
+  Schema, Scrape), Test (19), Store (9: Author, Database, Merge, Model, Path,
+  Public, Shadow, Vote), CLI (7: Parser, Registry, Schema), Configuration (6),
+  Transport (5: CDP, Select, Transport, View), Output (3: JSON, Table, Text),
+  Vote (2), Content (1), Ingest (1), Spacetime (1).
+- 6 CI workflows (Auto, codeql, Dependabot, GitHub, Node, NPM) and 26 package
+  scripts.
+
+AGENT PROFILE (a local skill library used by an assistant, 16 active categories,
+66 active skills, 154 archived): browser-cdp (6: connect, eval,
+batch-mutate-verify, scrape-paginated, ui-step-sequence, web-chat-research),
+software-development (21), hermes (5: compression, api-server,
+execution-resilience, kanban, plugin-lifecycle), curation (2), documentation
+(4), git (4), github (3), devops (3), maintenance (3), macos (2), productivity
+(2), creative (4), data-science (2), website-development (4), research (1), plus
+167 scripts across them.
+
+THE PROPOSAL I want you to attack: every capability becomes its own package with
+its own package.json, compiled by the same esbuild wrapper into its own Target/,
+described by a manifest, composed by a per-workflow root that names the concrete
+adapters, and pre-warmed by a harness that leases a prepared context. The end
+state would be a separate repository (Agentic) that the site consumes as a
+dependency.
+
+Questions, and please be blunt:
+
+1. Is the end state really "a templating engine plus a type system"? What does
+   that reduction lose, and what is the irreducible part that templating cannot
+   express?
+2. What is the minimal manifest field set that lets a preloader decide what to
+   warm and what to revalidate at admission? Which field do people forget?
+3. Given 66 active skills, 167 scripts and 125 modules, what must NOT become its
+   own package, and what is the deciding rule?
+4. What fails first, and what does this look like after two years?
+5. If you were to redesign the decomposition of this specific inventory, what
+   would the first five packages be, and why those? Reason from principle where
+   you have no source, cite where factual, and say which parts of this you
+   expect to be wrong.
+
+inventory:1 - HIGH, scope: this is design judgement from your supplied
+inventory, not a repository audit; no repository identity, source lines, import
+graph, or timings were supplied, so all proposed boundaries and failure
+predictions below are inferred, not reproduced. “:?” means an unlocated or
+proposed file; commands are read-only checks to run, not evidence I already
+collected - command: `git ls-files Maintain .github '*package.json' '*SKILL.md'`
+
+Maintain/Source:勘 - HIGH, Q1: no—the useful end state is a **runtime** with
+typed adapters and explicit composition roots; templates generate wiring, and
+types constrain wiring, but neither establishes whether a borrowed browser
+session is still authorized, uncontaminated, exclusive, and safe to return. Your
+proposal overemphasizes packaging and underdefines ownership - command:
+`rg -n 'lease|release|dispose|AbortSignal|disconnect|session' Maintain/Source`
+
+Maintain/Source/Browser:? - HIGH, inferred: the irreducible part is enforcing
+state transitions against the live world: prepare → validate → acquire → execute
+→ reset or destroy. Generated code can implement that machine, but then you have
+generated a runtime, not eliminated one; types alone cannot establish that an
+external browser still has the expected identity - command:
+`rg -n 'connect|disconnect|close|targetId|browserContextId|sessionId' Maintain/Source/Browser Maintain/Source/Transport`
+
+Maintain/Source/Command:? - HIGH, Q1: keep concrete adapter selection at
+executable entry points, not inside reusable capabilities; a per-workflow root
+is appropriate when that workflow is independently invoked, not when it is
+merely a reusable step. This matches the composition-root principle: compose
+near the application entry point, with libraries unaware of the container.
+[ploeh](https://blog.ploeh.dk/2011/07/28/CompositionRoot/) - command:
+`rg -n '^import|new |process\.argv' Maintain/Source/Command Maintain/Source/CLI`
+
+Agentic/manifest:勘 - HIGH, Q2, proposed minimum: manifest schema version;
+capability identity plus implementation digest; entry point and input/output
+contract identity; dependency requirements; declared preparation inputs;
+resource requirements and isolation scope; lifecycle hooks; validity policy; and
+effects/authority requirements. These are semantic groups, not necessarily ten
+top-level keys; omit descriptive metadata from admission decisions - command:
+`rg -n 'manifest|schemaVersion|capability|entrypoint|digest' Maintain .github`
+
+Agentic/manifest:勘 - HIGH, inferred: preparation inputs must identify
+everything that changes what “prepared” means: artifact digest, relevant
+configuration, runtime/tool versions, workspace snapshot where required, and
+credential identity/scope/version—not secret values. Cache keys that omit
+environmental inputs are unsound; Bazel’s action model illustrates why reusable
+results must depend on declared inputs.
+[bazel](https://bazel.build/versions/9.0.0/extending/rules) - command:
+`rg -n 'process\.env|process\.cwd|Date\.now|readFile|exec|spawn' Maintain/Source`
+
+Agentic/manifest:勘 - HIGH, Q2: the field people forget is
+validity—specifically, what invalidates preparation and what must be checked
+again at admission. Require an admission probe, invalidation dependencies, and
+an explicit freshness policy; “warm succeeded” is historical evidence, not
+present permission to execute. Startup and readiness are distinct checks in
+Kubernetes for the same underlying reason.
+[kubernetes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) -
+command:
+`rg -n 'ready|healthy|validate|expires|invalidate|timeout' Maintain/Source/Browser Maintain/Source/Transport Maintain/Source/Configuration`
+
+Agentic/manifest:勘 - HIGH, inferred: effects/authority is the other field you
+cannot omit: browser-read, browser-mutate, filesystem-write, remote-publish, and
+credential scope must remain distinguishable. A preloader must not discover an
+authenticated context by publishing a post, syncing a board, or navigating an
+exclusively leased tab; reject undeclared preparation effects - command:
+`rg -n 'publish|sync|writeFile|unlink|evaluate|navigate|credentials|token' Maintain/Source`
+
+Agentic/runtime:勘 - HIGH, inferred: keep per-instance facts out of the static
+manifest: resolved resource identity, tenant/profile, generation, owner,
+expiration, validation evidence, and dirty state belong in a lease record.
+Admission must reserve the resource and validate the reserved instance before
+handing it over; an expired owner must not reset or close a successor’s
+resource - command:
+`rg -n 'owner|generation|lease|expires|release|reset|dispose' Maintain/Source`
+
+Maintain/Source:勘 - HIGH, Q3: do not turn 125 modules, 167 scripts, 66 skills,
+13 subject areas, or every manifest entry into packages. A capability is an
+invocation/authority boundary; a package is a distribution/compatibility
+boundary; a skill is instructional policy. Treating those as interchangeable
+manufactures dependency edges without proving independent reuse - command:
+`git ls-files '*SKILL.md' '*.mjs' '*.py' 'Maintain/Source/*.ts' 'Maintain/Source/**/*.ts' '*package.json'`
+
+Maintain/Source:勘 - HIGH, inferred deciding rule: extract a package only when
+it has a coherent public contract, a credible independently changing consumer or
+runtime boundary, and tests that do not require private sibling internals. If
+ordinary changes repeatedly require coordinated releases across the boundary,
+merge it; a second consumer is useful evidence, not an absolute prerequisite -
+command: `git log --format='commit %h' --name-only -- Maintain/Source`
+
+Maintain/Source/Browser:? - HIGH, Q4, predicted first correctness failure: stale
+or shared authenticated browser state, especially mixing relaunch, scraping,
+chat UI operations, and geometry verification. A live CDP socket does not prove
+the expected account, tab, document, viewport, or exclusive ownership. This
+prediction is wrong if those workloads already use separate contexts and
+explicit ownership - command:
+`rg -n 'userDataDir|browserContext|targetId|viewport|connectOverCDP|9222|localhost' Maintain`
+
+Agentic/package.json:勘 - HIGH, Q4, predicted first development failure:
+export/version/build coordination arrives before composability benefits if each
+capability gets its own package and Target/. After two years, the bad outcome is
+a distributed monolith with lockstep releases, overlapping lifecycle hooks,
+abandoned adapters, and manifests that duplicate code; the better outcome is a
+small stable runtime with many ordinary modules - command:
+`git ls-files '*package.json' '*pnpm*' '*Build*' '*build*' '*Target*'`
+
+Agentic/package.json:勘 - MEDIUM, inferred: one esbuild wrapper is a build
+convention, not a compatibility or isolation guarantee. Keep a shared build
+pipeline, but choose packages by consumer contracts; separately decide which
+entry points are bundled, which dependencies remain external, and how Python
+executables are installed. Do not pretend rfc_board.py becomes TypeScript
+because it has package.json - command:
+`rg -n '@playform/build|esbuild|external|bundle|exports|Target|python' --glob '*package.json' --glob '*.ts' --glob '*.mjs' --glob '*.yml' .`
+
+Agentic/packages/browser:勘 - MEDIUM, Q5, first package: browser transport and
+ownership. Consolidate the shared CDP connection/target/session substrate from
+Browser and Transport plus the cdp-* drivers; expose connect, select, acquire,
+evaluate, and release primitives with cancellation and ownership rules. Leave
+chat workflows, scraping policy, and design assertions outside; whether Browser
+and Transport truly belong together requires reading their responsibilities -
+command:
+`rg -n '^import|^export|connect|Target|Session|Selector' Maintain/Source/Browser Maintain/Source/Transport; find . -type f -name 'cdp-*.mjs' -print`
+
+Agentic/packages/content-store:勘 - MEDIUM, Q5, second package: archive-domain
+contracts and persistence. Begin with the shared Post/Author/Event/schema
+contracts and the Store operations that enforce their invariants; keep CLI,
+browser scraping, output formatting, and site rendering out. Do not sweep all 19
+Model modules inside: Generated, Inference, and Scrape need dependency
+inspection first. Split persistence later if another backend or a browser-safe
+consumer justifies it - command:
+`rg -n '^import|^export|transaction|merge|schema' Maintain/Source/Model Maintain/Source/Store`
+
+Agentic/packages/site-verification:勘 - MEDIUM, Q5, third package: executable
+verification and evidence. Group verify-composition, verify-showcase,
+verify-spread, no-js-audit, and TokenContract behind explicit URL/build
+identity, viewport, route, and assertion inputs; return structured observations
+plus failures. Share browser mechanics with package one, but preserve no-JS and
+authenticated-session isolation. The site's actual design expectations should
+remain site-owned data - command:
+`find . -type f \\( -name 'verify-*.mjs' -o -name 'no-js-audit.mjs' -o -name 'TokenContract.mjs' \\) -print`
+
+Agentic/packages/rfc-board:勘 - MEDIUM, Q5, fourth package: the existing Python
+board application, not a forced TypeScript port. Its plan/render/verify/sync
+vocabulary and two test files make it a plausible existing boundary; separate
+pure planning from gh-backed execution and mark sync as effectful. This package
+is premature if it embeds one repository’s board policy with no intended reuse -
+command:
+`find . -type f -name '*rfc*' -print; rg -n 'subprocess|gh |sync|verify|render|plan' --glob '*.py' .`
+
+Agentic/packages/skill-contract:勘 - MEDIUM, Q5, fifth package: skill-library
+validation, starting with SkillContract.mjs. Export validation rules and
+machine-readable diagnostics; keep SKILL.md, Reference/Index.md, authoring
+lessons, and archive retention policy as content or applications. This gives the
+larger skill library a potentially reusable contract without creating 66
+executable packages - command:
+`find . -type f \\( -name 'SkillContract.mjs' -o -name 'SKILL.md' -o -name 'archive_tool.py' \\) -print`
+
+Maintain/Source/CLI:? - MEDIUM, inferred exclusions: keep Parser/Registry,
+JSON/Table/Text, small configuration utilities, individual selectors, tests,
+workflows, and the 26 package scripts as internal modules or entry points unless
+an actual independent consumer appears. Keep Figma acquisition, MCP calls,
+Spacetime local setup, maintenance operations, and chat research as
+workflow/adaptor candidates—not mandatory packages - command:
+`rg -n '^import|^export' Maintain/Source/CLI Maintain/Source/Output Maintain/Source/Configuration; git ls-files .github/workflows`
+
+Agentic/runtime:勘 - MEDIUM, inferred sequencing: implement the lease harness as
+a small internal module used by two real workflow roots before publishing a
+generic runtime package. Use authenticated chat and isolated no-JS verification
+as deliberately different consumers; if both require many escape hatches, the
+abstraction is wrong. Measure cold preparation, admission, execution, cleanup,
+invalidation, and resource occupancy before claiming prewarming helps - command:
+`rg -n 'performance\.|console\.time|duration|prepare|admission|cleanup' Maintain`
+
+Agentic:勘 - LOW, expected errors in this recommendation: content-store may
+split earlier because Astro needs portable read models; verification may remain
+site-specific; RFC-board may never deserve extraction; browser workloads may
+need separate transport packages if their runtime dependencies differ. Import
+edges, change coupling, consumer requirements, and measured startup cost would
+settle these—not the inventory counts - command:
+`rg -n '^import|^export' Maintain/Source; git log --format='commit %h' --name-only -- Maintain`
+
+Agentic:勘 - LOW, inferred migration gate: establish these boundaries inside the
+current workspace first; extract to Agentic only after the site consumes public
+exports without private paths and contract tests run against built artifacts.
+Otherwise the repository split will conceal coupling rather than remove it;
+defer a separate release process until there is something genuinely
+independently releasable - command:
+`rg -n 'Maintain/Source|/Target/|\\.\\./.*packages/' --glob '*.ts' --glob '*.astro' --glob '*.mjs' --glob '*package.json' .`
+
+Show me how to structure the state machine Define the composition root for the
+CLI entry point Write out the browser lease and reset lifecycle Compare this
+with a pure dependency injection setup Check the rest of the codebase inventory
+first Ask a follow-up
+
+## Step trace
+
+The work the answer did, in the order it did it. Depth is nesting, so a step
+inside a step is one level in.
+
+| Depth | Step     | Duration | Icon         | Expanded |
+| ----- | -------- | -------- | ------------ | -------- |
+| 0     | Finished | 8s       | chevron-down | true     |
+
+## Cited sources
+
+| Source                                                                                                                   | Label                                |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| https://blog.ploeh.dk/2011/07/28/CompositionRoot/                                                                        | ploeh                                |
+| https://bazel.build/versions/9.0.0/extending/rules                                                                       | bazel                                |
+| https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/                    | kubernetes                           |
+| https://blog.ploeh.dk/2011/07/28/CompositionRoot/                                                                        | ploeh                                |
+| https://bazel.build/versions/9.0.0/extending/rules                                                                       | bazel                                |
+| https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/                    | kubernetes                           |
+| https://docs.bazel.build/versions/0.29.1/skylark/lib/actions.html                                                        | bazel                                |
+| https://registry.bazel.build/modules/hermetic_launcher/0.0.17                                                            | registry.bazel                       |
+| https://registry.bazel.build/modules/hermetic_launcher/0.0.5/                                                            | registry.bazel                       |
+| https://dev.to/sertaoseracloud/engineering-multicloud-consensus-implementing-distributed-locking-with-fencing-tokens-31c | dev                                  |
+| https://stackoverflow.com/questions/59759128/dependency-injection-composition-root-and-entry-points                      | stackoverflow                        |
+| https://hackernoon.com/building-distributed-leases-with-consensus-heartbeats-and-fencing-tokens                          | hackernoon                           |
+| https://pub-979cff47d4d84105ade2d75c354ef020.r2.dev/Dependency%20Injection%20Principles.pdf                              | pub-979cff47d4d84105ade2d75c354ef020 |
+| https://www.infoq.com/articles/DI-Mark-Seemann/                                                                          | infoq                                |
+| https://brf.sh/en/blog/dagitik-kilit-cit-jetonu-kira-suresi-redis-postgresql-etcd                                        | brf                                  |
+| https://www.matthewswong.com/en/blog/leader-election-distributed-systems/                                                | matthewswong                         |
+| https://systemdesignacademy.com/blog/distributed-locks-leader-election                                                   | systemdesignacademy                  |
+| https://beza1e1.tuxen.de/hermetic_builds.html                                                                            | beza1e1.tuxen                        |

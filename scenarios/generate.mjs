@@ -140,7 +140,12 @@ const browseTiming = [
 		],
 		expect: {
 			result: { kind: "void" },
-			effects: [`launch:${Url}`, `handed:${Endpoint}`, `close:${Endpoint}`, `report:${Endpoint}`],
+			effects: [
+				`launch:${Url}`,
+				`handed:${Endpoint}`,
+				`close:${Endpoint}`,
+				`report:${Endpoint}`,
+			],
 			reports: 1,
 		},
 	},
@@ -149,7 +154,13 @@ const browseTiming = [
 /** The fixture every browse scenario starts from. */
 const browseFixture = {
 	endpoint: Endpoint,
-	transport: { behaviour: "answer", answer: null, closed: false, closeFailure: null, hangOnClose: false },
+	transport: {
+		behaviour: "answer",
+		answer: null,
+		closed: false,
+		closeFailure: null,
+		hangOnClose: false,
+	},
 	launcher: { open: "answer", failure: null, deadOnArrival: false },
 	session: { disposeTimeoutMs: 40, report: "record" },
 };
@@ -364,7 +375,10 @@ const chatFixture = {
 		model: "GPT-6.1 Sol",
 		composer: "textarea",
 		submit: "sent",
-		answersReads: [{ count: 0, text: "" }, { count: 1, text: "The whole answer" }],
+		answersReads: [
+			{ count: 0, text: "" },
+			{ count: 1, text: "The whole answer" },
+		],
 		answersStall: false,
 		answersHangFrom: null,
 		answersFailFrom: null,

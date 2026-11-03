@@ -38,15 +38,12 @@ for (const Entry of readdirSync(Directory).sort()) {
 		if (At === -1) continue;
 		const Key = Line.slice(0, At).trim();
 		let Value = Line.slice(At + 1).trim();
-		if (Value.startsWith('"') && Value.endsWith('"'))
-			Value = JSON.parse(Value);
+		if (Value.startsWith('"') && Value.endsWith('"')) Value = JSON.parse(Value);
 		Fields[Key] = Value;
 	}
 
 	const Body = Text.slice(End + 5);
-	const Headings = [...Body.matchAll(/^## (.+)$/gm)].map((Match) =>
-		Match[1].trim(),
-	);
+	const Headings = [...Body.matchAll(/^## (.+)$/gm)].map((Match) => Match[1].trim());
 
 	Records.push({
 		file: Entry,
@@ -103,12 +100,7 @@ writeFileSync(
 		...Rows,
 		"",
 		...(Problems.length > 0
-			? [
-					"## Not catalogued",
-					"",
-					...Problems.map((Problem) => `- ${Problem}`),
-					"",
-				]
+			? ["## Not catalogued", "", ...Problems.map((Problem) => `- ${Problem}`), ""]
 			: []),
 	].join("\n"),
 );

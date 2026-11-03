@@ -24,7 +24,9 @@ const At = (Name, Fallback) => {
 };
 
 if (!Root) {
-	console.error("usage: node bundle.mjs <root> --out <dir> [--max-files N] [--max-bytes N] [--include globs] [--exclude names]");
+	console.error(
+		"usage: node bundle.mjs <root> --out <dir> [--max-files N] [--max-bytes N] [--include globs] [--exclude names]",
+	);
 	process.exit(2);
 }
 
@@ -54,7 +56,9 @@ const Files = [];
 const Left = [];
 
 const Walk = (Directory) => {
-	for (const Entry of readdirSync(Directory, { withFileTypes: true }).sort((Left, Right) => Left.name.localeCompare(Right.name))) {
+	for (const Entry of readdirSync(Directory, { withFileTypes: true }).sort((Left, Right) =>
+		Left.name.localeCompare(Right.name),
+	)) {
 		const Path = join(Directory, Entry.name);
 		if (Entry.isDirectory()) {
 			if (Skipped(Path)) continue;
@@ -65,7 +69,11 @@ const Walk = (Directory) => {
 		if (!Wanted(Entry.name)) continue;
 		const Size = statSync(Path).size;
 		if (Size > MaxBytes) {
-			Left.push({ path: relative(Root, Path), bytes: Size, reason: "larger than --max-bytes" });
+			Left.push({
+				path: relative(Root, Path),
+				bytes: Size,
+				reason: "larger than --max-bytes",
+			});
 			continue;
 		}
 		Files.push({ path: Path, relative: relative(Root, Path), bytes: Size });
@@ -100,7 +108,10 @@ writeFileSync(join(Out, "tree.txt"), Tree + "\n");
 const Written = Batches.map((Batch, Index) => {
 	const Name = `batch-${String(Index + 1).padStart(2, "0")}.txt`;
 	const Body = Batch.files
-		.map((File) => `--- FILE: ${File.relative} ---\n${readFileSync(File.path, "utf8").replace(/\n+$/, "")}\n`)
+		.map(
+			(File) =>
+				`--- FILE: ${File.relative} ---\n${readFileSync(File.path, "utf8").replace(/\n+$/, "")}\n`,
+		)
 		.join("\n");
 	writeFileSync(join(Out, Name), Body);
 	return { name: Name, files: Batch.files.map((File) => File.relative), bytes: Body.length };
@@ -121,6 +132,9 @@ const Manifest = {
 
 writeFileSync(join(Out, "manifest.json"), JSON.stringify(Manifest, null, "\t") + "\n");
 
-console.log(`files: ${Manifest.totalFiles}  bytes: ${Manifest.totalBytes}  batches: ${Written.length}`);
-for (const Batch of Written) console.log(`  ${Batch.name}  ${Batch.files.length} file(s)  ${Batch.bytes} bytes`);
+console.log(
+	`files: ${Manifest.totalFiles}  bytes: ${Manifest.totalBytes}  batches: ${Written.length}`,
+);
+for (const Batch of Written)
+	console.log(`  ${Batch.name}  ${Batch.files.length} file(s)  ${Batch.bytes} bytes`);
 if (Left.length > 0) console.log(`left out: ${Left.length} (see manifest.json)`);

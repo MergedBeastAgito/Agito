@@ -98,8 +98,7 @@ const bounded = <T>(
 		}
 		void pending.then(
 			(value) => settle(undefined, value),
-			(error: unknown) =>
-				settle(error ?? new Error(`${phase} failed without a reason`)),
+			(error: unknown) => settle(error ?? new Error(`${phase} failed without a reason`)),
 		);
 	});
 };
@@ -136,28 +135,17 @@ const withBudget = (work: () => Promise<void>, budget: number): Promise<void> =>
 	});
 
 /** A session is one `Browse` bound to one launcher. */
-export const createSession = (
-	launcher: Launcher,
-	options: SessionOptions = {},
-): Browse => {
+export const createSession = (launcher: Launcher, options: SessionOptions = {}): Browse => {
 	const report =
 		options.report ??
 		((failure: { target: Target; error: unknown }) => {
-			console.warn(
-				`browser-cdp: dispose of ${failure.target.url} failed`,
-				failure.error,
-			);
+			console.warn(`browser-cdp: dispose of ${failure.target.url} failed`, failure.error);
 		});
-	const disposeBudget = budgetOf(
-		options.disposeTimeoutMs ?? DefaultDisposeBudgetMs,
-	);
+	const disposeBudget = budgetOf(options.disposeTimeoutMs ?? DefaultDisposeBudgetMs);
 	const held = new Map<string, Transport>();
 	const released = new Set<string>();
 
-	const release = async (
-		transport: Transport,
-		ownership: Ownership,
-	): Promise<void> => {
+	const release = async (transport: Transport, ownership: Ownership): Promise<void> => {
 		if (ownership === "launched") await transport.close();
 		else await transport.detach();
 	};
@@ -173,16 +161,9 @@ export const createSession = (
 	const classifyOpen = (error: unknown): BrowseError =>
 		error instanceof BrowseError
 			? error
-			: BrowseError.unavailable(
-					"the browser could not be reached",
-					reasonOf(error),
-					error,
-				);
+			: BrowseError.unavailable("the browser could not be reached", reasonOf(error), error);
 
-	const classifyPage = (
-		error: unknown,
-		transport: Transport,
-	): BrowseError => {
+	const classifyPage = (error: unknown, transport: Transport): BrowseError => {
 		if (error instanceof BrowseError) return error;
 		return transport.closed
 			? BrowseError.unavailable(
@@ -190,20 +171,12 @@ export const createSession = (
 					reasonOf(error),
 					error,
 				)
-			: BrowseError.navigation(
-					"the page could not answer",
-					reasonOf(error),
-					error,
-				);
+			: BrowseError.navigation("the page could not answer", reasonOf(error), error);
 	};
 
-	const open = async (
-		url: string,
-		openOptions: OpenOptions,
-	): Promise<Target> => {
+	const open = async (url: string, openOptions: OpenOptions): Promise<Target> => {
 		const attachTo = openOptions.attachTo;
-		const ownership: Ownership =
-			attachTo === undefined ? "launched" : "attached";
+		const ownership: Ownership = attachTo === undefined ? "launched" : "attached";
 		let transport: Transport;
 		try {
 			transport = await bounded(
@@ -219,10 +192,7 @@ export const createSession = (
 		}
 		if (transport.closed) {
 			try {
-				await withBudget(
-					() => release(transport, ownership),
-					disposeBudget,
-				);
+				await withBudget(() => release(transport, ownership), disposeBudget);
 			} catch (error) {
 				reportQuietly({
 					target: {
@@ -282,10 +252,7 @@ export const createSession = (
 			const transport = held.get(target.ws);
 			held.delete(target.ws);
 			if (transport === undefined) return;
-			await withBudget(
-				() => release(transport, target.ownership),
-				disposeBudget,
-			);
+			await withBudget(() => release(transport, target.ownership), disposeBudget);
 		} catch (error) {
 			// Never throw: not on a failed release, and not on something that is
 			// not a target at all. A dispose failure is reported, not propagated.

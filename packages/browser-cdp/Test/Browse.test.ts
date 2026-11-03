@@ -10,12 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
-import {
-	BrowseError,
-	ErrorCode,
-	type OperationOptions,
-	type Target,
-} from "../src/Port.ts";
+import { BrowseError, ErrorCode, type OperationOptions, type Target } from "../src/Port.ts";
 import { createSession } from "../src/Session.ts";
 import type { Launcher, Transport } from "../src/Transport.ts";
 
@@ -33,20 +28,13 @@ class FakeTransport implements Transport {
 	closeFailure: Error | undefined;
 	hangOnClose = false;
 
-	constructor(
-		endpoint: string,
-		behaviour: Behaviour = "answer",
-		answer: unknown = undefined,
-	) {
+	constructor(endpoint: string, behaviour: Behaviour = "answer", answer: unknown = undefined) {
 		this.endpoint = endpoint;
 		this.behaviour = behaviour;
 		this.answer = answer;
 	}
 
-	async evaluate<T>(
-		expression: string,
-		_options: OperationOptions,
-	): Promise<T> {
+	async evaluate<T>(expression: string, _options: OperationOptions): Promise<T> {
 		this.asked.push(expression);
 		if (this.behaviour === "dead" || this.closed) {
 			// The socket died under the call: the fake reports the state as well
@@ -54,8 +42,7 @@ class FakeTransport implements Transport {
 			this.closed = true;
 			throw new Error("WebSocket is already in CLOSING or CLOSED state");
 		}
-		if (this.behaviour === "throw")
-			throw new Error("ReferenceError: nothing is defined");
+		if (this.behaviour === "throw") throw new Error("ReferenceError: nothing is defined");
 		if (this.behaviour === "hang") return new Promise<T>(() => {});
 		return this.answer as T;
 	}
@@ -87,11 +74,7 @@ class FakeLauncher implements Launcher {
 		this.transport = transport;
 	}
 
-	async attach(
-		endpoint: string,
-		_url: string,
-		_options: OperationOptions,
-	): Promise<Transport> {
+	async attach(endpoint: string, _url: string, _options: OperationOptions): Promise<Transport> {
 		this.attaches += 1;
 		this.attachedTo.push(endpoint);
 		return await this.answer();
@@ -123,20 +106,17 @@ const session = (launcher: Launcher, disposeTimeoutMs = 40) => {
 	return { browse, reported };
 };
 
-const options = (
-	timeoutMs = 40,
-	signal = new AbortController().signal,
-): OperationOptions => ({ timeoutMs, signal });
+const options = (timeoutMs = 40, signal = new AbortController().signal): OperationOptions => ({
+	timeoutMs,
+	signal,
+});
 
 /** Await a rejection and insist it is the port's error, never a string. */
 const rejection = async (work: Promise<unknown>): Promise<BrowseError> => {
 	try {
 		await work;
 	} catch (error) {
-		assert.ok(
-			error instanceof BrowseError,
-			`expected a BrowseError, got ${String(error)}`,
-		);
+		assert.ok(error instanceof BrowseError, `expected a BrowseError, got ${String(error)}`);
 		return error;
 	}
 	assert.fail("expected the operation to reject");
@@ -147,10 +127,7 @@ describe("agentic.browse", () => {
 		const manifest = JSON.parse(
 			readFileSync(new URL("../module.json", import.meta.url), "utf8"),
 		) as { provides: { errors: string[] } };
-		assert.deepEqual(
-			Object.values(ErrorCode).sort(),
-			[...manifest.provides.errors].sort(),
-		);
+		assert.deepEqual(Object.values(ErrorCode).sort(), [...manifest.provides.errors].sort());
 	});
 
 	describe("open", () => {
@@ -217,9 +194,7 @@ describe("agentic.browse", () => {
 			const { browse } = session(launcher);
 			const controller = new AbortController();
 			setTimeout(() => controller.abort(), 5);
-			const error = await rejection(
-				browse.open(Url, options(5_000, controller.signal)),
-			);
+			const error = await rejection(browse.open(Url, options(5_000, controller.signal)));
 			assert.equal(error.code, ErrorCode.Timeout);
 			assert.match(error.message, /cancelled/);
 		});
@@ -240,11 +215,7 @@ describe("agentic.browse", () => {
 			const launcher = new FakeLauncher(transport);
 			const { browse } = session(launcher);
 			const target = await browse.open(Url, options());
-			const value = await browse.evaluate<number>(
-				target,
-				"1 + 41",
-				options(),
-			);
+			const value = await browse.evaluate<number>(target, "1 + 41", options());
 			assert.equal(value, 42);
 			assert.deepEqual(transport.asked, ["1 + 41"]);
 		});
@@ -254,9 +225,7 @@ describe("agentic.browse", () => {
 			const launcher = new FakeLauncher(transport);
 			const { browse } = session(launcher);
 			const target = await browse.open(Url, options());
-			const error = await rejection(
-				browse.evaluate(target, "document.title", options(40)),
-			);
+			const error = await rejection(browse.evaluate(target, "document.title", options(40)));
 			assert.equal(error.code, ErrorCode.Timeout);
 			assert.equal(typeof error.message, "string");
 			assert.match(error.message, /deadline/);
@@ -277,11 +246,7 @@ describe("agentic.browse", () => {
 			const controller = new AbortController();
 			setTimeout(() => controller.abort(), 5);
 			const error = await rejection(
-				browse.evaluate(
-					target,
-					"document.title",
-					options(5_000, controller.signal),
-				),
+				browse.evaluate(target, "document.title", options(5_000, controller.signal)),
 			);
 			assert.equal(error.code, ErrorCode.Timeout);
 			assert.match(error.message, /cancelled/);
@@ -295,11 +260,7 @@ describe("agentic.browse", () => {
 			const controller = new AbortController();
 			controller.abort();
 			const error = await rejection(
-				browse.evaluate(
-					target,
-					"document.title",
-					options(5_000, controller.signal),
-				),
+				browse.evaluate(target, "document.title", options(5_000, controller.signal)),
 			);
 			assert.equal(error.code, ErrorCode.Timeout);
 			assert.deepEqual(transport.asked, []);
@@ -312,9 +273,7 @@ describe("agentic.browse", () => {
 			const target = await browse.open(Url, options());
 			// A caller that forgot its signal gets its deadline, not a TypeError.
 			const withoutSignal = { timeoutMs: 20 } as OperationOptions;
-			const error = await rejection(
-				browse.evaluate(target, "document.title", withoutSignal),
-			);
+			const error = await rejection(browse.evaluate(target, "document.title", withoutSignal));
 			assert.equal(error.code, ErrorCode.Timeout);
 			assert.match(error.message, /deadline/);
 		});
@@ -324,9 +283,7 @@ describe("agentic.browse", () => {
 			const launcher = new FakeLauncher(transport);
 			const { browse } = session(launcher);
 			const target = await browse.open(Url, options());
-			const error = await rejection(
-				browse.evaluate(target, "document.title", options()),
-			);
+			const error = await rejection(browse.evaluate(target, "document.title", options()));
 			assert.equal(error.code, ErrorCode.Unavailable);
 			assert.notEqual(error.code, ErrorCode.Timeout);
 			assert.equal(transport.asked.length, 1);
@@ -338,9 +295,7 @@ describe("agentic.browse", () => {
 			const { browse } = session(launcher);
 			const target = await browse.open(Url, options());
 			transport.closed = true;
-			const error = await rejection(
-				browse.evaluate(target, "document.title", options()),
-			);
+			const error = await rejection(browse.evaluate(target, "document.title", options()));
 			assert.equal(error.code, ErrorCode.Unavailable);
 			assert.deepEqual(transport.asked, []);
 		});
@@ -350,9 +305,7 @@ describe("agentic.browse", () => {
 			const launcher = new FakeLauncher(transport);
 			const { browse } = session(launcher);
 			const target = await browse.open(Url, options());
-			const error = await rejection(
-				browse.evaluate(target, "nope.nope", options()),
-			);
+			const error = await rejection(browse.evaluate(target, "nope.nope", options()));
 			assert.equal(error.code, ErrorCode.Navigation);
 			assert.equal(transport.closed, false);
 		});
@@ -476,9 +429,7 @@ describe("agentic.browse", () => {
 			const { browse } = session(launcher);
 			const target = await browse.open(Url, options());
 			await browse.dispose(target);
-			const error = await rejection(
-				browse.evaluate(target, "document.title", options()),
-			);
+			const error = await rejection(browse.evaluate(target, "document.title", options()));
 			assert.equal(error.code, ErrorCode.Unavailable);
 			assert.deepEqual(transport.asked, []);
 		});

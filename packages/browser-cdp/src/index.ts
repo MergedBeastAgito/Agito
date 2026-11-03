@@ -5,13 +5,7 @@
  * import another package's adapter; the composition root supplies one.
  */
 export { BrowseError, ErrorCode } from "./Port.ts";
-export type {
-	Browse,
-	OpenOptions,
-	OperationOptions,
-	Ownership,
-	Target,
-} from "./Port.ts";
+export type { Browse, OpenOptions, OperationOptions, Ownership, Target } from "./Port.ts";
 export { createSession } from "./Session.ts";
 export type { SessionOptions } from "./Session.ts";
 export type { Launcher, Transport } from "./Transport.ts";

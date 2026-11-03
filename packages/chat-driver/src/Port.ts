@@ -122,11 +122,7 @@ export interface Page {
 	/** Open the page at `url`. */
 	open(url: string, options: OperationOptions): Promise<Target>;
 	/** Evaluate one expression in the page and return its value. */
-	evaluate<T>(
-		target: Target,
-		expression: string,
-		options: OperationOptions,
-	): Promise<T>;
+	evaluate<T>(target: Target, expression: string, options: OperationOptions): Promise<T>;
 	/** Release everything the page holds. Never throws. */
 	dispose(target: Target): Promise<void>;
 }
@@ -153,12 +149,7 @@ export class ChatError extends Error {
 	/** What was observed, kept apart from the sentence shown to a human. */
 	readonly detail: string;
 
-	constructor(
-		code: ErrorCode,
-		message: string,
-		detail = "",
-		options?: { cause?: unknown },
-	) {
+	constructor(code: ErrorCode, message: string, detail = "", options?: { cause?: unknown }) {
 		super(message, options);
 		this.name = "ChatError";
 		this.code = code;
@@ -185,11 +176,7 @@ export class ChatError extends Error {
 	}
 
 	/** The page is set to a different model, so nothing was sent. */
-	static wrongModel(
-		message: string,
-		detail = "",
-		cause?: unknown,
-	): ChatError {
+	static wrongModel(message: string, detail = "", cause?: unknown): ChatError {
 		return new ChatError(ErrorCode.WrongModel, message, detail, { cause });
 	}
 

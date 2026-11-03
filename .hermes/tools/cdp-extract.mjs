@@ -218,8 +218,7 @@ const Socket = new WebSocket(WsUrl);
 try {
 	await new Promise((Done, Fail) => {
 		Socket.onopen = Done;
-		Socket.onerror = (Event) =>
-			Fail(new Error(`cannot connect: ${Event.message ?? "error"}`));
+		Socket.onerror = (Event) => Fail(new Error(`cannot connect: ${Event.message ?? "error"}`));
 	});
 } catch (Error) {
 	console.error(`blocker: ${Error.message}`);
@@ -231,10 +230,7 @@ Socket.onmessage = (Event) => {
 	const Slot = Pending.get(Message.id);
 	if (Slot === undefined) return;
 	Pending.delete(Message.id);
-	if (Message.error)
-		Slot.Fail(
-			new Error(`${Message.error.message} (${Message.error.code})`),
-		);
+	if (Message.error) Slot.Fail(new Error(`${Message.error.message} (${Message.error.code})`));
 	else Slot.Done(Message.result);
 };
 
@@ -242,9 +238,7 @@ const Send = (Method, Params = {}) =>
 	new Promise((Done, Fail) => {
 		const Key = ++Id;
 		Pending.set(Key, { Done, Fail });
-		Socket.send(
-			JSON.stringify({ id: Key, method: Method, params: Params }),
-		);
+		Socket.send(JSON.stringify({ id: Key, method: Method, params: Params }));
 	});
 
 // A collapsed answer keeps its tail out of the DOM, so nothing downstream can

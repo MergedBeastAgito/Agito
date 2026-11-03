@@ -34,11 +34,7 @@
 					"kind": "names",
 					"names": ["Alpha", "Mike", "Zulu"]
 				},
-				"effects": [
-					"discovered:Alpha",
-					"discovered:Mike",
-					"discovered:Zulu"
-				]
+				"effects": ["discovered:Alpha", "discovered:Mike", "discovered:Zulu"]
 			}
 		},
 		{
@@ -163,10 +159,7 @@
 			"steps": [{ "op": "validate", "skill": "Beta" }],
 			"expect": {
 				"result": { "kind": "findings", "rules": ["unlisted-reference"] },
-				"effects": [
-					"discovered:Beta",
-					"finding:unlisted-reference:Beta"
-				]
+				"effects": ["discovered:Beta", "finding:unlisted-reference:Beta"]
 			}
 		},
 		{
@@ -214,10 +207,7 @@
 			"steps": [{ "op": "validate", "skill": "Prefix" }],
 			"expect": {
 				"result": { "kind": "findings", "rules": ["unlisted-reference"] },
-				"effects": [
-					"discovered:Prefix",
-					"finding:unlisted-reference:Prefix"
-				]
+				"effects": ["discovered:Prefix", "finding:unlisted-reference:Prefix"]
 			}
 		},
 		{
@@ -235,11 +225,7 @@
 					"kind": "findings",
 					"rules": ["unparsable", "uncited"]
 				},
-				"effects": [
-					"discovered:Bare",
-					"finding:unparsable:Bare",
-					"finding:uncited:Bare"
-				]
+				"effects": ["discovered:Bare", "finding:unparsable:Bare", "finding:uncited:Bare"]
 			}
 		},
 		{
@@ -453,10 +439,7 @@
 			],
 			"expect": {
 				"result": { "kind": "findings", "rules": ["unlisted-reference"] },
-				"effects": [
-					"discovered:Alpha",
-					"finding:unlisted-reference:Alpha"
-				]
+				"effects": ["discovered:Alpha", "finding:unlisted-reference:Alpha"]
 			}
 		},
 		{
@@ -511,10 +494,7 @@
 			"rust": "an_unreadable_root_is_an_empty_corpus_not_a_failure",
 			"note": "The root is never created. A discover that threw would fail the runner; the digest of the empty list is a literal record list, which is the `digest([])` the TypeScript suite calls.",
 			"fixture": { "absentRoot": true },
-			"steps": [
-				{ "op": "discover" },
-				{ "op": "digest", "skills": [] }
-			],
+			"steps": [{ "op": "discover" }, { "op": "digest", "skills": [] }],
 			"expect": {
 				"result": {
 					"kind": "digest",
@@ -565,10 +545,7 @@
 				],
 				"corpusIndex": "Index.md"
 			},
-			"steps": [
-				{ "op": "discover" },
-				{ "op": "digest", "mutate": { "reverse": true } }
-			],
+			"steps": [{ "op": "discover" }, { "op": "digest", "mutate": { "reverse": true } }],
 			"expect": {
 				"result": {
 					"kind": "digest",

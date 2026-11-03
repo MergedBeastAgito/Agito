@@ -45,11 +45,7 @@ for (const entry of casesOf(File)) {
 test("every scenario names a case the TypeScript suite has", async () => {
 	const source = await readFile(Contract, "utf8");
 	for (const entry of File.cases) {
-		assert.equal(
-			typeof entry.typescript,
-			"string",
-			`${entry.id} names no TypeScript case`,
-		);
+		assert.equal(typeof entry.typescript, "string", `${entry.id} names no TypeScript case`);
 		assert.ok(
 			source.includes(`test("${entry.typescript}"`),
 			`${entry.id} names a TypeScript case that does not exist: ${entry.typescript}`,

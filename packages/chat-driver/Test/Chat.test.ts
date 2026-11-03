@@ -79,9 +79,7 @@ class FakeElement {
 	}
 
 	getAttribute(name: string): string | null {
-		return Object.hasOwn(this.attributes, name)
-			? this.attributes[name]
-			: null;
+		return Object.hasOwn(this.attributes, name) ? this.attributes[name] : null;
 	}
 
 	setAttribute(name: string, value: string): void {
@@ -154,19 +152,13 @@ class FakePage implements Page {
 		return { url };
 	}
 
-	async evaluate<T>(
-		_target: Target,
-		expression: string,
-		_options: OperationOptions,
-	): Promise<T> {
+	async evaluate<T>(_target: Target, expression: string, _options: OperationOptions): Promise<T> {
 		this.asked.push(expression);
 		if (this.closed) throw new Error("the page is gone");
 		if (this.hang) return new Promise<T>(() => {});
 		const run = new Function("document", `return (${expression});`);
 		const value = run(this.document) as unknown;
-		return (
-			this.rewrite === undefined ? value : this.rewrite(expression, value)
-		) as T;
+		return (this.rewrite === undefined ? value : this.rewrite(expression, value)) as T;
 	}
 
 	async dispose(target: Target): Promise<void> {
@@ -201,8 +193,7 @@ type PageOptions = {
 };
 
 /** One element, built from its description. */
-const element = (options: ElementOptions): FakeElement =>
-	new FakeElement(options);
+const element = (options: ElementOptions): FakeElement => new FakeElement(options);
 
 /** A page that behaves like a chat product, and records what was done to it. */
 const build = (options: PageOptions = {}) => {
@@ -252,10 +243,7 @@ const build = (options: PageOptions = {}) => {
 			innerText: options.earlier,
 		});
 		earlier.place(S.trace, ...(options.earlierTrace ?? []).map(element));
-		earlier.place(
-			S.sources,
-			...(options.earlierSources ?? []).map(element),
-		);
+		earlier.place(S.sources, ...(options.earlierSources ?? []).map(element));
 		page.document.place(S.answer, earlier);
 	}
 
@@ -268,8 +256,7 @@ const build = (options: PageOptions = {}) => {
 		// A disabled control sends nothing, exactly as a real one would.
 		if (submit.disabled || (composer.value ?? "").length === 0) return;
 		const answer = new FakeElement({ tagName: "DIV" });
-		if (options.stall === true)
-			answer.serve = (read) => `still writing ${read}`;
+		if (options.stall === true) answer.serve = (read) => `still writing ${read}`;
 		else {
 			const texts = options.stream ?? ["The whole answer"];
 			answer.serve = (read) => texts[Math.min(read, texts.length - 1)];
@@ -281,11 +268,7 @@ const build = (options: PageOptions = {}) => {
 			);
 		answer.place(S.trace, ...(options.trace ?? []).map(element));
 		answer.place(S.sources, ...(options.sources ?? []).map(element));
-		page.document.place(
-			S.answer,
-			...page.document.querySelectorAll(S.answer),
-			answer,
-		);
+		page.document.place(S.answer, ...page.document.querySelectorAll(S.answer), answer);
 	};
 	page.document.place(S.submit, submit);
 
@@ -299,10 +282,10 @@ const question = (overrides: Partial<Question> = {}): Question => ({
 	...overrides,
 });
 
-const options = (
-	timeoutMs = 400,
-	signal = new AbortController().signal,
-): OperationOptions => ({ timeoutMs, signal });
+const options = (timeoutMs = 400, signal = new AbortController().signal): OperationOptions => ({
+	timeoutMs,
+	signal,
+});
 
 const driver = (page: FakePage, overrides: Partial<DriverOptions> = {}) =>
 	Create(page, { url: Url, pollMs: 0, ...overrides });
@@ -312,10 +295,7 @@ const rejection = async (work: Promise<unknown>): Promise<ChatError> => {
 	try {
 		await work;
 	} catch (error) {
-		assert.ok(
-			error instanceof ChatError,
-			`expected a ChatError, got ${String(error)}`,
-		);
+		assert.ok(error instanceof ChatError, `expected a ChatError, got ${String(error)}`);
 		return error;
 	}
 	assert.fail("expected the call to reject");
@@ -326,10 +306,7 @@ describe("agentic.chat.ask", () => {
 		const manifest = JSON.parse(
 			readFileSync(new URL("../module.json", import.meta.url), "utf8"),
 		) as { provides: { errors: string[] } };
-		assert.deepEqual(
-			Object.values(ErrorCode).sort(),
-			[...manifest.provides.errors].sort(),
-		);
+		assert.deepEqual(Object.values(ErrorCode).sort(), [...manifest.provides.errors].sort());
 	});
 
 	test("returns the answer, its trace and its sources", async () => {
@@ -502,20 +479,14 @@ describe("completion is stable text, not a count", () => {
 
 		const answer = await driver(page).ask(question(), options());
 
-		assert.deepEqual(answer.trace, [
-			{ depth: 0, label: "This step", detail: "" },
-		]);
-		assert.deepEqual(answer.sources, [
-			{ url: "https://this.example.test/", label: "this" },
-		]);
+		assert.deepEqual(answer.trace, [{ depth: 0, label: "This step", detail: "" }]);
+		assert.deepEqual(answer.sources, [{ url: "https://this.example.test/", label: "this" }]);
 	});
 
 	test("refuses with not-ready when the answer never stops changing", async () => {
 		const { page } = build({ stall: true });
 
-		const error = await rejection(
-			driver(page).ask(question(), options(120)),
-		);
+		const error = await rejection(driver(page).ask(question(), options(120)));
 
 		assert.equal(error.code, ErrorCode.NotReady);
 		assert.match(error.message, /settle/);
@@ -526,9 +497,7 @@ describe("completion is stable text, not a count", () => {
 		const { page } = build();
 		page.hang = true;
 
-		const error = await rejection(
-			driver(page).ask(question(), options(60)),
-		);
+		const error = await rejection(driver(page).ask(question(), options(60)));
 
 		assert.equal(error.code, ErrorCode.NotReady);
 		assert.match(error.message, /deadline/);
@@ -567,9 +536,7 @@ describe("the page", () => {
 		const { page } = build();
 		page.hangOnOpen = true;
 
-		const error = await rejection(
-			driver(page).ask(question(), options(60)),
-		);
+		const error = await rejection(driver(page).ask(question(), options(60)));
 
 		assert.equal(error.code, ErrorCode.NotReady);
 		assert.match(error.message, /deadline/);
@@ -650,8 +617,7 @@ describe("a provider that answers the wrong shape", () => {
 	 */
 	test("refuses a mode that is not text with wrong-mode, and sends nothing", async () => {
 		const { page, composer, submit } = build();
-		page.rewrite = (expression, value) =>
-			expression.includes("aria-pressed") ? 42 : value;
+		page.rewrite = (expression, value) => (expression.includes("aria-pressed") ? 42 : value);
 
 		const error = await rejection(driver(page).ask(question(), options()));
 
@@ -715,10 +681,7 @@ describe("every failure stays inside the four codes", () => {
 		const { page } = build();
 
 		const error = await rejection(
-			driver(page).ask(
-				question(),
-				undefined as unknown as OperationOptions,
-			),
+			driver(page).ask(question(), undefined as unknown as OperationOptions),
 		);
 
 		assert.equal(error.code, ErrorCode.NotReady);

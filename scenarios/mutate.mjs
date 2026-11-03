@@ -110,12 +110,14 @@ const Mutations = [
 			{
 				file: "packages/chat-driver/src/Driver.ts",
 				find: "\t\t\t\tif (remaining() <= 0)\n\t\t\t\t\tthrow ChatError.notReady(\n\t\t\t\t\t\t`the answer did not settle within the ${budget}ms deadline`,\n\t\t\t\t\t\t`the last read was ${describe(previous)}`,\n\t\t\t\t\t);",
-				replace: '\t\t\t\tif (remaining() <= 0) {\n\t\t\t\t\ttext = previous ?? "";\n\t\t\t\t\tbreak;\n\t\t\t\t}',
+				replace:
+					'\t\t\t\tif (remaining() <= 0) {\n\t\t\t\t\ttext = previous ?? "";\n\t\t\t\t\tbreak;\n\t\t\t\t}',
 			},
 			{
 				file: "rust/Crate/ChatDriver/Source/Struct/Driver.rs",
 				find: '\t\t\tif Call.Expired(self.Pace.as_ref()) {\n\t\t\t\treturn Err(Error::NotReady(\n\t\t\t\t\tformat!("the answer did not settle within the {}ms deadline", Budget.as_millis()),\n\t\t\t\t\tformat!("the last read was {}", DescribeText(Progress.Text())),\n\t\t\t\t));\n\t\t\t}',
-				replace: "\t\t\tif Call.Expired(self.Pace.as_ref()) {\n\t\t\t\tbreak Progress.Text().unwrap_or_default().to_string();\n\t\t\t}",
+				replace:
+					"\t\t\tif Call.Expired(self.Pace.as_ref()) {\n\t\t\t\tbreak Progress.Text().unwrap_or_default().to_string();\n\t\t\t}",
 			},
 		],
 	},
@@ -128,7 +130,8 @@ const Mutations = [
 			{
 				file: "packages/browser-cdp/src/Session.ts",
 				find: '\t\t\t? BrowseError.unavailable(\n\t\t\t\t\t"the transport closed while the page was being asked",',
-				replace: '\t\t\t? BrowseError.timeout(\n\t\t\t\t\t"the transport closed while the page was being asked",',
+				replace:
+					'\t\t\t? BrowseError.timeout(\n\t\t\t\t\t"the transport closed while the page was being asked",',
 			},
 			{
 				file: "rust/Crate/BrowserCDP/Source/Fn/Classify.rs",
@@ -183,10 +186,15 @@ const failed = (suite) => {
 		const output = `${error.stdout ?? ""}${error.stderr ?? ""}`;
 		// A mutation that does not compile proves nothing about the assertions: it
 		// is reported separately and counted as a hole rather than as a catch.
-		const compiled = !/could not compile|error\[E\d+\]|SyntaxError|Unexpected token|ERR_MODULE_NOT_FOUND/.test(
-			output,
-		);
-		const line = (pattern) => output.split("\n").map((one) => one.trim()).find((one) => pattern.test(one));
+		const compiled =
+			!/could not compile|error\[E\d+\]|SyntaxError|Unexpected token|ERR_MODULE_NOT_FOUND/.test(
+				output,
+			);
+		const line = (pattern) =>
+			output
+				.split("\n")
+				.map((one) => one.trim())
+				.find((one) => pattern.test(one));
 		const detail =
 			line(/^not ok \d+ - /) ??
 			line(/^---- .* stdout ----$/) ??
@@ -217,7 +225,10 @@ const check = (mutation) => {
 			throw new Error(
 				`${mutation.name}: ${edit.file} contains ${occurrences} copies of the text to mutate, expected exactly 1`,
 			);
-		current.set(path, inEnding(toLf(before).replace(edit.find, edit.replace), endingOf(before)));
+		current.set(
+			path,
+			inEnding(toLf(before).replace(edit.find, edit.replace), endingOf(before)),
+		);
 	}
 
 	try {
@@ -257,14 +268,17 @@ for (const mutation of chosen) {
 	const { typescript, rust } = check(mutation);
 	const mark = (result) =>
 		!result.rejected ? "SURVIVED" : result.compiled ? "rejected" : "NO COMPILE";
-	if (!typescript.rejected || !rust.rejected || !typescript.compiled || !rust.compiled) survived += 1;
+	if (!typescript.rejected || !rust.rejected || !typescript.compiled || !rust.compiled)
+		survived += 1;
 	console.log(`${mutation.name.padEnd(28)} ${mark(typescript).padEnd(11)} ${mark(rust)}`);
 	console.log(`  ${mutation.what}`);
 	if (typescript.rejected) console.log(`  typescript: ${typescript.detail}`);
 	if (rust.rejected) console.log(`  rust:       ${rust.detail}`);
 }
 console.log("-".repeat(60));
-const unrestored = [...Audit].filter(([path, digest]) => hash(readFileSync(path, "utf8")) !== digest);
+const unrestored = [...Audit].filter(
+	([path, digest]) => hash(readFileSync(path, "utf8")) !== digest,
+);
 for (const [path] of unrestored) console.log(`UNRESTORED ${path}`);
 console.log(
 	`${chosen.length - survived}/${chosen.length} mutations rejected by both suites` +

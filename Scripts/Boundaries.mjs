@@ -42,9 +42,7 @@ for (const [Name, Kind] of Kinds) {
 	const Directory = join(Root, "packages", Name.replace("@agentic/", ""));
 	for (const File of Walk(Directory)) {
 		const Text = readFileSync(File, "utf8");
-		for (const Match of Text.matchAll(
-			/from\s+["'](@agentic\/[a-z-]+)["']/g,
-		)) {
+		for (const Match of Text.matchAll(/from\s+["'](@agentic\/[a-z-]+)["']/g)) {
 			const Target = Match[1];
 			const TargetKind = Kinds.get(Target);
 			if (Target === Name) continue;

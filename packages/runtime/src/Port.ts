@@ -163,21 +163,14 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 export class RuntimeError extends Error {
 	readonly code: ErrorCode;
 
-	constructor(
-		code: ErrorCode,
-		message: string,
-		options?: { cause?: unknown },
-	) {
+	constructor(code: ErrorCode, message: string, options?: { cause?: unknown }) {
 		super(message, options);
 		this.name = "RuntimeError";
 		this.code = code;
 	}
 
 	/** The request may not proceed: it is malformed, or its authority ended. */
-	static refused(
-		message: string,
-		options?: { cause?: unknown },
-	): RuntimeError {
+	static refused(message: string, options?: { cause?: unknown }): RuntimeError {
 		return new RuntimeError(ErrorCode.AdmissionRefused, message, options);
 	}
 

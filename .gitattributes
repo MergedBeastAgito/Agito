@@ -1,0 +1,18 @@
+# Text files keep LF in the working tree. `prettier.config.mjs` sets
+# `endOfLine: "lf"`, so a CRLF checkout fails `prettier --check` on every file at
+# once, and the editor's own `files.eol` cannot repair a file nobody opened. The
+# global `core.autocrlf=true` on a development machine would otherwise do exactly
+# that: files sit in the working tree with CRLF while their committed bytes are LF.
+* text=auto eol=lf
+
+# Called out separately because a shebang is unforgiving: with CRLF the
+# interpreter reads `env: bash\r`, is not found, and the script refuses to run on
+# macOS and Linux. `*.sh` keeps this rule even if the one above is narrowed.
+*.sh text eol=lf
+
+# The same discipline for hooks, which have no extension to match on. Git stores
+# them as plain files, `core.autocrlf` converts them like any other, and the
+# failure is silent: a CRLF hook is not executable and the guard it implements
+# simply never runs. No `.githooks/` directory exists in this repository yet; the
+# rule is here so that the day one is added it is already correct.
+.githooks/* text eol=lf

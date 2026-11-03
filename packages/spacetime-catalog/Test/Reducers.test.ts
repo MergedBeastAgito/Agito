@@ -50,11 +50,7 @@ const Catalog = (sender = "agent:a", now = 0): Memory => {
 const Written = (ctx: Memory, mark: number): Write[] => ctx.writes.slice(mark);
 
 /** Bind a generation and answer its id. */
-const Bound = (
-	ctx: Memory,
-	previous: string | null = null,
-	digest = "sha256:first",
-): string => {
+const Bound = (ctx: Memory, previous: string | null = null, digest = "sha256:first"): string => {
 	assert.deepEqual(
 		bind(ctx, {
 			previous,
@@ -331,10 +327,7 @@ test("the allowance is per audience, so another holder gets its own observation"
 	assert.equal(Probed(ctx).ok, true);
 
 	ctx.as("agent:b").now = 20;
-	assert.deepEqual(
-		Claimed(ctx, { resource: "browser:second", task: "task:2" }),
-		{ ok: true },
-	);
+	assert.deepEqual(Claimed(ctx, { resource: "browser:second", task: "task:2" }), { ok: true });
 	const result = Probed(ctx, { resource: "browser:second" });
 	assert.equal(result.ok, true);
 	assert.deepEqual(
@@ -379,10 +372,7 @@ test("recordTrace appends once per instant, kind and subject, and refuses differ
 	assert.deepEqual(Traced(ctx), { ok: true });
 	assert.deepEqual(Traced(ctx), { ok: true });
 	assert.equal(Written(ctx, mark).length, 1);
-	assert.equal(
-		ctx.rows("trace")[0]?.["id"],
-		`1000:lease.claimed:${Resource}`,
-	);
+	assert.equal(ctx.rows("trace")[0]?.["id"], `1000:lease.claimed:${Resource}`);
 	assert.equal(ctx.rows("trace")[0]?.["sender"], "agent:a");
 
 	const second = ctx.writes.length;
@@ -412,15 +402,10 @@ test("every timestamp a row carries is ctx.now, so a fake clock decides the whol
 	const times = Written(ctx, mark).flatMap((write) =>
 		Object.entries(write.row ?? {}).filter(
 			([column, value]) =>
-				/(^at$|At$)/.test(column) &&
-				column !== "expiresAt" &&
-				typeof value === "number",
+				/(^at$|At$)/.test(column) && column !== "expiresAt" && typeof value === "number",
 		),
 	);
-	assert.ok(
-		times.length >= 4,
-		`only ${times.length} timestamps were written`,
-	);
+	assert.ok(times.length >= 4, `only ${times.length} timestamps were written`);
 	for (const [column, value] of times)
 		assert.equal(value, 1_234_567, `${column} did not come from ctx.now`);
 });

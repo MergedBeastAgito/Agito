@@ -41,11 +41,7 @@ import {
 	ReadTrace,
 	TypeQuestion,
 } from "../../packages/chat-driver/src/Expressions.ts";
-import {
-	ChatError,
-	Create,
-	DefaultSelectors,
-} from "../../packages/chat-driver/src/index.ts";
+import { ChatError, Create, DefaultSelectors } from "../../packages/chat-driver/src/index.ts";
 
 const S = DefaultSelectors;
 
@@ -70,8 +66,7 @@ const KindOf = (question, expression) => {
 		trace: ReadTrace(S),
 		sources: ReadSources(S),
 	};
-	for (const [kind, expected] of Object.entries(known))
-		if (expression === expected) return kind;
+	for (const [kind, expected] of Object.entries(known)) if (expression === expected) return kind;
 	return null;
 };
 
@@ -226,16 +221,9 @@ class FakePage {
 			const press = () => {
 				// `stuck` is a toggle that is pressed and does not move: the page
 				// accepts the click and stays in the mode it was in.
-				this.pressed =
-					normalise(state.modeAfterPress) === "search" ? "search" : "computer";
-				search.setAttribute(
-					"aria-pressed",
-					this.pressed === "search" ? "true" : "false",
-				);
-				computer.setAttribute(
-					"aria-pressed",
-					this.pressed === "search" ? "false" : "true",
-				);
+				this.pressed = normalise(state.modeAfterPress) === "search" ? "search" : "computer";
+				search.setAttribute("aria-pressed", this.pressed === "search" ? "true" : "false");
+				computer.setAttribute("aria-pressed", this.pressed === "search" ? "false" : "true");
 			};
 			search.onClick = press;
 			computer.onClick = press;
@@ -272,9 +260,7 @@ class FakePage {
 		const trace = Array.isArray(state.trace) ? state.trace : [];
 		const sources = Array.isArray(state.sources) ? state.sources : [];
 		const earlierTrace = Array.isArray(state.earlierTrace) ? state.earlierTrace : [];
-		const earlierSources = Array.isArray(state.earlierSources)
-			? state.earlierSources
-			: [];
+		const earlierSources = Array.isArray(state.earlierSources) ? state.earlierSources : [];
 		const answers = [];
 		for (let index = 0; index < count; index += 1) {
 			const newest = index === count - 1;
@@ -303,8 +289,7 @@ class FakePage {
 
 	/** What the page's thread holds on its `read`th read, counting from zero. */
 	threadAt(read) {
-		if (this.state.answersStall === true)
-			return { count: 1, text: `still writing ${read}` };
+		if (this.state.answersStall === true) return { count: 1, text: `still writing ${read}` };
 		const reads = this.state.answersReads ?? [];
 		if (reads.length === 0) return { count: 0, text: "" };
 		return reads[Math.min(read, reads.length - 1)];
@@ -373,8 +358,7 @@ class FakePage {
 		if (kind === "composer" && value === true && this.composer !== null)
 			this.effects.push(`written:${this.composer.value}`);
 		if (kind === "submit" && value === "sent") this.effects.push("sent");
-		if (kind === "submit" && value === "disabled")
-			this.effects.push("refused:submit:disabled");
+		if (kind === "submit" && value === "disabled") this.effects.push("refused:submit:disabled");
 
 		return value;
 	}
@@ -392,10 +376,7 @@ const signalOf = (kind) => {
 	if (kind === "aborted") controller.abort();
 	let timer;
 	if (typeof kind === "string" && kind.startsWith("after:"))
-		timer = setTimeout(
-			() => controller.abort(),
-			Number(kind.slice("after:".length)),
-		);
+		timer = setTimeout(() => controller.abort(), Number(kind.slice("after:".length)));
 	return {
 		signal: controller.signal,
 		clear: () => {
@@ -434,8 +415,7 @@ export const runChat = async (entry) => {
 
 	let result = { kind: "void" };
 	for (const one of entry.steps) {
-		if (one.before !== undefined && one.before.page !== undefined)
-			page.patch(one.before.page);
+		if (one.before !== undefined && one.before.page !== undefined) page.patch(one.before.page);
 		if (one.op !== "ask") throw new Error(`unknown chat step ${JSON.stringify(one.op)}`);
 		try {
 			const answer = await driver.ask(question, options);

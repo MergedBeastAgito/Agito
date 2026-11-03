@@ -102,14 +102,8 @@ const Allowance = (budget: Budget | undefined): Budget | null => {
 	if (budget === undefined || budget === null) return null;
 	const { deadline, operations } = budget;
 	if (typeof deadline !== "number" || Number.isNaN(deadline))
-		throw RuntimeError.refused(
-			`a budget needs a numeric deadline; got ${String(deadline)}`,
-		);
-	if (
-		typeof operations !== "number" ||
-		!Number.isInteger(operations) ||
-		operations < 0
-	)
+		throw RuntimeError.refused(`a budget needs a numeric deadline; got ${String(deadline)}`);
+	if (typeof operations !== "number" || !Number.isInteger(operations) || operations < 0)
 		throw RuntimeError.refused(
 			`a budget needs a whole, non-negative operation count; got ${String(operations)}`,
 		);
@@ -123,9 +117,7 @@ export const Create = (options: RuntimeOptions): Policy => {
 	const generation = options.generation;
 	const clock = options.clock ?? WallClock;
 	if (typeof clock.now !== "function")
-		throw new TypeError(
-			"a runtime reads one clock, and it must answer now()",
-		);
+		throw new TypeError("a runtime reads one clock, and it must answer now()");
 
 	const capabilities = new Map<string, Registration>();
 	for (const registration of options.capabilities ?? []) {
@@ -190,10 +182,7 @@ export const Create = (options: RuntimeOptions): Policy => {
 				"a lease is the one the runtime issued: resource and fence are required",
 			);
 		const run = runs.get(lease.resource);
-		if (!run)
-			throw RuntimeError.refused(
-				`no lease is live for ${lease.resource}`,
-			);
+		if (!run) throw RuntimeError.refused(`no lease is live for ${lease.resource}`);
 		if (run.fence !== lease.fence)
 			throw RuntimeError.held(
 				`${lease.resource} is held under fence ${run.fence}, not fence ${lease.fence}`,
@@ -202,10 +191,7 @@ export const Create = (options: RuntimeOptions): Policy => {
 			throw RuntimeError.refused(
 				`the lease presented for fence ${run.fence} of ${lease.resource} was not the one issued`,
 			);
-		if (run.released)
-			throw RuntimeError.refused(
-				`the lease on ${lease.resource} was released`,
-			);
+		if (run.released) throw RuntimeError.refused(`the lease on ${lease.resource} was released`);
 		if (now >= run.expiresAt)
 			throw RuntimeError.refused(
 				`the lease on ${lease.resource} expired at ${run.expiresAt}, and the clock reads ${now}`,
@@ -229,9 +215,7 @@ export const Create = (options: RuntimeOptions): Policy => {
 				`the run's deadline passed at ${budget.deadline}, and the clock reads ${now}`,
 			);
 		if (budget.operations <= 0)
-			throw RuntimeError.spent(
-				"the run has spent every operation it was granted",
-			);
+			throw RuntimeError.spent("the run has spent every operation it was granted");
 		budget.operations -= 1;
 	};
 
@@ -246,20 +230,13 @@ export const Create = (options: RuntimeOptions): Policy => {
 	 */
 	const Settle = (resource: string, run: Run): void => {
 		run.inFlight -= 1;
-		if (run.released && run.inFlight === 0 && runs.get(resource) === run)
-			runs.delete(resource);
+		if (run.released && run.inFlight === 0 && runs.get(resource) === run) runs.delete(resource);
 	};
 
-	const claim = (
-		resource: string,
-		ttlMs: number,
-		budget?: Budget,
-	): Promise<Lease> =>
+	const claim = (resource: string, ttlMs: number, budget?: Budget): Promise<Lease> =>
 		Serialise(() => {
 			if (typeof resource !== "string" || resource.length === 0)
-				throw RuntimeError.refused(
-					"a claim names the resource it wants",
-				);
+				throw RuntimeError.refused("a claim names the resource it wants");
 			const ttl = Positive(ttlMs, "a lease ttl");
 			const allowance = Allowance(budget);
 			const now = clock.now();
@@ -307,10 +284,7 @@ export const Create = (options: RuntimeOptions): Policy => {
 			return { ...lease, expiresAt };
 		});
 
-	const withLease = async <T>(
-		lease: Lease,
-		write: () => Promise<T>,
-	): Promise<T> => {
+	const withLease = async <T>(lease: Lease, write: () => Promise<T>): Promise<T> => {
 		if (typeof write !== "function")
 			throw RuntimeError.refused("withLease needs a write to admit");
 		const run = await Serialise(() => {
@@ -392,9 +366,7 @@ export const Create = (options: RuntimeOptions): Policy => {
 				name: registration.name,
 				state: registration.state,
 			}))
-			.sort((left, right) =>
-				left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
-			),
+			.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
 	});
 
 	return {

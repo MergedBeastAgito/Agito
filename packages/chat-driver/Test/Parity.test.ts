@@ -18,10 +18,7 @@ import { runChat } from "../../../scenarios/lib/chat.mjs";
 import { casesOf, compare, load } from "../../../scenarios/lib/load.mjs";
 
 const Scenarios = new URL("../../../scenarios/chat-driver.json", import.meta.url);
-const Generated = new URL(
-	"../../../scenarios/generated/chat-driver.timing.json",
-	import.meta.url,
-);
+const Generated = new URL("../../../scenarios/generated/chat-driver.timing.json", import.meta.url);
 
 for (const file of [load(Scenarios), load(Generated)])
 	for (const entry of casesOf(file)) {

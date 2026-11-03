@@ -49,10 +49,7 @@ const Answering = (readings: Record<string, Reading>): Fixture => {
 				return {
 					selector,
 					present: reading?.present === true,
-					value:
-						reading?.present === true
-							? (reading.value ?? null)
-							: null,
+					value: reading?.present === true ? (reading.value ?? null) : null,
 				};
 			});
 		},
@@ -62,10 +59,11 @@ const Answering = (readings: Record<string, Reading>): Fixture => {
 /** The capability under test, over a transport that answers nothing. */
 const UnderTest = () => Create(Answering({}));
 
-const Present = (
-	selector: string,
-	value: number | string | null,
-): Measurement => ({ selector, present: true, value });
+const Present = (selector: string, value: number | string | null): Measurement => ({
+	selector,
+	present: true,
+	value,
+});
 
 const Absent = (selector: string): Measurement => ({
 	selector,
@@ -84,10 +82,7 @@ test("measure asks for every selector once and answers in the order it was given
 		".rail": { present: true, value: 224 },
 		".drawer": { present: true, value: 360 },
 	});
-	const measurements = await Create(fixture).measure(
-		[".rail", ".drawer"],
-		Options(),
-	);
+	const measurements = await Create(fixture).measure([".rail", ".drawer"], Options());
 	assert.deepEqual(fixture.asked, [[".rail", ".drawer"]]);
 	assert.deepEqual(
 		measurements.map((measurement) => measurement.selector),
@@ -109,10 +104,7 @@ test("an answer that arrives in another order is matched by selector, not by pos
 			}));
 		},
 	};
-	const measurements = await Create(transport).measure(
-		[".rail", ".drawer"],
-		Options(),
-	);
+	const measurements = await Create(transport).measure([".rail", ".drawer"], Options());
 	assert.deepEqual(measurements, [
 		{ selector: ".rail", present: true, value: "value of .rail" },
 		{ selector: ".drawer", present: true, value: "value of .drawer" },
@@ -420,12 +412,7 @@ test("a present element that read null is a value, not an absence", () => {
 test("the absent list names each selector once, in the order it was measured", () => {
 	const verdict = UnderTest().check(
 		[],
-		[
-			Absent(".seam"),
-			Present(".rail", 224),
-			Absent(".drawer"),
-			Absent(".seam"),
-		],
+		[Absent(".seam"), Present(".rail", 224), Absent(".drawer"), Absent(".seam")],
 	);
 	assert.deepEqual(verdict.absent, [".seam", ".drawer"]);
 	assert.equal(verdict.held, false);
@@ -456,9 +443,7 @@ test("check is a pure function of its arguments: the same measurements answer th
 
 test("the package's source carries no selector, length or colour of any design", async () => {
 	const directory = new URL("../src/", import.meta.url);
-	const files = (await readdir(directory)).filter((name) =>
-		name.endsWith(".ts"),
-	);
+	const files = (await readdir(directory)).filter((name) => name.endsWith(".ts"));
 	assert.ok(files.length > 0);
 	const design = /[0-9]+px|rgb\(|#[0-9a-f]{3,6}/;
 	for (const name of files) {
@@ -473,10 +458,7 @@ test("the error codes are the manifest's errors, and there are no others", async
 		await readFile(new URL("../module.json", import.meta.url), "utf8"),
 	) as { provides: { port: string; errors: string[] } };
 	assert.equal(manifest.provides.port, "agentic.verify.design");
-	assert.deepEqual(
-		[...Object.values(ErrorCode)].sort(),
-		[...manifest.provides.errors].sort(),
-	);
+	assert.deepEqual([...Object.values(ErrorCode)].sort(), [...manifest.provides.errors].sort());
 });
 
 test("a verdict becomes the exception the manifest names, absence before a broken invariant", () => {

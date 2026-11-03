@@ -140,7 +140,8 @@ for (const capability of Capabilities) {
 
 		if (!skipped(entry, "typescript")) {
 			observed = await capability.run(entry);
-			for (const sentence of compare(observed, entry.expect)) wrong.push(`typescript: ${sentence}`);
+			for (const sentence of compare(observed, entry.expect))
+				wrong.push(`typescript: ${sentence}`);
 		}
 
 		if (rust !== null && !skipped(entry, "rust")) {
@@ -148,11 +149,15 @@ for (const capability of Capabilities) {
 			if (theirs === undefined) {
 				wrong.push("rust: no observation for this scenario");
 			} else {
-				for (const sentence of compare(theirs, entry.expect)) wrong.push(`rust: ${sentence}`);
+				for (const sentence of compare(theirs, entry.expect))
+					wrong.push(`rust: ${sentence}`);
 				// The expectation already pins the effects, so this is a redundant
 				// check on purpose: it catches a case whose expectation was left too
 				// vague for either side to be pinned by it.
-				if (observed !== null && JSON.stringify(observed.effects) !== JSON.stringify(theirs.effects))
+				if (
+					observed !== null &&
+					JSON.stringify(observed.effects) !== JSON.stringify(theirs.effects)
+				)
 					wrong.push(
 						`effects differ: typescript ${JSON.stringify(observed.effects)} / rust ${JSON.stringify(theirs.effects)}`,
 					);
@@ -167,7 +172,9 @@ for (const capability of Capabilities) {
 			console.log(`  unported  ${entry.id} - ${entry.unported ?? "no reason given"}`);
 		} else if (wrong.length === 0) {
 			agreed += 1;
-			console.log(`  agree     ${entry.id}${sides.length > 0 ? ` (${sides.join(", ")} only)` : ""}`);
+			console.log(
+				`  agree     ${entry.id}${sides.length > 0 ? ` (${sides.join(", ")} only)` : ""}`,
+			);
 		} else {
 			differing.push({ id: entry.id, wrong });
 			console.log(`  differ    ${entry.id}`);
@@ -176,5 +183,7 @@ for (const capability of Capabilities) {
 	}
 }
 
-console.log(`\n${agreed}/${total} scenarios agreed${Compare ? " on both sides" : ""}; ${unported} unported; ${differing.length} differing`);
+console.log(
+	`\n${agreed}/${total} scenarios agreed${Compare ? " on both sides" : ""}; ${unported} unported; ${differing.length} differing`,
+);
 if (differing.length > 0) process.exit(1);

@@ -139,10 +139,7 @@ export interface Verify {
 	 * Never throws because an element is missing - that is `present: false`. The
 	 * only rejection is `not-ready`, which means the page was never read.
 	 */
-	measure(
-		selectors: string[],
-		options: OperationOptions,
-	): Promise<Measurement[]>;
+	measure(selectors: string[], options: OperationOptions): Promise<Measurement[]>;
 	/**
 	 * Judge a set of measurements against a set of invariants. Pure, and it
 	 * never throws: a verdict is a result, not an exception.
@@ -165,12 +162,7 @@ export class VerifyError extends Error {
 	/** What was observed, kept apart from the sentence shown to a human. */
 	readonly detail: string;
 
-	constructor(
-		code: ErrorCode,
-		message: string,
-		detail = "",
-		options?: { cause?: unknown },
-	) {
+	constructor(code: ErrorCode, message: string, detail = "", options?: { cause?: unknown }) {
 		super(message, options);
 		this.name = "VerifyError";
 		this.code = code;
@@ -186,11 +178,7 @@ export class VerifyError extends Error {
 	 * capability. `detail` says which one happened, so a caller can tell its own
 	 * cancellation from a slow page.
 	 */
-	static notReady(
-		message: string,
-		detail = "",
-		cause?: unknown,
-	): VerifyError {
+	static notReady(message: string, detail = "", cause?: unknown): VerifyError {
 		return new VerifyError(ErrorCode.NotReady, message, detail, { cause });
 	}
 
@@ -212,9 +200,7 @@ export class VerifyError extends Error {
 				absent.join(", "),
 			);
 		}
-		const evidence = Array.isArray(verdict?.evidence)
-			? verdict.evidence
-			: [];
+		const evidence = Array.isArray(verdict?.evidence) ? verdict.evidence : [];
 		const broken = evidence.filter((row) => row?.held !== true);
 		if (broken.length > 0) {
 			return new VerifyError(

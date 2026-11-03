@@ -1,2 +1,39 @@
+# Build output. `rust/.cargo/config.toml` puts the workspace's build directory at
+# `rust/Target`, and the root entry is for anything a future package emits here.
+rust/Target/
+/Target/
+
+# Turbo's run cache, if a pipeline is ever added to `turbo.json`.
+.turbo/
+
+# Dependencies. Unanchored on purpose: the workspace root and every package can
+# hold one.
+node_modules/
+
+# The resolution artefact. `rust/.gitignore` covers the build directory and this
+# rule covers the lockfile: a clone resolves its own versions, and a committed
+# lock made the tree fight `cargo update` for no benefit.
+Cargo.lock
+
+# Scratch: probes and throwaway trees. The archive of everything this workspace
+# worked from is tracked - `.hermes/research/`, `.hermes/bundle/` and
+# `.hermes/tools/` are the record and the tooling - and only the scratch inside
+# it is not.
 !.hermes
-.hermes/tmp
+.hermes/tmp/
+
+# Local secrets: any API key, any token. A credential in this repository deserves
+# a rule that travels with the repository rather than one that depends on a
+# machine's global ignore.
+.env
+.env.*
+!.env.example
+
+# Operating-system droppings.
+.DS_Store
+Thumbs.db
+__pycache__/
+
+# The agent instruction file is source, not scratch: a global ignore for
+# `AGENTS.md` must not take it out of this tree.
+!AGENTS.md

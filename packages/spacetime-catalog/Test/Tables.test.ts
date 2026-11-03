@@ -15,28 +15,15 @@ import { test } from "node:test";
 import { ColumnTypes, PrimaryKey, TableNames, Tables } from "../src/index.ts";
 
 test("the catalog describes exactly the six tables the model needs", () => {
-	assert.deepEqual(TableNames, [
-		"capability",
-		"generation",
-		"lease",
-		"probe",
-		"belief",
-		"trace",
-	]);
+	assert.deepEqual(TableNames, ["capability", "generation", "lease", "probe", "belief", "trace"]);
 	assert.deepEqual(Object.keys(Tables), [...TableNames]);
 	for (const name of TableNames) assert.equal(Tables[name].name, name);
 });
 
 test("every table declares one primary key, and it is the column rows are addressed by", () => {
 	for (const name of TableNames) {
-		const primary = Tables[name].columns.filter(
-			(column) => column.key === "primary",
-		);
-		assert.equal(
-			primary.length,
-			1,
-			`${name} declares ${primary.length} keys`,
-		);
+		const primary = Tables[name].columns.filter((column) => column.key === "primary");
+		assert.equal(primary.length, 1, `${name} declares ${primary.length} keys`);
 		assert.equal(PrimaryKey(name), primary[0]?.name);
 	}
 	assert.deepEqual(
@@ -52,10 +39,7 @@ test("every column uses a type the catalog declares", () => {
 				(ColumnTypes as readonly string[]).includes(column.type),
 				`${name}.${column.name} is ${column.type}`,
 			);
-			assert.ok(
-				column.note.length > 0,
-				`${name}.${column.name} has no note`,
-			);
+			assert.ok(column.note.length > 0, `${name}.${column.name} has no note`);
 		}
 	}
 });

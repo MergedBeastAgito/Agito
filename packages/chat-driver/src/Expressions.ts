@@ -82,10 +82,7 @@ export const ReadModel = (selectors: Selectors): string => `(() => {
  * composer that never saw an input event keeps its send control disabled and the
  * question would sit there looking sent.
  */
-export const TypeQuestion = (
-	selectors: Selectors,
-	text: string,
-): string => `(() => {
+export const TypeQuestion = (selectors: Selectors, text: string): string => `(() => {
 	const Composer = document.querySelector(${literal(selectors.composer)});
 	if (Composer === null) return false;
 	const Text = ${literal(text)};

@@ -1,0 +1,13 @@
+packages:
+  # The workspace root is a member because it owns the gate: `check`, `Format`
+  # and `Format:Check` are scripts here, not in a package.
+  - "."
+
+  - "packages/*"
+
+# No `allowBuilds` block. Every package here is TypeScript with no native
+# dependency and no post-install step, so there is nothing for pnpm to approve -
+# and an unnecessary approval is a hole nobody reviews. A package that grows one
+# (a browser download, a native binding) adds its own line here, because an
+# unapproved build makes `pnpm install` exit 1 and takes every `pnpm run` down
+# with it through the dependency precheck.

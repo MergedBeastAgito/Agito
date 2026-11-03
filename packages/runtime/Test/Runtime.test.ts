@@ -32,9 +32,7 @@ const Start = 1_000;
 const Generation = 7;
 
 /** A clock the test moves by hand. */
-const FakeClock = (
-	start = Start,
-): { clock: Clock; advance: (ms: number) => void } => {
+const FakeClock = (start = Start): { clock: Clock; advance: (ms: number) => void } => {
 	let now = start;
 	return {
 		clock: { now: () => now },
@@ -80,10 +78,7 @@ const Refuses = async (
 	try {
 		await call;
 	} catch (error) {
-		assert.ok(
-			error instanceof RuntimeError,
-			`expected a RuntimeError, got ${String(error)}`,
-		);
+		assert.ok(error instanceof RuntimeError, `expected a RuntimeError, got ${String(error)}`);
 		assert.equal(error.code, code);
 		return error;
 	}
@@ -96,8 +91,7 @@ const Refusal = async (
 	request: { capability: string; state: StateClass; generation: number },
 ): Promise<string> => {
 	const result = await runtime.admit(request);
-	if (result.ok)
-		return assert.fail(`expected ${request.capability} to be refused`);
+	if (result.ok) return assert.fail(`expected ${request.capability} to be refused`);
 	return result.reason;
 };
 
@@ -106,10 +100,7 @@ describe("agentic.runtime", () => {
 		const manifest = JSON.parse(
 			readFileSync(new URL("../module.json", import.meta.url), "utf8"),
 		) as { provides: { errors: string[] } };
-		assert.deepEqual(
-			Object.values(ErrorCode).sort(),
-			[...manifest.provides.errors].sort(),
-		);
+		assert.deepEqual(Object.values(ErrorCode).sort(), [...manifest.provides.errors].sort());
 	});
 
 	test("reads the clock it was given, not the wall clock", () => {
@@ -202,10 +193,7 @@ describe("leases", () => {
 	test("a second claim is refused while the first is live", async () => {
 		const { runtime } = Harness();
 		const first = await runtime.claim("browse", 1_000);
-		const refusal = await Refuses(
-			runtime.claim("browse", 1_000),
-			ErrorCode.LeaseHeld,
-		);
+		const refusal = await Refuses(runtime.claim("browse", 1_000), ErrorCode.LeaseHeld);
 		assert.match(refusal.message, new RegExp(`fence ${first.fence}`));
 	});
 
@@ -228,20 +216,14 @@ describe("leases", () => {
 			ErrorCode.LeaseHeld,
 		);
 		assert.deepEqual(writes, []);
-		assert.equal(
-			await runtime.withLease(second, () => write("now")),
-			"now",
-		);
+		assert.equal(await runtime.withLease(second, () => write("now")), "now");
 		assert.deepEqual(writes, ["now"]);
 	});
 
 	test("a lease that expires mid-run refuses the next write", async () => {
 		const { runtime, advance, writes, write } = Harness();
 		const lease = await runtime.claim("browse", 1_000);
-		assert.equal(
-			await runtime.withLease(lease, () => write("early")),
-			"early",
-		);
+		assert.equal(await runtime.withLease(lease, () => write("early")), "early");
 		advance(1_000);
 		const refusal = await Refuses(
 			runtime.withLease(lease, () => write("late")),
@@ -259,20 +241,14 @@ describe("leases", () => {
 		assert.equal(renewed.expiresAt, Start + 1_900);
 		assert.equal(renewed.fence, lease.fence);
 		advance(500);
-		assert.equal(
-			await runtime.withLease(renewed, () => write("kept")),
-			"kept",
-		);
+		assert.equal(await runtime.withLease(renewed, () => write("kept")), "kept");
 	});
 
 	test("a renewal that does not extend the lease is refused", async () => {
 		const { runtime, advance } = Harness();
 		const lease = await runtime.claim("browse", 1_000);
 		advance(500);
-		const refusal = await Refuses(
-			runtime.renew(lease, 1),
-			ErrorCode.AdmissionRefused,
-		);
+		const refusal = await Refuses(runtime.renew(lease, 1), ErrorCode.AdmissionRefused);
 		assert.match(refusal.message, /must extend/);
 	});
 
@@ -280,10 +256,7 @@ describe("leases", () => {
 		const { runtime, advance } = Harness();
 		const lease = await runtime.claim("browse", 1_000);
 		advance(1_000);
-		const refusal = await Refuses(
-			runtime.renew(lease, 1_000),
-			ErrorCode.AdmissionRefused,
-		);
+		const refusal = await Refuses(runtime.renew(lease, 1_000), ErrorCode.AdmissionRefused);
 		assert.match(refusal.message, /expired/);
 	});
 
@@ -364,10 +337,7 @@ describe("release", () => {
 		advance(1_000);
 		const second = await runtime.claim("browse", 1_000);
 		await runtime.release(first);
-		assert.equal(
-			await runtime.withLease(second, () => write("held")),
-			"held",
-		);
+		assert.equal(await runtime.withLease(second, () => write("held")), "held");
 	});
 
 	test("release during an effect frees the resource once it settles", async () => {
@@ -427,11 +397,7 @@ describe("budgets", () => {
 
 	test("a budget's deadline refuses effects past it", async () => {
 		const { runtime, advance, writes, write } = Harness();
-		const lease = await runtime.claim(
-			"browse",
-			5_000,
-			Allowance(10, Start + 1_000),
-		);
+		const lease = await runtime.claim("browse", 5_000, Allowance(10, Start + 1_000));
 		await runtime.withLease(lease, () => write("in time"));
 		advance(1_000);
 		const refusal = await Refuses(
@@ -480,10 +446,7 @@ describe("budgets", () => {
 		const browse = await runtime.claim("browse", 1_000, Allowance(1));
 		const chat = await runtime.claim("chat", 1_000, Allowance(1));
 		await runtime.withLease(browse, () => write("browse"));
-		assert.equal(
-			await runtime.withLease(chat, () => write("chat")),
-			"chat",
-		);
+		assert.equal(await runtime.withLease(chat, () => write("chat")), "chat");
 		await Refuses(
 			runtime.withLease(browse, () => write("spent")),
 			ErrorCode.BudgetExhausted,

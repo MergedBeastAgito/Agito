@@ -1,0 +1,35 @@
+# Generated, vendored or data-shaped - never format these. Every entry is bytes
+# a tool owns or bytes whose exact text is the value: a formatter that rewrites
+# either turns a current artifact into a stale one, and `Scripts/Feed.mjs`
+# compares the bundler's output byte for byte.
+
+# Build output. The two entries are anchored on purpose: an unanchored `Target/`
+# matches that directory name at any depth, which is how a real source directory
+# gets hidden from the formatter for as long as the rule stays loose.
+/Target/
+rust/Target/
+
+# Unanchored on purpose: every package and the workspace root can hold one.
+node_modules/
+
+# The feed tools' output. `bundle.mjs` writes `batch-NN.txt`, `tree.txt` and
+# `manifest.json`; the batches are the payload a chat composer receives, so
+# rewrapping a line would change what is sent.
+.hermes/bundle/
+.hermes/research-bundle/
+
+# Scratch: probes and throwaway trees. Never part of the repository, and a
+# format pass over a fixture would rewrite the bytes a test asserts on.
+.hermes/tmp/
+
+# The research captures are evidence, not documentation. `docs/Research.md` says
+# they are never edited, and a capture's bytes are what it recorded - rewrapping
+# a paragraph to fit a column would edit the record. `catalog.mjs` beside them is
+# source and stays formattable.
+.hermes/research/*.md
+
+# Dependencies and locks. `Cargo.lock` is a resolution artefact and the tree
+# treats it as local-only; the pnpm lockfiles are pnpm's to write.
+pnpm-lock.yaml
+package-lock.json
+Cargo.lock

@@ -24,7 +24,9 @@ const Timeout = At("--timeout", 240);
 const AsJson = Args.includes("--json");
 
 if (!WsUrl) {
-	console.error("usage: node observe.mjs <ws-url> [--interval 500] [--idle 4] [--timeout 240] [--json]");
+	console.error(
+		"usage: node observe.mjs <ws-url> [--interval 500] [--idle 4] [--timeout 240] [--json]",
+	);
 	process.exit(2);
 }
 

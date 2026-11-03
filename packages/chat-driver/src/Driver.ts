@@ -99,11 +99,7 @@ const reasonOf = (error: unknown): string =>
  * then refuse it on its merits, with a code the manifest actually has.
  */
 const textOf = (value: unknown): string =>
-	typeof value === "string"
-		? value
-		: value === null || value === undefined
-			? ""
-			: String(value);
+	typeof value === "string" ? value : value === null || value === undefined ? "" : String(value);
 
 /**
  * What a label means, for comparison.
@@ -157,8 +153,7 @@ const asSteps = (value: unknown): Step[] | null => {
 					})
 				: {};
 		return {
-			depth:
-				typeof depth === "number" && Number.isFinite(depth) ? depth : 0,
+			depth: typeof depth === "number" && Number.isFinite(depth) ? depth : 0,
 			label: textOf(label),
 			detail: textOf(detail),
 		};
@@ -253,8 +248,7 @@ const bounded = <T>(
 		}
 		void pending.then(
 			(value) => settle(undefined, value),
-			(error: unknown) =>
-				settle(error ?? new Error(`${phase} failed without a reason`)),
+			(error: unknown) => settle(error ?? new Error(`${phase} failed without a reason`)),
 		);
 	});
 
@@ -284,16 +278,11 @@ const pause = (ms: number, signal: AbortSignal | undefined): Promise<void> =>
 export const Create = (page: Page, options: DriverOptions): Chat => {
 	const selectors = options.selectors ?? DefaultSelectors;
 	const pollMs = budgetOf(options.pollMs ?? DefaultPollMs);
-	const disposeBudget = budgetOf(
-		options.disposeTimeoutMs ?? DefaultDisposeBudgetMs,
-	);
+	const disposeBudget = budgetOf(options.disposeTimeoutMs ?? DefaultDisposeBudgetMs);
 	const report =
 		options.report ??
 		((failure: { target: Target; error: unknown }) => {
-			console.warn(
-				`chat-driver: dispose of ${failure.target.url} failed`,
-				failure.error,
-			);
+			console.warn(`chat-driver: dispose of ${failure.target.url} failed`, failure.error);
 		});
 
 	const reportQuietly = (failure: { target: Target; error: unknown }) => {
@@ -306,12 +295,7 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 
 	const release = async (target: Target): Promise<void> => {
 		try {
-			await bounded(
-				"dispose",
-				() => page.dispose(target),
-				disposeBudget,
-				undefined,
-			);
+			await bounded("dispose", () => page.dispose(target), disposeBudget, undefined);
 		} catch (error) {
 			// Never thrown: the caller already has its answer, or its own failure,
 			// and a failing cleanup must not replace either.
@@ -319,10 +303,7 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 		}
 	};
 
-	const perform = async (
-		question: Question,
-		call: OperationOptions,
-	): Promise<Answer> => {
+	const perform = async (question: Question, call: OperationOptions): Promise<Answer> => {
 		const budget = budgetOf(call.timeoutMs);
 		const deadline = Date.now() + budget;
 		const signal = call.signal;
@@ -346,11 +327,7 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 		};
 
 		/** One expression, run inside whatever budget is left. */
-		const probe = async <T>(
-			phase: string,
-			expression: string,
-			target: Target,
-		): Promise<T> => {
+		const probe = async <T>(phase: string, expression: string, target: Target): Promise<T> => {
 			const timeoutMs = left(phase);
 			try {
 				return await bounded(
@@ -394,21 +371,13 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 		} catch (error) {
 			throw error instanceof ChatError
 				? error
-				: ChatError.notReady(
-						"the chat page could not be opened",
-						reasonOf(error),
-						error,
-					);
+				: ChatError.notReady("the chat page could not be opened", reasonOf(error), error);
 		}
 
 		try {
 			/** One read of the thread, refusing a page that answers something else. */
 			const readAnswers = async (phase: string): Promise<Answers> => {
-				const value = await probe<unknown>(
-					phase,
-					ReadAnswers(selectors),
-					target,
-				);
+				const value = await probe<unknown>(phase, ReadAnswers(selectors), target);
 				const answers = asAnswers(value);
 				if (answers === null)
 					throw ChatError.notReady(
@@ -419,22 +388,10 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 			};
 
 			// The mode is a precondition, not a preference.
-			let mode = await probe<unknown>(
-				"mode",
-				ReadMode(selectors),
-				target,
-			);
+			let mode = await probe<unknown>("mode", ReadMode(selectors), target);
 			if (normalise(mode) !== "search") {
-				await probe<boolean>(
-					"mode press",
-					PressMode(selectors),
-					target,
-				);
-				mode = await probe<unknown>(
-					"mode",
-					ReadMode(selectors),
-					target,
-				);
+				await probe<boolean>("mode press", PressMode(selectors), target);
+				mode = await probe<unknown>("mode", ReadMode(selectors), target);
 				if (normalise(mode) !== "search")
 					throw ChatError.wrongMode(
 						"the composer does not offer search mode",
@@ -443,11 +400,7 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 			}
 
 			// The model is a precondition, and it is compared before the send.
-			const label = await probe<unknown>(
-				"model",
-				ReadModel(selectors),
-				target,
-			);
+			const label = await probe<unknown>("model", ReadModel(selectors), target);
 			if (normalise(label) !== normalise(question.model))
 				throw ChatError.wrongModel(
 					"the page is set to a different model",
@@ -468,11 +421,7 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 					`nothing matched ${JSON.stringify(selectors.composer)}`,
 				);
 
-			const sent = await probe<SendOutcome>(
-				"submit",
-				PressSubmit(selectors),
-				target,
-			);
+			const sent = await probe<SendOutcome>("submit", PressSubmit(selectors), target);
 			if (sent !== "sent")
 				throw ChatError.notReady(
 					"the question could not be sent",
@@ -515,11 +464,7 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 
 			// A collapsed answer is not the whole answer.
 			const collapsed = textOf(
-				await probe<unknown>(
-					"collapse",
-					ReadCollapse(selectors),
-					target,
-				),
+				await probe<unknown>("collapse", ReadCollapse(selectors), target),
 			).trim();
 			if (collapsed.length > 0)
 				throw ChatError.truncated(
@@ -527,22 +472,14 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 					`the page shows ${JSON.stringify(collapsed)} over ${text.length} characters`,
 				);
 
-			const traceValue = await probe<unknown>(
-				"trace",
-				ReadTrace(selectors),
-				target,
-			);
+			const traceValue = await probe<unknown>("trace", ReadTrace(selectors), target);
 			const trace = asSteps(traceValue);
 			if (trace === null)
 				throw ChatError.notReady(
 					"the trace could not be read from the page",
 					`the page answered ${describe(traceValue)} instead of a list of steps`,
 				);
-			const sourcesValue = await probe<unknown>(
-				"sources",
-				ReadSources(selectors),
-				target,
-			);
+			const sourcesValue = await probe<unknown>("sources", ReadSources(selectors), target);
 			const sources = asSources(sourcesValue);
 			if (sources === null)
 				throw ChatError.notReady(
@@ -574,19 +511,12 @@ export const Create = (page: Page, options: DriverOptions): Chat => {
 	 * not already a `ChatError` becomes `not-ready` - the answer did not arrive -
 	 * with the cause attached rather than flattened.
 	 */
-	const ask = async (
-		question: Question,
-		call: OperationOptions,
-	): Promise<Answer> => {
+	const ask = async (question: Question, call: OperationOptions): Promise<Answer> => {
 		try {
 			return await perform(question, call);
 		} catch (error) {
 			if (error instanceof ChatError) throw error;
-			throw ChatError.notReady(
-				"the question could not be asked",
-				reasonOf(error),
-				error,
-			);
+			throw ChatError.notReady("the question could not be asked", reasonOf(error), error);
 		}
 	};
 
