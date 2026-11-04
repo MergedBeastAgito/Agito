@@ -49,9 +49,7 @@ const SerialiseScript:&str = script!("Expressions/Extract");
 /// `null` when there is no toggle, when none is pressed, or when several are -
 /// a page that cannot say which mode it is in has not said it is in search
 /// mode.
-pub fn ReadMode(Selectors:&Selectors) -> String {
-	script!("Expressions/ReadMode"; Mode = &Selectors.Mode)
-}
+pub fn ReadMode(Selectors:&Selectors) -> String { script!("Expressions/ReadMode"; Mode = &Selectors.Mode) }
 
 /// Press the mode toggle.
 ///
@@ -59,14 +57,10 @@ pub fn ReadMode(Selectors:&Selectors) -> String {
 /// button per mode is switched rather than cycled; a single cycling toggle is
 /// the fallback. Pressing is not verifying - the caller reads the mode again
 /// and decides - so this returns whether anything was there to press.
-pub fn PressMode(Selectors:&Selectors) -> String {
-	script!("Expressions/PressMode"; Mode = &Selectors.Mode)
-}
+pub fn PressMode(Selectors:&Selectors) -> String { script!("Expressions/PressMode"; Mode = &Selectors.Mode) }
 
 /// The model label the composer will send to, as the page shows it.
-pub fn ReadModel(Selectors:&Selectors) -> String {
-	script!("Expressions/ReadModel"; Model = &Selectors.Model)
-}
+pub fn ReadModel(Selectors:&Selectors) -> String { script!("Expressions/ReadModel"; Model = &Selectors.Model) }
 
 /// Put the question in the composer.
 ///
@@ -265,11 +259,12 @@ mod Tests {
 	/// The compiled JavaScript is the JavaScript the page was already being
 	/// sent, byte for byte.
 	///
-	/// The fixture is the *before* side of this card: every expression, built by
-	/// the code at the commit before the compilation, dumped from that code
-	/// rather than retyped. It is a baseline, not a snapshot to refresh - if a
-	/// change to a script fails here, the change altered what a page receives,
-	/// which is exactly the thing the compilation was not allowed to do.
+	/// The fixture is the *before* side of this card: every expression, built
+	/// by the code at the commit before the compilation, dumped from that
+	/// code rather than retyped. It is a baseline, not a snapshot to
+	/// refresh - if a change to a script fails here, the change altered
+	/// what a page receives, which is exactly the thing the compilation was
+	/// not allowed to do.
 	///
 	/// This is the assertion that rules out a formatter: a compiler that
 	/// re-indented, re-quoted, appended a semicolon or dropped a comment would
@@ -286,9 +281,7 @@ mod Tests {
 			"the fixture covers a different set of expressions than the driver builds"
 		);
 		for (Name, Text) in Built {
-			let Want = Before
-				.get(Name)
-				.unwrap_or_else(|| panic!("{Name} is not in the fixture"));
+			let Want = Before.get(Name).unwrap_or_else(|| panic!("{Name} is not in the fixture"));
 			assert_eq!(&Text, Want, "{Name} is not the expression the page used to receive");
 		}
 	}

@@ -30,31 +30,14 @@
 //! # Why the failure is loud
 //!
 //! A marker no value replaces stays in the expression, and a page that receives
-//! `__PARAM_Scroll__` throws `ReferenceError: __PARAM_Scroll__ is not defined` -
+//! `__PARAM_Scroll__` throws `ReferenceError: __PARAM_Scroll__ is not defined`;
 //! a failure with a name, not a selector that quietly matches nothing.
 //! [`Unfilled`] is the same check without a page, and [`AssertParameters`]
-//! moves the parameter-count check to compile time: a call site that forgets a
-//! parameter, or passes one the script does not declare, fails `cargo build`
-//! instead of a page.
+//! moves the parameter check to compile time: a call site that forgets a
+//! parameter, passes one the script does not declare, or passes the same one
+//! twice, fails `cargo build` instead of a page.
 
 use std::fmt::Write;
-
-/// Whether a parameter is data or code.
-///
-/// Read from the script's own `declare const` type by the build, and carried
-/// here as text so a filled expression costs one pass over a few short lines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
-	/// Declared `string`: substituted as an escaped JavaScript string literal.
-	Text,
-	/// Declared as anything else: spliced as it stands.
-	Code,
-}
-
-/// The name a parameter is written as in a script.
-pub fn Marker(Name:&str) -> String {
-	format!("__PARAM_{Name}__")
-}
 
 /// Fill a script from the parameter contract its build wrote.
 ///
@@ -134,7 +117,7 @@ pub fn Escape(Value:&str) -> String {
 			'\u{0c}' => Out.push_str("\\f"),
 			Control if (Control as u32) < 0x20 => {
 				let _ = write!(Out, "\\u{:04x}", Control as u32);
-			}
+			},
 			Other => Out.push(Other),
 		}
 	}
@@ -305,10 +288,7 @@ mod Tests {
 			Declared,
 			&[("Scroll", "a \"quoted\" \\ selector"), ("Serialise", "() => 1")],
 		);
-		assert_eq!(
-			Filled,
-			"const A = \"a \\\"quoted\\\" \\\\ selector\"; const B = () => 1;"
-		);
+		assert_eq!(Filled, "const A = \"a \\\"quoted\\\" \\\\ selector\"; const B = () => 1;");
 	}
 
 	#[test]
@@ -334,7 +314,8 @@ mod Tests {
 	fn escaping_matches_json_for_every_byte() {
 		// The values that reach a page are selectors and questions. The rule
 		// this holds is that the escaped form is exactly what a JSON string
-		// literal would be, so a value that survives `serde_json` survives this.
+		// literal would be, so a value that survives `serde_json` survives
+		// this.
 		let Cases = [
 			"",
 			"a",

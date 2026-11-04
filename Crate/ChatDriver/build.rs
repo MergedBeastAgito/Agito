@@ -6,6 +6,4 @@
 
 include!("../../Build/Script.rs");
 
-fn main() {
-	CompileScripts("Source/Script", "Script");
-}
+fn main() { CompileScripts("Source/Script", "Script"); }

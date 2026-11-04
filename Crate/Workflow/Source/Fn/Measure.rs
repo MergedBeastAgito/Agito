@@ -69,8 +69,7 @@ mod Tests {
 	#[test]
 	fn the_measure_expression_is_byte_for_byte_the_one_the_page_received() {
 		const Held:&str = include_str!("../../Test/Fixture/Measure.json");
-		let Fixture:serde_json::Value =
-			serde_json::from_str(Held).expect("the fixture is a JSON object");
+		let Fixture:serde_json::Value = serde_json::from_str(Held).expect("the fixture is a JSON object");
 		let Selectors:Vec<String> = Fixture["selectors"]
 			.as_array()
 			.expect("the fixture names the selectors")
