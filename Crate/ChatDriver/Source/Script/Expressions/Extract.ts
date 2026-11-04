@@ -39,7 +39,7 @@
  * with no annotation contributes nothing rather than its glyphs, and a cell
  * that is not there is an empty cell rather than a shifted row.
  */
-const Serialise = (Root) => {
+const Serialise = (Root: Element | null): string => {
 	if (Root === null || Root === undefined) return "";
 
 	/** Elements that are chrome, controls or duplicate trees, never prose. */

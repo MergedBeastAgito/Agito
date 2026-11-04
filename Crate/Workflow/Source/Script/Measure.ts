@@ -1,3 +1,5 @@
+declare const __PARAM_Selectors__: string[];
+
 (() => {
 	const Read = (Selector) => {
 		const Element = document.querySelector(Selector);
@@ -9,5 +11,5 @@
 		}
 		return { selector: Selector, present: true, value: (Element.innerText || "").trim() };
 	};
-	return {{selectors}}.map(Read);
+	return __PARAM_Selectors__.map(Read);
 })()

@@ -9,21 +9,19 @@
 //! that matches nothing is `present: false` with a `null` value, which is the
 //! wire shape the capability's port asks for.
 //!
-//! The JavaScript is `Source/Script/Measure.js`, taken whole. The one value
-//! this function supplies - the selector list, already a JSON array - is
-//! written where it belongs as `{{selectors}}` and filled at call time, so the
-//! file is the expression and this function is only its parameter.
+//! The JavaScript is `Source/Script/Measure.ts`, compiled by this crate's
+//! `build.rs` and baked in by [`script!`]. The one value this function supplies
+//! - the selector list, already a JSON array - is the parameter the script
+//! declares as `declare const __PARAM_Selectors__: string[];`, so the file is
+//! the expression and this function is only its parameter.
 
-use AgenticRuntime::Fill;
+use AgenticRuntime::script;
 use serde_json::Value;
-
-/// The expression itself.
-const MeasureScript:&str = include_str!("../Script/Measure.js");
 
 /// A JavaScript expression that answers one measurement per selector.
 pub fn MeasurementExpression(Selectors:&[String]) -> String {
 	let Selectors = serde_json::to_string(Selectors).unwrap_or_else(|_| "[]".to_string());
-	Fill(MeasureScript, &[("selectors", &Selectors)])
+	script!("Measure"; Selectors = Selectors)
 }
 
 /// The selectors a caller asked about, as a JSON array, for a harness that
@@ -52,11 +50,11 @@ mod Tests {
 	fn the_measure_expression_is_filled_and_can_be_read_back() {
 		let Selectors = vec!["#main".to_string(), "body > p".to_string()];
 		let Built = MeasurementExpression(&Selectors);
-		assert_eq!(Unfilled(&Built), None, "the expression still carries a placeholder");
+		assert_eq!(Unfilled(&Built), None, "the expression still carries a marker");
 		assert_eq!(
-			Unfilled(MeasureScript).as_deref(),
-			Some("selectors"),
-			"the script carries no placeholder, so nothing proves the fill ran"
+			Unfilled(script!("Measure")).as_deref(),
+			Some("Selectors"),
+			"the script carries no marker, so nothing proves the fill ran"
 		);
 		assert_eq!(MeasurementSelectors(&Built), Some(serde_json::json!(["#main", "body > p"])));
 	}

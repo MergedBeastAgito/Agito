@@ -1,7 +1,10 @@
+declare const __PARAM_Composer__: string;
+declare const __PARAM_Text__: string;
+
 (() => {
-	const Composer = document.querySelector({{composer}});
+	const Composer = document.querySelector(__PARAM_Composer__);
 	if (Composer === null) return false;
-	const Text = {{text}};
+	const Text = __PARAM_Text__;
 	Composer.focus();
 	if (Composer.tagName === "TEXTAREA" || Composer.tagName === "INPUT") {
 		const Proto = Composer.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;

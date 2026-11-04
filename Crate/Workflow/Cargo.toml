@@ -19,6 +19,16 @@ agentic-skill-contract = { workspace = true }
 agentic-browser-cdp = { workspace = true }
 serde_json = { workspace = true }
 
+# The TypeScript parser the build erases type syntax with - the same five
+# build-only dependencies `Crate/ChatDriver` declares, because both crates
+# compile their scripts through the one shared rule in `Build/Script.rs`.
+[build-dependencies]
+oxc_allocator = { workspace = true }
+oxc_ast = { workspace = true }
+oxc_ast_visit = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_span = { workspace = true }
+
 [lints.rust]
 non_snake_case = "allow"
 non_upper_case_globals = "allow"

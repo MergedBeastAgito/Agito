@@ -31,6 +31,16 @@ agentic-workflow = { version = "0.1.0", path = "Crate/Workflow" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
+
+# Build-time only: the TypeScript parser a crate's `build.rs` erases type
+# syntax with. Pinned exactly, because the erasure walks this parser's AST and
+# a minor release that renames a node must be a deliberate upgrade rather than
+# a broken build. Nothing at run time links any of these.
+oxc_allocator = "=0.157.0"
+oxc_ast = "=0.157.0"
+oxc_ast_visit = "=0.157.0"
+oxc_parser = "=0.157.0"
+oxc_span = "=0.157.0"
 tokio = { version = "1.54.1", features = [
 	"rt",
 	"rt-multi-thread",
