@@ -14,11 +14,11 @@ found it, with the command or the reading that shows it; a card is the unit of w
 deliverable, and a body that says how the result will be checked. Work that starts without an issue
 is fine. Work that ends without one leaves the next person nothing to read.
 
-This repository has no RFC corpus. A decision that changes the design is a paragraph in `docs/`,
-with the claim it rests on named as a source or marked as a decision. The existing documents show
-the shape, and a document that changes its mind says so rather than rewriting the earlier position:
-`docs/Observability.md` and `docs/Review.md` are both corrections of an earlier pass, and both
-record the pass they correct.
+This repository has no RFC corpus. A decision that changes the design is a paragraph in
+`Documentation/`, with the claim it rests on named as a source or marked as a decision. The existing
+documents show the shape, and a document that changes its mind says so rather than rewriting the
+earlier position: `Documentation/Observability.md` and `Documentation/Review.md` are both
+corrections of an earlier pass, and both record the pass they correct.
 
 ---
 
@@ -47,32 +47,32 @@ browser belongs in an ad-hoc run under `.hermes/tools/`, not in the gate.
 
 One convention, everywhere in the tree: folders, files, identifiers and prose.
 
-| Kind       | Rule                                                                   | Example                                           |
-| ---------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
-| Folder     | PascalCase when it names a role; lowercase where an ecosystem fixes it | `Crate/BrowserCDP/Source`, `packages/runtime/src` |
-| File       | PascalCase, one concept per file                                       | `Port.ts`, `Library.rs`, `Scope.md`               |
-| Acronym    | fully uppercase, in names and prose                                    | `CLI`, `URL`, `API`, `JSON`, `CDP`                |
-| Identifier | PascalCase for types and values; camelCase for locals                  | `CDPClient`, `cdpValue`                           |
+| Kind       | Rule                                                                   | Example                                                 |
+| ---------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| Folder     | PascalCase when it names a role; lowercase where an ecosystem fixes it | `Crate/BrowserCDP/Source`, `Package/browser-cdp/Source` |
+| File       | PascalCase, one concept per file                                       | `Port.ts`, `Library.rs`, `Scope.md`                     |
+| Acronym    | fully uppercase, in names and prose                                    | `CLI`, `URL`, `API`, `JSON`, `CDP`                      |
+| Identifier | PascalCase for types and values; camelCase for locals                  | `CDPClient`, `cdpValue`                                 |
 
 A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a file or crate named after one
 keeps it - `BrowserCDP`, `CDPSession`.
 
-Four kinds of name sit outside the rule because something else already fixes their spelling: the
-lowercase TypeScript package directories and their `src/` (`packages/browser-cdp/src`), the
-ecosystem's root files (`package.json`, `module.json`, `Cargo.toml`, `tsconfig.json`), the lowercase
-CLI entry points under `.hermes/tools/` (`cdp-extract.mjs`, `cdp-trace.mjs`), and wire-format field
-names such as `webSocketDebuggerUrl`. A plural stays where the folder is a collection rather than a
-role: `Scripts/` holds independent scripts, `packages/` holds packages, while `Source/Fn` and
-`Source/Struct` name roles.
+Two kinds of name sit outside the rule because something else already fixes their spelling: the
+ecosystem's root files (`package.json`, `module.json`, `Cargo.toml`, `tsconfig.json`) and
+wire-format field names such as `webSocketDebuggerUrl`. A third is narrower than it looks: a
+TypeScript package's directory is the npm package's own name with its scope dropped, so it stays
+lowercase - `Package/browser-cdp` - while everything above and below it follows the rule:
+`Package/`, `Source/`, `Test/`.
 
-The Rust tree is the strict case, because a module path is a file path:
+The two trees have one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/, Test/}` and
+`Package/<Name>/{module.json, Source/, Test/}`. `Source/` holds the code and `Test/` the suites, in
+both. The Rust half is the strict case because a module path is a file path:
 `Crate/<Name>/Source/Library.rs` is the library root, `Fn/` holds operations, `Struct/` holds data
-and contracts, and every module name matches its file. The TypeScript tree keeps PascalCase for the
-file that holds a concept and lowercase for the directory an ecosystem named.
+and contracts, and every module name matches its file.
 
 A rename is mechanical: `git mv` the path, then follow every import, the `module.json` that names
-the package, and the paths quoted in `docs/` and `README.md`. A half-renamed tree does not pass the
-gate, which is the check.
+the package, and the paths quoted in `Documentation/` and `README.md`. A half-renamed tree does not
+pass the gate, which is the check.
 
 ---
 

@@ -1,6 +1,6 @@
-# Build output. `rust/.cargo/config.toml` puts the workspace's build directory at
-# `rust/Target`, and the root entry is for anything a future package emits here.
-rust/Target/
+# Build output. `.cargo/config.toml` puts the workspace's build directory at
+# `Target`, and the anchored entry is the one that matters: a bare `Target/`
+# would match that directory name at any depth.
 /Target/
 
 # Turbo's run cache, if a pipeline is ever added to `turbo.json`.
@@ -10,8 +10,7 @@ rust/Target/
 # hold one.
 node_modules/
 
-# The resolution artefact. `rust/.gitignore` covers the build directory and this
-# rule covers the lockfile: a clone resolves its own versions, and a committed
+# The resolution artefact. A clone resolves its own versions, and a committed
 # lock made the tree fight `cargo update` for no benefit.
 Cargo.lock
 

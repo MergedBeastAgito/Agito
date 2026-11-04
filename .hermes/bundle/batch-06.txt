@@ -1,0 +1,3513 @@
+--- FILE: Crate/SkillContract/Source/Struct/Skill.rs ---
+//! One skill's record, and one rule it breaks.
+//!
+//! The record is what a sweep carries: the directory name is the skill's name,
+//! because that is the address a reader types and an index cites, and
+//! `Directory` is excluded from the digest so the same corpus digests the same
+//! in two checkouts.
+
+use serde::{Deserialize, Serialize};
+
+use crate::Struct::Error::Rule;
+
+/// One skill directory, as `discover` reports it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Skill {
+	/// The directory name, which is the skill's name.
+	pub Name:String,
+	/// Where the skill lives. Excluded from the digest on purpose.
+	pub Directory:String,
+	/// The frontmatter's `description`, trimmed; empty when there is none.
+	pub Description:String,
+	/// The file names directly under `Reference/`, excluding its index, sorted.
+	pub References:Vec<String>,
+}
+
+/// One rule a skill breaks, as `validate` reports it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Finding {
+	/// The skill the finding is about.
+	pub Skill:String,
+	/// Which of the three rules it breaks.
+	pub Rule:String,
+	/// What was observed, kept apart from the sentence a human reads.
+	pub Detail:String,
+}
+
+impl Finding {
+	/// A finding for one skill, from a rule and what was observed.
+	pub fn Of(Skill:&Skill, Rule:Rule, Detail:impl Into<String>) -> Self {
+		Self { Skill:Skill.Name.clone(), Rule:Rule.Name().to_string(), Detail:Detail.into() }
+	}
+
+	/// The rule this finding reports, if it is one of the three.
+	pub fn Code(&self) -> Option<Rule> { Rule::Parse(&self.Rule) }
+}
+
+--- FILE: Crate/SkillContract/Test/Parity.rs ---
+//! The Rust side of the differential run for `agentic.skill.validate`.
+//!
+//! These cases are not written here: they are read from
+//! `scenarios/skill-contract.json`, the same file
+//! `Package/skill-contract/Test/Parity.test.ts` reads. What this file adds is
+//! only the corpus builder, the interpreter and the assertion - the tree, the
+//! steps, the expected result and the expected ordered effect list all come from
+//! the scenario file, so the two implementations cannot drift by being tested
+//! against two hand-written suites.
+//!
+//! The capability reads a real filesystem, so the corpus is real: the fixture is
+//! materialised under `std::env::temp_dir()` exactly as the TypeScript side
+//! materialises it under `mkdtemp`, byte for byte, and removed afterwards. Only
+//! the root path differs between the two runs, and the root path is outside every
+//! observation - `directory` is excluded from the digest and no effect carries a
+//! path.
+//!
+//! `effects` is what the port reported, in order: every skill a `discover`
+//! answered and every finding a `validate` reported. Two ports that answered the
+//! same findings in a different order disagree here, which is the whole point.
+//!
+//! `Test/SkillContract.rs` is kept as it is: that suite is the contract, this one
+//! is the comparison. `AGENTIC_PARITY_OUT=<path>` makes this test also write what
+//! it observed as JSON, which is how `scenarios/run.mjs --compare` gets the Rust
+//! half of the differential run.
+
+#![allow(non_snake_case, non_upper_case_globals)]
+
+use std::{
+	collections::BTreeMap,
+	fs,
+	path::{Path, PathBuf},
+	sync::atomic::{AtomicU64, Ordering},
+	time::{Duration, SystemTime},
+};
+
+use AgenticRuntime::BlockOn;
+use AgenticSkillContract::{Create, Skill, SkillContract};
+use serde_json::{Map, Value, json};
+
+/// Distinguishes two corpora built in the same process, which one test builds
+/// one after another.
+static Counter: AtomicU64 = AtomicU64::new(0);
+
+/// A corpus on disk, removed when the case is done with it.
+struct Corpus {
+	Base: PathBuf,
+	Root: PathBuf,
+}
+
+impl Drop for Corpus {
+	fn drop(&mut self) { let _ = fs::remove_dir_all(&self.Base); }
+}
+
+/// One `SKILL.md`, as the contract suite writes it.
+fn body(Name: &str, Frontmatter: &str) -> String {
+	format!("---\n{Frontmatter}\n---\n\n# {Name}\n\nA body.\n")
+}
+
+/// The corpus root's index, from the skills that are cited.
+fn index(Names: &[String]) -> String {
+	let mut Text = Names
+		.iter()
+		.map(|Name| format!("- [{Name}/]({Name}/)"))
+		.collect::<Vec<String>>()
+		.join("\n");
+	Text.push('\n');
+	Text
+}
+
+/// The file a `touchAfterFirstValidate` hook writes, without its extension.
+fn stem(Document: &str) -> String {
+	let Name = Path::new(Document)
+		.file_name()
+		.map(|Name| Name.to_string_lossy().into_owned())
+		.unwrap_or_default();
+	match Name.rsplit_once('.') {
+		Some((Left, _)) => Left.to_string(),
+		None => Name,
+	}
+}
+
+fn write(Path: &Path, Text: &str) {
+	if let Some(Parent) = Path.parent() {
+		fs::create_dir_all(Parent).expect("a directory is writable");
+	}
+	fs::write(Path, Text).expect("a file is writable");
+}
+
+/// Every skill a fixture describes: the corpus, then the one linked in.
+fn skills_of(Fixture: &Value) -> Vec<Value> {
+	let mut Skills: Vec<Value> = Fixture
+		.get("corpus")
+		.and_then(Value::as_array)
+		.cloned()
+		.unwrap_or_default();
+	if let Some(Linked) = Fixture.get("symlink").filter(|Value| !Value.is_null()) {
+		let mut One = Linked.clone();
+		if let Value::Object(Map) = &mut One {
+			Map.insert("external".to_string(), Value::Bool(true));
+		}
+		Skills.push(One);
+	}
+	Skills
+}
+
+/// Build the corpus a fixture describes, and answer it.
+///
+/// The root sits one directory in from a fresh scratch directory, so the
+/// symlinked skill has somewhere to live that is genuinely outside the corpus -
+/// a link inside the corpus would prove nothing.
+fn materialise(Fixture: &Value) -> Corpus {
+	let Unique = format!(
+		"skill-parity-{}-{}",
+		std::process::id(),
+		Counter.fetch_add(1, Ordering::SeqCst)
+	);
+	let Base = std::env::temp_dir().join(Unique);
+	let _ = fs::remove_dir_all(&Base);
+	fs::create_dir_all(&Base).expect("the scratch directory is writable");
+	let Root = Base.join("corpus");
+	let Corpus = Corpus { Base, Root };
+	if bool_at(Fixture, &["absentRoot"]).unwrap_or(false) {
+		return Corpus;
+	}
+	let Outside = Corpus.Base.join("outside");
+	fs::create_dir_all(&Corpus.Root).expect("the corpus root is writable");
+	let mut Cited: Vec<String> = Vec::new();
+	for Skill in skills_of(Fixture) {
+		let Name = string_at(&Skill, &["name"]).unwrap_or_default();
+		let External = bool_at(&Skill, &["external"]).unwrap_or(false);
+		let Home = if External { Outside.join(&Name) } else { Corpus.Root.join(&Name) };
+		fs::create_dir_all(&Home).expect("the skill directory is writable");
+		if !bool_at(&Skill, &["noBody"]).unwrap_or(false) {
+			write(
+				&Home.join("SKILL.md"),
+				&body(&Name, &string_at(&Skill, &["frontmatter"]).unwrap_or_default()),
+			);
+		}
+		if let Some(References) = Skill.get("references").and_then(Value::as_object) {
+			for (File, Text) in References {
+				write(&Home.join("Reference").join(File), Text.as_str().unwrap_or_default());
+			}
+		}
+		if let Some(Text) = Skill.get("referenceIndex").and_then(Value::as_str) {
+			write(&Home.join("Reference").join("Index.md"), Text);
+		}
+		if External {
+			#[cfg(unix)]
+			std::os::unix::fs::symlink(&Home, Corpus.Root.join(&Name)).expect("the link is created");
+		}
+		if bool_at(&Skill, &["cited"]).unwrap_or(true) {
+			Cited.push(Name);
+		}
+	}
+	if let Some(Files) = Fixture.get("rootFiles").and_then(Value::as_object) {
+		for (File, Text) in Files {
+			write(&Corpus.Root.join(File), Text.as_str().unwrap_or_default());
+		}
+	}
+	if let Some(Name) = Fixture.get("corpusIndex").and_then(Value::as_str) {
+		write(&Corpus.Root.join(Name), &index(&Cited));
+	}
+	Corpus
+}
+
+/// A day forward, on every file under `Path`.
+fn touch(Path: &Path) {
+	let Ok(Entries) = fs::read_dir(Path) else {
+		return;
+	};
+	for Entry in Entries.flatten() {
+		let Child = Entry.path();
+		let Ok(Kind) = Entry.file_type() else {
+			continue;
+		};
+		if Kind.is_dir() {
+			touch(&Child);
+		} else if Kind.is_file() {
+			let Later = SystemTime::now() + Duration::from_secs(86_400);
+			if let Ok(File) = fs::OpenOptions::new().write(true).open(&Child) {
+				let _ = File.set_times(fs::FileTimes::new().set_modified(Later));
+			}
+		}
+	}
+}
+
+/// One record, with the four fields the port promises and nothing else.
+fn record(Document: &Value) -> Skill {
+	Skill {
+		Name: string_at(Document, &["name"]).unwrap_or_default(),
+		Directory: string_at(Document, &["directory"]).unwrap_or_default(),
+		Description: string_at(Document, &["description"]).unwrap_or_default(),
+		References: Document
+			.get("references")
+			.and_then(Value::as_array)
+			.map(|List| List.iter().filter_map(Value::as_str).map(str::to_string).collect())
+			.unwrap_or_default(),
+	}
+}
+
+/// The records a `digest` step hands the port: a literal list, or the last
+/// discovered records with one mutation applied.
+fn digested(Step: &Value, Held: &[Skill]) -> Vec<Skill> {
+	if let Some(List) = Step.get("skills").and_then(Value::as_array) {
+		return List.iter().map(record).collect();
+	}
+	let mut Records = Held.to_vec();
+	let Mutate = Step.get("mutate").cloned().unwrap_or(Value::Null);
+	if bool_at(&Mutate, &["reverse"]).unwrap_or(false) {
+		Records.reverse();
+	}
+	if let Some(At) = number_at(&Mutate, &["at"]) {
+		if let Some(One) = Records.get_mut(At as usize) {
+			if let Some(Name) = string_at(&Mutate, &["name"]) {
+				One.Name = Name;
+			}
+			if let Some(Directory) = string_at(&Mutate, &["directory"]) {
+				One.Directory = Directory;
+			}
+			if let Some(Description) = string_at(&Mutate, &["description"]) {
+				One.Description = Description;
+			}
+			if let Some(References) = Mutate.get("references").and_then(Value::as_array) {
+				One.References = References.iter().filter_map(Value::as_str).map(str::to_string).collect();
+			}
+		}
+	}
+	Records
+}
+
+/// Run one scenario, and answer what it did: the result and the ordered effects.
+fn run_case(Fixture: &Value, Entry: &Value) -> Value {
+	let Fixture = merge(Fixture, Entry.get("fixture").unwrap_or(&Value::Null));
+	let Corpus = materialise(&Fixture);
+	let Root = Corpus.Root.to_string_lossy().into_owned();
+	let Contract = Create();
+	let Hook = string_at(&Fixture, &["touchAfterFirstValidate"]);
+	let Id = string_at(Entry, &["id"]).unwrap_or_else(|| "<unnamed>".to_string());
+
+	let mut Effects: Vec<String> = Vec::new();
+	let mut Held: Vec<Skill> = Vec::new();
+	let mut Touched = false;
+	let mut Result = Value::Null;
+
+	let Steps = Entry.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
+	for Step in &Steps {
+		let Op = string_at(Step, &["op"]).unwrap_or_default();
+		match Op.as_str() {
+			"discover" => {
+				Held = BlockOn(Contract.Discover(&Root));
+				for Skill in &Held {
+					Effects.push(format!("discovered:{}", Skill.Name));
+				}
+				Result = json!({
+					"kind": "names",
+					"names": Held.iter().map(|Skill| Skill.Name.clone()).collect::<Vec<String>>(),
+				});
+			}
+			"touch" => touch(&Corpus.Root),
+			"digest" => {
+				Result = json!({ "kind": "digest", "value": Contract.Digest(&digested(Step, &Held)) });
+			}
+			"validate" | "validateDiscovered" => {
+				let Wanted = string_at(Step, &["skill"]).unwrap_or_default();
+				let One = if Op == "validate" {
+					let Discovered = BlockOn(Contract.Discover(&Root));
+					for Skill in &Discovered {
+						Effects.push(format!("discovered:{}", Skill.Name));
+					}
+					Discovered.into_iter().find(|Skill| Skill.Name == Wanted)
+				} else {
+					Held.iter().find(|Skill| Skill.Name == Wanted).cloned()
+				};
+				let Some(One) = One else {
+					panic!("{Id}: no discovered record for {Wanted}");
+				};
+				let Findings = BlockOn(Contract.Validate(&One));
+				for Finding in &Findings {
+					Effects.push(format!("finding:{}:{}", Finding.Rule, Finding.Skill));
+				}
+				Result = json!({
+					"kind": "findings",
+					"rules": Findings.iter().map(|Finding| Finding.Rule.clone()).collect::<Vec<String>>(),
+				});
+				if !Touched {
+					if let Some(Hook) = &Hook {
+						Touched = true;
+						write(
+							&Path::new(&One.Directory).join(Hook),
+							&format!("# {}\n", stem(Hook)),
+						);
+					}
+				}
+			}
+			Other => panic!("unknown skill step {Other}"),
+		}
+	}
+
+	json!({ "result": Result, "effects": Effects })
+}
+
+/// What one observation got wrong, as sentences. Empty means the case agreed.
+///
+/// This is `scenarios/lib/load.mjs`'s `compare`, written out for the kinds this
+/// capability answers: a `findings` result is compared by rule, a `names` result
+/// by the names and their order, and a `digest` result by its exact constant -
+/// never by a pattern, because the constant is the evidence.
+fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
+	let mut Wrong = Vec::new();
+	let Want = Expect.get("result").cloned().unwrap_or(Value::Null);
+	let Got = Observed.get("result").cloned().unwrap_or(Value::Null);
+	let Kind = |Document: &Value| Document.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
+	if Kind(&Want) != Kind(&Got) {
+		Wrong.push(format!("result kind: wanted {}, got {}", Kind(&Want), Kind(&Got)));
+	} else {
+		match Kind(&Want).as_str() {
+			"findings" => {
+				if Want.get("rules") != Got.get("rules") {
+					Wrong.push(format!(
+						"result rules: wanted {}, got {}",
+						Want.get("rules").unwrap_or(&Value::Null),
+						Got.get("rules").unwrap_or(&Value::Null)
+					));
+				}
+			}
+			"names" => {
+				if Want.get("names") != Got.get("names") {
+					Wrong.push(format!(
+						"result names: wanted {}, got {}",
+						Want.get("names").unwrap_or(&Value::Null),
+						Got.get("names").unwrap_or(&Value::Null)
+					));
+				}
+			}
+			"digest" => {
+				if let Some(Equals) = Want.get("equals") {
+					if Got.get("value") != Some(Equals) {
+						Wrong.push(format!(
+							"result digest: wanted {Equals}, got {}",
+							Got.get("value").unwrap_or(&Value::Null)
+						));
+					}
+				}
+			}
+			Other => Wrong.push(format!("unknown result kind {Other}")),
+		}
+	}
+	if let Some(Effects) = Expect.get("effects") {
+		if Effects != Observed.get("effects").unwrap_or(&Value::Null) {
+			Wrong.push(format!(
+				"effects: wanted {Effects}, got {}",
+				Observed.get("effects").unwrap_or(&Value::Null)
+			));
+		}
+	}
+	Wrong
+}
+
+/// Read a dotted path out of a JSON value.
+fn at<'a>(Document: &'a Value, Path: &[&str]) -> Option<&'a Value> {
+	let mut Cursor = Document;
+	for Step in Path {
+		Cursor = Cursor.get(*Step)?;
+	}
+	Some(Cursor)
+}
+
+fn string_at(Document: &Value, Path: &[&str]) -> Option<String> {
+	at(Document, Path).and_then(Value::as_str).map(str::to_string)
+}
+
+fn bool_at(Document: &Value, Path: &[&str]) -> Option<bool> { at(Document, Path).and_then(Value::as_bool) }
+
+fn number_at(Document: &Value, Path: &[&str]) -> Option<u64> { at(Document, Path).and_then(Value::as_u64) }
+
+/// Merge a patch into a fixture, one level deep per section, recursively. A
+/// missing patch is not a patch: it leaves the fixture alone.
+fn merge(Base: &Value, Patch: &Value) -> Value {
+	if Patch.is_null() {
+		return Base.clone();
+	}
+	match (Base, Patch) {
+		(Value::Object(Base), Value::Object(Patch)) => {
+			let mut Merged = Base.clone();
+			for (Key, Patched) in Patch {
+				let Next = match Merged.get(Key) {
+					Some(Existing) => merge(Existing, Patched),
+					None => Patched.clone(),
+				};
+				Merged.insert(Key.clone(), Next);
+			}
+			Value::Object(Merged)
+		}
+		_ => Patch.clone(),
+	}
+}
+
+/// The scenario file this crate answers to.
+fn scenario_file() -> Value {
+	let Path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenarios/skill-contract.json");
+	let Text = fs::read_to_string(&Path)
+		.unwrap_or_else(|Why| panic!("{} is readable: {Why}", Path.display()));
+	serde_json::from_str(&Text).unwrap_or_else(|Why| panic!("{} is JSON: {Why}", Path.display()))
+}
+
+/// Every case in the file.
+fn cases(File: &Value) -> Vec<Value> {
+	File.get("cases").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+/// A case this side cannot express is skipped, and the file says why.
+fn skipped_on_rust(Entry: &Value) -> bool {
+	Entry
+		.get("skip")
+		.and_then(Value::as_array)
+		.map(|Sides| Sides.iter().any(|Side| Side.as_str() == Some("rust")))
+		.unwrap_or(false)
+}
+
+/// Every scenario, against its expectation, with what was observed left behind
+/// for the differential run to compare against the TypeScript half.
+#[test]
+fn every_scenario_agrees_with_its_expectation() {
+	let File = scenario_file();
+	let Fixture = File.get("fixture").cloned().unwrap_or(Value::Null);
+	let mut Observed: BTreeMap<String, Value> = BTreeMap::new();
+	let mut Wrong: Vec<String> = Vec::new();
+	let mut Ran = 0usize;
+
+	for Entry in cases(&File) {
+		if skipped_on_rust(&Entry) {
+			continue;
+		}
+		let Id = string_at(&Entry, &["id"]).unwrap_or_else(|| "<unnamed>".to_string());
+		let One = run_case(&Fixture, &Entry);
+		for Sentence in mismatches(&One, Entry.get("expect").unwrap_or(&Value::Null)) {
+			Wrong.push(format!("{Id}: {Sentence}"));
+		}
+		Observed.insert(Id, One);
+		Ran += 1;
+	}
+
+	if let Ok(Path) = std::env::var("AGENTIC_PARITY_OUT") {
+		let Document =
+			serde_json::to_string_pretty(&Value::Object(Observed.clone().into_iter().collect::<Map<String, Value>>()))
+				.unwrap_or_default();
+		let _ = fs::write(Path, Document);
+	}
+
+	assert!(!Observed.is_empty(), "no scenarios were found");
+	assert_eq!(
+		Ran,
+		cases(&File).iter().filter(|Entry| !skipped_on_rust(Entry)).count(),
+		"every scenario in the file must run on this side"
+	);
+	assert!(
+		Wrong.is_empty(),
+		"the Rust port disagrees with the scenario file:\n{}",
+		Wrong.join("\n")
+	);
+}
+
+/// Every scenario names a case this crate's contract suite has, so the case map
+/// in `Documentation/Parity.md` cannot point at a test that was renamed away.
+#[test]
+fn every_scenario_names_a_case_the_rust_suite_has() {
+	let Contract = include_str!("../Test/SkillContract.rs");
+	for Entry in cases(&scenario_file()) {
+		let Id = string_at(&Entry, &["id"]).unwrap_or_else(|| "<unnamed>".to_string());
+		let Name = string_at(&Entry, &["rust"]).unwrap_or_else(|| panic!("{Id} names no Rust case"));
+		assert!(
+			Contract.contains(&format!("fn {Name}(")),
+			"{Id} names a Rust case that does not exist: {Name}"
+		);
+	}
+}
+
+--- FILE: Crate/SkillContract/Test/SkillContract.rs ---
+//! `agentic.skill.validate`, exercised against corpora this test builds on
+//! disk.
+//!
+//! No network, no browser and no fixture files checked in: a corpus is a
+//! temporary directory the test writes, so a test can add a file between two
+//! calls and prove that nothing was cached.
+
+use std::{
+	fs,
+	path::{Path, PathBuf},
+};
+
+use AgenticRuntime::BlockOn;
+use AgenticSkillContract::{Create, Finding, Rule, Rules, Skill, SkillContract};
+
+/// A fresh, empty corpus root.
+fn Root(Tag:&str) -> PathBuf {
+	let Base = Path::new(env!("CARGO_TARGET_TMPDIR")).join(Tag);
+	let _ = fs::remove_dir_all(&Base);
+	fs::create_dir_all(&Base).expect("the corpus root is writable");
+	Base
+}
+
+/// A skill directory carrying one `SKILL.md`.
+fn SkillAt(Root:&Path, Name:&str, Frontmatter:&str) -> PathBuf {
+	let Directory = Root.join(Name);
+	fs::create_dir_all(&Directory).expect("the skill directory is writable");
+	fs::write(Directory.join("SKILL.md"), format!("---\n{Frontmatter}\n---\n\n# {Name}\n"))
+		.expect("SKILL.md is writable");
+	Directory
+}
+
+/// One file under a skill's `Reference/`.
+fn ReferenceAt(Directory:&Path, Name:&str, Body:&str) {
+	let References = Directory.join("Reference");
+	fs::create_dir_all(&References).expect("Reference/ is writable");
+	fs::write(References.join(Name), Body).expect("the reference is writable");
+}
+
+/// A skill's `Reference/Index.md`.
+fn ReferenceIndexAt(Directory:&Path, Body:&str) { ReferenceAt(Directory, "Index.md", Body); }
+
+/// The corpus root's index.
+fn CorpusIndexAt(Root:&Path, Name:&str, Body:&str) {
+	fs::write(Root.join(Name), Body).expect("the corpus index is writable");
+}
+
+fn Discovered(Root:&Path, Name:&str) -> Skill {
+	let Skills = BlockOn(Create().Discover(&Root.to_string_lossy()));
+	Skills
+		.into_iter()
+		.find(|Candidate| Candidate.Name == Name)
+		.unwrap_or_else(|| panic!("no skill named {Name} was discovered"))
+}
+
+fn Findings(Skill:&Skill) -> Vec<Finding> { BlockOn(Create().Validate(Skill)) }
+
+fn RulesOf(Findings:&[Finding]) -> Vec<&str> { Findings.iter().map(|Finding| Finding.Rule.as_str()).collect() }
+
+/// The fixture the recorded digest belongs to.
+fn Valid(Root:&Path) -> Skill {
+	let Directory = SkillAt(
+		Root,
+		"Alpha",
+		"name: alpha\ndescription: One honest skill, with its reference listed.",
+	);
+	ReferenceAt(&Directory, "Notes.md", "# Notes\n");
+	ReferenceIndexAt(&Directory, "- [Notes.md](Notes.md)\n");
+	CorpusIndexAt(Root, "Index.md", "- [Alpha](Alpha/SKILL.md)\n");
+	Discovered(Root, "Alpha")
+}
+
+#[test]
+fn the_port_declares_exactly_the_errors_the_manifest_promises() {
+	let Declared:Vec<&str> = Rules.into_iter().map(Rule::Name).collect();
+	assert_eq!(Declared, vec!["unparsable", "unlisted-reference", "uncited"]);
+	let Manifest = include_str!("../module.json");
+	for Name in Declared {
+		assert!(Manifest.contains(&format!("\"{Name}\"")), "{Name} is not in module.json");
+	}
+}
+
+#[test]
+fn discover_returns_every_skill_directory_ordered_by_name() {
+	let Root = Root("order");
+	SkillAt(&Root, "Zulu", "description: Created first, sorted last.");
+	SkillAt(&Root, "Alpha", "description: Created second, sorted first.");
+	let Names:Vec<String> = BlockOn(Create().Discover(&Root.to_string_lossy()))
+		.into_iter()
+		.map(|Skill| Skill.Name)
+		.collect();
+	assert_eq!(Names, vec!["Alpha", "Zulu"]);
+}
+
+#[test]
+fn discover_is_deterministic_across_two_runs() {
+	let Root = Root("deterministic");
+	SkillAt(&Root, "Beta", "description: One.");
+	SkillAt(&Root, "Alpha", "description: Two.");
+	SkillAt(&Root, "Gamma", "description: Three.");
+	let First = BlockOn(Create().Discover(&Root.to_string_lossy()));
+	let Second = BlockOn(Create().Discover(&Root.to_string_lossy()));
+	assert_eq!(First, Second);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_skill_directory_is_discovered_like_a_real_one() {
+	let Elsewhere = Root("symlink-real");
+	SkillAt(&Elsewhere, "Linked", "description: Reached through a link.");
+	let Corpus = Root("symlink");
+	std::os::unix::fs::symlink(Elsewhere.join("Linked"), Corpus.join("Linked")).expect("the link is created");
+	let Names:Vec<String> = BlockOn(Create().Discover(&Corpus.to_string_lossy()))
+		.into_iter()
+		.map(|Skill| Skill.Name)
+		.collect();
+	assert_eq!(Names, vec!["Linked"]);
+}
+
+#[test]
+fn a_valid_skill_has_no_findings() {
+	let Root = Root("valid");
+	let Skill = Valid(&Root);
+	assert_eq!(Findings(&Skill), vec![]);
+	assert_eq!(Skill.Description, "One honest skill, with its reference listed.");
+	assert_eq!(Skill.References, vec!["Notes.md"]);
+}
+
+#[test]
+fn a_reference_file_the_index_does_not_name_is_one_unlisted_reference() {
+	let Root = Root("unlisted");
+	let Directory = SkillAt(&Root, "Beta", "name: beta\ndescription: One file is forgotten.");
+	ReferenceAt(&Directory, "Listed.md", "# Listed\n");
+	ReferenceAt(&Directory, "Unlisted.md", "# Unlisted\n");
+	ReferenceIndexAt(&Directory, "- [Listed.md](Listed.md)\n");
+	CorpusIndexAt(&Root, "Index.md", "- [Beta](Beta/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Beta"));
+	assert_eq!(RulesOf(&Found), vec!["unlisted-reference"]);
+	assert!(Found[0].Detail.contains("Unlisted.md"));
+	assert_eq!(Found[0].Skill, "Beta");
+}
+
+#[test]
+fn a_reference_tree_without_an_index_reports_each_file_as_unlisted() {
+	let Root = Root("no-index");
+	let Directory = SkillAt(&Root, "Gamma", "name: gamma\ndescription: No index at all.");
+	ReferenceAt(&Directory, "One.md", "# One\n");
+	ReferenceAt(&Directory, "Two.md", "# Two\n");
+	CorpusIndexAt(&Root, "Index.md", "- [Gamma](Gamma/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Gamma"));
+	assert_eq!(RulesOf(&Found), vec!["unlisted-reference", "unlisted-reference"]);
+	assert!(Found[0].Detail.contains("there is no Reference/Index.md"));
+}
+
+#[test]
+fn an_index_that_names_a_longer_file_does_not_name_the_shorter_one() {
+	let Root = Root("substring");
+	let Directory = SkillAt(&Root, "Delta", "name: delta\ndescription: One name hides another.");
+	ReferenceAt(&Directory, "Notes.md", "# Notes\n");
+	ReferenceAt(&Directory, "Notes.md.bak", "# Backup\n");
+	ReferenceIndexAt(&Directory, "- [Notes.md.bak](Notes.md.bak)\n");
+	CorpusIndexAt(&Root, "Index.md", "- [Delta](Delta/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Delta"));
+	assert_eq!(RulesOf(&Found), vec!["unlisted-reference"]);
+	assert!(Found[0].Detail.contains("Reference/Notes.md is not named"));
+}
+
+#[test]
+fn a_skill_directory_without_a_body_is_unparsable_and_uncited() {
+	let Root = Root("no-body");
+	fs::create_dir_all(Root.join("Empty")).expect("the directory is writable");
+	let Skill = Discovered(&Root, "Empty");
+	let Found = Findings(&Skill);
+	assert_eq!(RulesOf(&Found), vec!["unparsable", "uncited"]);
+	assert!(Found[0].Detail.contains("carries no SKILL.md"));
+}
+
+#[test]
+fn unparsable_frontmatter_is_a_finding_not_a_rejection() {
+	let Root = Root("unparsable");
+	SkillAt(&Root, "Epsilon", "name: epsilon\nthis line is neither a key nor a value");
+	CorpusIndexAt(&Root, "Index.md", "- [Epsilon](Epsilon/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Epsilon"));
+	assert_eq!(RulesOf(&Found), vec!["unparsable"]);
+	assert!(Found[0].Detail.contains("is not a key: value pair"));
+}
+
+#[test]
+fn a_frontmatter_without_a_description_is_unparsable() {
+	let Root = Root("no-description");
+	SkillAt(&Root, "Zeta", "name: zeta");
+	CorpusIndexAt(&Root, "Index.md", "- [Zeta](Zeta/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Zeta"));
+	assert_eq!(RulesOf(&Found), vec!["unparsable"]);
+	assert!(Found[0].Detail.contains("states no description"));
+}
+
+#[test]
+fn a_frontmatter_name_that_disagrees_with_the_directory_is_unparsable() {
+	let Root = Root("renamed");
+	SkillAt(&Root, "Eta", "name: theta\ndescription: A rename that stopped halfway.");
+	CorpusIndexAt(&Root, "Index.md", "- [Eta](Eta/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Eta"));
+	assert_eq!(RulesOf(&Found), vec!["unparsable"]);
+	assert!(Found[0].Detail.contains("the frontmatter names \"theta\""));
+}
+
+#[test]
+fn a_corpus_root_that_names_its_skills_in_agents_md_is_read_as_well() {
+	let Root = Root("agents");
+	SkillAt(&Root, "Iota", "name: iota\ndescription: Cited by the repository's own index.");
+	CorpusIndexAt(&Root, "AGENTS.md", "- [Iota](Iota/SKILL.md)\n");
+	assert_eq!(Findings(&Discovered(&Root, "Iota")), vec![]);
+}
+
+#[test]
+fn a_skill_the_corpus_index_does_not_name_is_uncited() {
+	let Root = Root("uncited");
+	SkillAt(&Root, "Kappa", "name: kappa\ndescription: Nothing points at it.");
+	CorpusIndexAt(&Root, "Index.md", "- [SomethingElse](SomethingElse/SKILL.md)\n");
+	let Found = Findings(&Discovered(&Root, "Kappa"));
+	assert_eq!(RulesOf(&Found), vec!["uncited"]);
+	assert!(Found[0].Detail.contains("Index.md does not name Kappa/"));
+}
+
+#[test]
+fn a_corpus_root_with_no_index_at_all_is_uncited() {
+	let Root = Root("no-corpus-index");
+	SkillAt(&Root, "Lambda", "name: lambda\ndescription: No index to cite it.");
+	let Found = Findings(&Discovered(&Root, "Lambda"));
+	assert_eq!(RulesOf(&Found), vec!["uncited"]);
+	assert!(Found[0].Detail.contains("carries no Index.md or AGENTS.md"));
+}
+
+#[test]
+fn every_finding_uses_one_of_the_three_rules_the_manifest_declares() {
+	let Root = Root("vocabulary");
+	SkillAt(&Root, "Mu", "");
+	let Found = Findings(&Discovered(&Root, "Mu"));
+	assert!(!Found.is_empty());
+	for Finding in &Found {
+		assert!(Finding.Code().is_some(), "{} is not one of the three rules", Finding.Rule);
+	}
+}
+
+#[test]
+fn validate_is_stateless_and_answers_the_same_findings_twice() {
+	let Root = Root("stateless");
+	let Skill = Valid(&Root);
+	let First = Findings(&Skill);
+	let Second = Findings(&Skill);
+	assert_eq!(First, Second);
+	assert_eq!(First, vec![]);
+}
+
+#[test]
+fn validate_re_reads_the_directory_so_a_later_file_is_reported() {
+	let Root = Root("re-read");
+	let Skill = Valid(&Root);
+	assert_eq!(Findings(&Skill), vec![]);
+	ReferenceAt(Path::new(&Skill.Directory), "Added.md", "# Added later\n");
+	let Found = Findings(&Skill);
+	assert_eq!(RulesOf(&Found), vec!["unlisted-reference"]);
+	assert!(Found[0].Detail.contains("Added.md"));
+}
+
+#[test]
+fn a_skill_with_no_reference_tree_is_valid() {
+	let Root = Root("no-references");
+	SkillAt(&Root, "Nu", "name: nu\ndescription: Nothing but a body.");
+	CorpusIndexAt(&Root, "Index.md", "- [Nu](Nu/SKILL.md)\n");
+	let Skill = Discovered(&Root, "Nu");
+	assert_eq!(Skill.References, Vec::<String>::new());
+	assert_eq!(Findings(&Skill), vec![]);
+}
+
+#[test]
+fn a_folded_description_is_read_as_the_description() {
+	let Root = Root("folded");
+	SkillAt(
+		&Root,
+		"Xi",
+		"name: xi\ndescription: >\n  A description that spans\n  two lines.",
+	);
+	CorpusIndexAt(&Root, "Index.md", "- [Xi](Xi/SKILL.md)\n");
+	let Skill = Discovered(&Root, "Xi");
+	assert_eq!(Skill.Description, "A description that spans two lines.");
+	assert_eq!(Findings(&Skill), vec![]);
+}
+
+#[test]
+fn an_unreadable_root_is_an_empty_corpus_not_a_failure() {
+	let Missing = Path::new(env!("CARGO_TARGET_TMPDIR")).join("there-is-no-corpus-here");
+	let Skills = BlockOn(Create().Discover(&Missing.to_string_lossy()));
+	assert_eq!(Skills, vec![]);
+	let Digest = Create().Digest(&[]);
+	assert_eq!(Digest.len(), "sha256:".len() + 64);
+	assert!(Digest.starts_with("sha256:"));
+}
+
+#[test]
+fn the_digest_ignores_modification_times_and_directories() {
+	let Root = Root("digest-times");
+	let Skill = Valid(&Root);
+	let Before = Create().Digest(std::slice::from_ref(&Skill));
+	let Moved = Skill { Directory:"/somewhere/else".to_string(), ..Skill.clone() };
+	let After = Create().Digest(std::slice::from_ref(&Moved));
+	assert_eq!(Before, After);
+}
+
+#[test]
+fn the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes() {
+	let Root = Root("digest-changes");
+	let Skill = Valid(&Root);
+	let Base = Create().Digest(std::slice::from_ref(&Skill));
+	let Renamed = Skill { Name:"Alpha2".to_string(), ..Skill.clone() };
+	assert_ne!(Base, Create().Digest(std::slice::from_ref(&Renamed)));
+	let Described = Skill { Description:"Another sentence.".to_string(), ..Skill.clone() };
+	assert_ne!(Base, Create().Digest(std::slice::from_ref(&Described)));
+	let Referenced = Skill { References:vec!["Notes.md".to_string(), "Other.md".to_string()], ..Skill.clone() };
+	assert_ne!(Base, Create().Digest(std::slice::from_ref(&Referenced)));
+	let Other = Skill { Name:"Zulu".to_string(), ..Skill.clone() };
+	assert_ne!(
+		Create().Digest(&[Skill.clone(), Other.clone()]),
+		Create().Digest(&[Other, Skill])
+	);
+}
+
+#[test]
+fn the_digest_of_the_valid_skill_is_the_recorded_one() {
+	// The same value the TypeScript suite records, which is what proves the two
+	// trees canonicalise a corpus identically rather than merely stably.
+	let Root = Root("digest-recorded");
+	let Skill = Valid(&Root);
+	assert_eq!(
+		Create().Digest(std::slice::from_ref(&Skill)),
+		"sha256:86b8b052e5214defc8a0940faccaba3b4436a5d5545afabcc08ec5ad7cb8b4f9"
+	);
+}
+
+--- FILE: Crate/Workflow/Source/Fn.rs ---
+//! Functions: the measurement expression, and the composition that uses all
+//! four capabilities.
+
+pub mod Measure;
+pub mod VerifySkillPage;
+
+--- FILE: Crate/Workflow/Source/Fn/Measure.rs ---
+//! The one expression that turns a page into measurements.
+//!
+//! This is a *workflow* decision, not a capability's: the verification package
+//! must not know what an element is, so the convention for reading one lives
+//! here, where a particular site can replace it.
+//!
+//! What it reads: `data-value` when the element carries one, parsed as a number
+//! when it is numeric, and the element's trimmed text otherwise. A selector
+//! that matches nothing is `present: false` with a `null` value, which is the
+//! wire shape the capability's port asks for.
+//!
+//! The JavaScript is `Source/Script/Measure.js`, taken whole. The one value this
+//! function supplies - the selector list, already a JSON array - is written where
+//! it belongs as `{{selectors}}` and filled at call time, so the file is the
+//! expression and this function is only its parameter.
+
+use AgenticRuntime::Fill;
+use serde_json::Value;
+
+/// The expression itself.
+const MeasureScript:&str = include_str!("../Script/Measure.js");
+
+/// A JavaScript expression that answers one measurement per selector.
+pub fn MeasurementExpression(Selectors:&[String]) -> String {
+	let Selectors = serde_json::to_string(Selectors).unwrap_or_else(|_| "[]".to_string());
+	Fill(MeasureScript, &[("selectors", &Selectors)])
+}
+
+/// The selectors a caller asked about, as a JSON array, for a harness that
+/// wants to see what was sent without building a page.
+pub fn MeasurementSelectors(Expression:&str) -> Option<Value> {
+	let Start = Expression.rfind("return ")?;
+	let Rest = &Expression[Start + "return ".len()..];
+	let End = Rest.find(".map(Read)")?;
+	serde_json::from_str(&Rest[..End]).ok()
+}
+
+#[cfg(test)]
+mod Tests {
+	use super::*;
+	use AgenticRuntime::Unfilled;
+
+	/// The script is filled completely, the check that says so bites, and what
+	/// the expression was built from can still be read back out of it.
+	///
+	/// The read-back is the part that a rewrite would break silently:
+	/// `MeasurementSelectors` finds `return ` and `.map(Read)` in the built
+	/// string, so a template that moved either marker would leave every
+	/// measurement test passing and every read-back answering `None`.
+	#[test]
+	fn the_measure_expression_is_filled_and_can_be_read_back() {
+		let Selectors = vec!["#main".to_string(), "body > p".to_string()];
+		let Built = MeasurementExpression(&Selectors);
+		assert_eq!(Unfilled(&Built), None, "the expression still carries a placeholder");
+		assert_eq!(Unfilled(MeasureScript).as_deref(), Some("selectors"), "the script carries no placeholder, so nothing proves the fill ran");
+		assert_eq!(MeasurementSelectors(&Built), Some(serde_json::json!(["#main", "body > p"])));
+	}
+}
+
+--- FILE: Crate/Workflow/Source/Fn/VerifySkillPage.rs ---
+//! One composition that uses four capabilities in the order a release check
+//! does.
+//!
+//! A corpus is swept, every skill is validated, the corpus is digested, and
+//! then a built page is measured and judged. It is written here rather than in
+//! a capability because it is the composition that knows all four, and it is
+//! written at all because a workflow crate with no workflow in it is a
+//! directory.
+//!
+//! The order is the interesting part: the corpus is read before the page is
+//! touched, so a release check that finds a broken skill does not pay for a
+//! browser, and a page that cannot be measured does not hide the findings that
+//! were already collected.
+
+use AgenticDesignVerification::{Invariant, Measurement, Verdict, Verify};
+use AgenticRuntime::{Call, FutureBox};
+use AgenticSkillContract::{Finding, Skill, SkillContract};
+
+/// What one release check found.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Outcome {
+	/// Every skill the corpus holds.
+	pub Skills:Vec<Skill>,
+	/// Every rule a skill broke.
+	pub Findings:Vec<Finding>,
+	/// The corpus digest, which is stable across checkouts.
+	pub Digest:String,
+	/// What the page measured, when there was a page to measure.
+	pub Measurements:Vec<Measurement>,
+	/// The verdict, when there was one.
+	pub Verdict:Option<Verdict>,
+	/// Why the page could not be measured, when it could not be.
+	pub Failure:Option<String>,
+}
+
+impl Outcome {
+	/// Whether the corpus is clean and the page held.
+	pub fn Held(&self) -> bool {
+		self.Findings.is_empty() && self.Failure.is_none() && self.Verdict.as_ref().is_none_or(|Verdict| Verdict.Held)
+	}
+}
+
+/// Sweep a corpus, then measure and judge a page.
+pub fn VerifySkillPage<'a>(
+	Contract:&'a dyn SkillContract,
+	Verify:&'a dyn Verify,
+	Root:&'a str,
+	Selectors:&'a [String],
+	Invariants:&'a [Invariant],
+	Call:Call,
+) -> FutureBox<'a, Outcome> {
+	Box::pin(async move {
+		let Skills = Contract.Discover(Root).await;
+		let mut Findings = Vec::new();
+		for Skill in &Skills {
+			Findings.extend(Contract.Validate(Skill).await);
+		}
+		let Digest = Contract.Digest(&Skills);
+		let mut Outcome = Outcome { Skills, Findings, Digest, ..Outcome::default() };
+
+		if Selectors.is_empty() {
+			return Outcome;
+		}
+
+		match Verify.Measure(Selectors, Call).await {
+			Ok(Measurements) => {
+				Outcome.Verdict = Some(Verify.Check(Invariants, &Measurements));
+				Outcome.Measurements = Measurements;
+			},
+			Err(Why) => Outcome.Failure = Some(format!("{}: {}", Why.Code().Name(), Why.Message())),
+		}
+		Outcome
+	})
+}
+
+--- FILE: Crate/Workflow/Source/Library.rs ---
+//! Adapter-independent compositions, and the one place that knows both sides of
+//! a port.
+//!
+//! This crate exists to hold the thing neither a capability nor an adapter may
+//! hold: the translation between a consumer's own trait and the browser
+//! substrate. `chat-driver` declares `Page` and must not know a browser;
+//! `browser-cdp` exports `Browse` and must not know a chat product.
+//! [`Struct::Binding`] implements the first in terms of the second, and that is
+//! what a composition layer is for.
+//!
+//! The translation is deliberately small and deliberately not shared. A
+//! "universal browser request" type that both capabilities could use would
+//! quietly become the ports crate the whole design exists to avoid, so each
+//! binding converts on its own and keeps its own conventions.
+
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::upper_case_acronyms)]
+
+pub mod Fn;
+pub mod Struct;
+
+pub use crate::{
+	Fn::{
+		Measure::MeasurementExpression,
+		VerifySkillPage::{Outcome, VerifySkillPage},
+	},
+	Struct::Binding::{Measure::Measure, Page::Page},
+};
+
+--- FILE: Crate/Workflow/Source/Struct.rs ---
+//! Types: the two bindings, and nothing else.
+
+pub mod Binding;
+
+--- FILE: Crate/Workflow/Source/Struct/Binding.rs ---
+//! The bridge from the browser substrate to the two consumer-owned ports.
+//!
+//! One module per consumer, because they are not the same port and must not be
+//! made to be: [`Page`] serves the chat driver's `Page` - open, ask, release,
+//! no ownership - and [`Measure`] serves design verification's `Browse` - read
+//! the named elements of one configured page, retaining nothing.
+
+pub mod Measure;
+pub mod Page;
+
+--- FILE: Crate/Workflow/Source/Struct/Binding/Measure.rs ---
+//! Design verification's `Browse`, over the browser substrate.
+//!
+//! The capability's port has one verb and no session, so this binding opens the
+//! configured page for each measurement and releases it afterwards. That is not
+//! an oversight: the manifest says `stateless`, and a binding that kept a page
+//! alive between measurements would turn a stateless capability into a
+//! `holds-transport` one behind its own manifest.
+//!
+//! The expression this binding sends is the one place a page convention lives,
+//! and it is deliberately in the workflow rather than in the verification
+//! package: the package must not know what an element is, and a workflow is
+//! exactly the layer that decides how a particular site is read.
+
+use std::sync::Arc;
+
+use AgenticBrowserCDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions};
+use AgenticDesignVerification::{Browse, Failure};
+use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
+
+use crate::Fn::Measure::MeasurementExpression;
+
+/// The verification capability's transport, served by the browser substrate.
+pub struct Measure {
+	Browse:Arc<dyn BrowserBrowse>,
+	Url:String,
+}
+
+/// Bind design verification's `Browse` to one page of one browser.
+pub fn Create(Browse:Arc<dyn BrowserBrowse>, Url:impl Into<String>) -> Measure { Measure { Browse, Url:Url.into() } }
+
+/// A browser failure, said in the verification port's vocabulary.
+fn Classify(Why:BrowserError) -> Failure {
+	Failure {
+		Message:format!("{}: {}", Why.Code().Name(), Why.Message()),
+		Detail:Why.Detail().to_string(),
+	}
+}
+
+impl Browse for Measure {
+	fn Measure<'a>(&'a self, Selectors:&'a [String], Call:Call) -> FutureBox<'a, Result<Vec<Value>, Failure>> {
+		Box::pin(async move {
+			let Target = self
+				.Browse
+				.Open(&self.Url, OpenOptions::Launch(Call.clone()))
+				.await
+				.map_err(Classify)?;
+			let Expression = MeasurementExpression(Selectors);
+			let Read = self.Browse.Evaluate(&Target, &Expression, Call).await;
+			// Released on every path: the capability is stateless, so the page
+			// must not outlive the measurement that asked for it.
+			self.Browse.Dispose(Target).await;
+			match Read {
+				Ok(Value::Array(Entries)) => Ok(Entries),
+				Ok(Other) => {
+					Err(Failure::Of(format!(
+						"the page answered {Other} instead of a list of measurements"
+					)))
+				},
+				Err(Why) => Err(Classify(Why)),
+			}
+		})
+	}
+}
+
+--- FILE: Crate/Workflow/Source/Struct/Binding/Page.rs ---
+//! The chat driver's `Page`, over the browser substrate.
+//!
+//! Three translations, and each one is a decision this layer owns:
+//!
+//! 1. **Ownership.** `Page` has no ownership because a chat driver must not
+//!    care whether the browser was launched or attached. This binding launches,
+//!    because a capability that asks a product a question owns the page it
+//!    opened; a caller that wants a shared browser supplies a `Browse` that
+//!    attaches instead.
+//! 2. **The handle.** The driver passes back whatever `Open` returned and never
+//!    reads it, so the browser target lives here, keyed by the URL the driver
+//!    does keep. That is the whole of "a provider may hang whatever it needs
+//!    there".
+//! 3. **The vocabulary.** A browser failure has three codes and the chat port
+//!    has four; the browser's code and message travel in the failure's
+//!    `message`, and its observation in `detail`, so the driver can map the
+//!    whole thing onto `not-ready` without losing which of the three happened.
+
+use std::{
+	collections::HashMap,
+	sync::{Arc, Mutex, MutexGuard},
+};
+
+use AgenticBrowserCDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions, Target as BrowserTarget};
+use AgenticChatDriver::{Failure, Page as ChatPage, Target};
+use AgenticRuntime::{Call, FutureBox};
+use serde_json::Value;
+
+/// The chat driver's page, served by the browser substrate.
+pub struct Page {
+	Browse:Arc<dyn BrowserBrowse>,
+	/// Where to attach, when the caller wants a browser it did not start.
+	Attach:Option<String>,
+	/// Which page to bind on that browser, when it is not a new one.
+	Bind:Option<String>,
+	/// What each chat target was bound to, by URL.
+	Held:Mutex<HashMap<String, BrowserTarget>>,
+}
+
+/// Bind the chat driver's `Page` to a browser this session launches.
+pub fn Create(Browse:Arc<dyn BrowserBrowse>) -> Page {
+	Page { Browse, Attach:None, Bind:None, Held:Mutex::new(HashMap::new()) }
+}
+
+/// Bind the chat driver's `Page` to a browser somebody else owns, and to the
+/// page `Bind` names when it is given.
+///
+/// Attaching without a bind opens a page in that browser; attaching with one
+/// drives the page that is already there, which is the difference between a
+/// test run and a conversation with a tab a person is looking at.
+pub fn Attached(Browse:Arc<dyn BrowserBrowse>, Endpoint:impl Into<String>, Bind:Option<String>) -> Page {
+	Page { Browse, Attach:Some(Endpoint.into()), Bind, Held:Mutex::new(HashMap::new()) }
+}
+
+impl Page {
+	fn Lock(&self) -> MutexGuard<'_, HashMap<String, BrowserTarget>> {
+		self.Held.lock().unwrap_or_else(|Poison| Poison.into_inner())
+	}
+}
+
+/// A browser failure, said in the chat port's vocabulary.
+///
+/// The code is kept: a consumer reading `detail` can still tell an unavailable
+/// browser from a page that failed to load, which is the difference between
+/// retrying and fixing the page.
+fn Classify(Why:BrowserError) -> Failure {
+	Failure {
+		Message:format!("{}: {}", Why.Code().Name(), Why.Message()),
+		Detail:Why.Detail().to_string(),
+	}
+}
+
+impl ChatPage for Page {
+	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
+		Box::pin(async move {
+			let Options = match (&self.Attach, &self.Bind) {
+				(Some(Endpoint), Some(Key)) => OpenOptions::Existing(Endpoint.clone(), Key.clone(), Call),
+				(Some(Endpoint), None) => OpenOptions::Attach(Endpoint.clone(), Call),
+				(None, _) => OpenOptions::Launch(Call),
+			};
+			let Target = self.Browse.Open(Url, Options).await.map_err(Classify)?;
+			self.Lock().insert(Target.Url.clone(), Target.clone());
+			Ok(Target { Url:Target.Url })
+		})
+	}
+
+	fn Evaluate<'a>(
+		&'a self,
+		Target:&'a Target,
+		Expression:&'a str,
+		Call:Call,
+	) -> FutureBox<'a, Result<Value, Failure>> {
+		Box::pin(async move {
+			let Held = self.Lock().get(&Target.Url).cloned();
+			let Some(Held) = Held else {
+				return Err(Failure::Of("this binding holds no browser target for the page"));
+			};
+			self.Browse.Evaluate(&Held, Expression, Call).await.map_err(Classify)
+		})
+	}
+
+	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()> {
+		Box::pin(async move {
+			let Held = self.Lock().remove(&Target.Url);
+			if let Some(Held) = Held {
+				self.Browse.Dispose(Held).await;
+			}
+		})
+	}
+}
+
+--- FILE: Crate/Workflow/Test/Workflow.rs ---
+//! The bridge and the composition, exercised against a fake browser.
+//!
+//! No browser and no network: the substrate is a fake that answers the
+//! expressions the bindings send, and a clock the test owns decides what a
+//! deadline means.
+
+use std::{
+	sync::{
+		Arc,
+		Mutex,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::{Duration, Instant},
+};
+
+use AgenticBrowserCDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions, Target};
+use AgenticChatDriver::{Failure, Page, Target as ChatTarget};
+use AgenticDesignVerification::{Browse, Create as CreateVerifier, Invariant, Measurement};
+use AgenticRuntime::{BlockOn, Call, Clock, FutureBox, Never, Pace};
+use AgenticSkillContract::Create as CreateContract;
+use AgenticWorkflow::{MeasurementExpression, VerifySkillPage};
+use serde_json::{Value, json};
+
+fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
+
+/// A clock the test owns.
+struct TestPace {
+	Now:Mutex<Instant>,
+}
+
+impl TestPace {
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()) }) }
+}
+
+impl Clock for TestPace {
+	fn Now(&self) -> Instant { *self.Now.lock().unwrap() }
+}
+
+impl Pace for TestPace {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> {
+		*self.Now.lock().unwrap() += Span.max(Duration::from_millis(1));
+		Box::pin(std::future::ready(()))
+	}
+}
+
+/// A browser that answers the expression it is handed.
+struct FakeBrowse {
+	Answer:Mutex<Result<Value, BrowserError>>,
+	Opens:AtomicU64,
+	Disposes:AtomicU64,
+	Expressions:Mutex<Vec<String>>,
+}
+
+impl FakeBrowse {
+	fn Answering(Value:Value) -> Arc<Self> {
+		Arc::new(Self {
+			Answer:Mutex::new(Ok(Value)),
+			Opens:AtomicU64::new(0),
+			Disposes:AtomicU64::new(0),
+			Expressions:Mutex::new(Vec::new()),
+		})
+	}
+
+	fn Failing(Why:BrowserError) -> Arc<Self> {
+		Arc::new(Self {
+			Answer:Mutex::new(Err(Why)),
+			Opens:AtomicU64::new(0),
+			Disposes:AtomicU64::new(0),
+			Expressions:Mutex::new(Vec::new()),
+		})
+	}
+}
+
+impl BrowserBrowse for FakeBrowse {
+	fn Open<'a>(&'a self, Url:&'a str, _Options:OpenOptions) -> FutureBox<'a, Result<Target, BrowserError>> {
+		self.Opens.fetch_add(1, Ordering::SeqCst);
+		let Answer = self.Answer.lock().unwrap().clone();
+		Box::pin(async move {
+			// A fake that is scripted to fail fails everywhere, so a test can
+			// say "this browser is unreachable" once and mean it.
+			if let Err(Why) = Answer {
+				return Err(Why);
+			}
+			Ok(Target {
+				Url:Url.to_string(),
+				Ws:"ws://fake".to_string(),
+				Ownership:AgenticBrowserCDP::Ownership::Launched,
+			})
+		})
+	}
+
+	fn Evaluate<'a>(
+		&'a self,
+		_Target:&'a Target,
+		Expression:&'a str,
+		_Call:Call,
+	) -> FutureBox<'a, Result<Value, BrowserError>> {
+		self.Expressions.lock().unwrap().push(Expression.to_string());
+		let Answer = self.Answer.lock().unwrap().clone();
+		Box::pin(async move { Answer })
+	}
+
+	fn Dispose<'a>(&'a self, _Target:Target) -> FutureBox<'a, ()> {
+		self.Disposes.fetch_add(1, Ordering::SeqCst);
+		Box::pin(async move {})
+	}
+}
+
+fn Call(Pace:&TestPace) -> Call { Call::Within(Span(2_000), Pace, Arc::new(Never)) }
+
+#[test]
+fn the_page_binding_opens_launches_and_hands_the_driver_a_target_it_can_pass_back() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!("ok"));
+	let Page = AgenticWorkflow::Struct::Binding::Page::Create(Browse.clone());
+	let Target:ChatTarget = BlockOn(Page.Open("https://chat.example/", Call(&Pace))).expect("opened");
+	assert_eq!(Target.Url, "https://chat.example/");
+	assert_eq!(Browse.Opens.load(Ordering::SeqCst), 1);
+	let Value = BlockOn(Page.Evaluate(&Target, "1 + 1", Call(&Pace))).expect("evaluated");
+	assert_eq!(Value, json!("ok"));
+	BlockOn(Page.Dispose(Target));
+	assert_eq!(Browse.Disposes.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_page_binding_releases_the_browser_target_when_the_driver_releases_its_own() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!("ok"));
+	let Page = AgenticWorkflow::Struct::Binding::Page::Create(Browse.clone());
+	let Target = BlockOn(Page.Open("https://chat.example/", Call(&Pace))).expect("opened");
+	BlockOn(Page.Dispose(Target.clone()));
+	// A second release is silent, and the browser is not asked twice.
+	BlockOn(Page.Dispose(Target.clone()));
+	assert_eq!(Browse.Disposes.load(Ordering::SeqCst), 1);
+	// And the handle is gone: asking the page again fails in the binding's
+	// vocabulary.
+	let Failure = BlockOn(Page.Evaluate(&Target, "1 + 1", Call(&Pace))).expect_err("failed");
+	assert!(Failure.Message.contains("holds no browser target"));
+}
+
+#[test]
+fn the_page_binding_keeps_the_browser_code_in_the_message_and_the_observation_in_the_detail() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Failing(BrowserError::Navigation("the page did not load", "404"));
+	let Page = AgenticWorkflow::Struct::Binding::Page::Create(Browse);
+	let Failure:Failure = BlockOn(Page.Open("https://chat.example/", Call(&Pace))).expect_err("failed");
+	assert!(Failure.Message.contains("navigation-failed"), "{}", Failure.Message);
+	assert_eq!(Failure.Detail, "404");
+}
+
+#[test]
+fn the_measure_binding_opens_measures_and_releases_the_page_every_time() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!([
+		{ "selector": "[data-rail]", "present": true, "value": 320 }
+	]));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse.clone(), "https://site.example/");
+	let Selectors = vec!["[data-rail]".to_string()];
+	let Measurements = BlockOn(Measure.Measure(&Selectors, Call(&Pace))).expect("measured");
+	assert_eq!(Measurements.len(), 1);
+	assert_eq!(Browse.Opens.load(Ordering::SeqCst), 1);
+	assert_eq!(Browse.Disposes.load(Ordering::SeqCst), 1, "stateless: it released");
+}
+
+#[test]
+fn the_measure_binding_sends_the_expression_the_workflow_built() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!([]));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse.clone(), "https://site.example/");
+	let Selectors = vec!["[data-rail]".to_string(), "[data-drawer]".to_string()];
+	let _ = BlockOn(Measure.Measure(&Selectors, Call(&Pace)));
+	let Sent = Browse.Expressions.lock().unwrap().clone();
+	assert_eq!(Sent.len(), 1);
+	assert_eq!(Sent[0], MeasurementExpression(&Selectors));
+	assert!(Sent[0].contains("data-value"));
+	assert!(Sent[0].contains("[data-drawer]"));
+}
+
+#[test]
+fn the_measure_binding_refuses_an_answer_that_is_not_a_list() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!("not a list"));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse.clone(), "https://site.example/");
+	let Selectors = vec!["[data-rail]".to_string()];
+	let Failure = BlockOn(Measure.Measure(&Selectors, Call(&Pace))).expect_err("failed");
+	assert!(Failure.Message.contains("instead of a list"));
+	assert_eq!(Browse.Disposes.load(Ordering::SeqCst), 1, "still released");
+}
+
+#[test]
+fn the_composition_reads_the_corpus_before_it_touches_a_page() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!([
+		{ "selector": "[data-rail]", "present": true, "value": 320 }
+	]));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse.clone(), "https://site.example/");
+	let Verifier = CreateVerifier(Arc::new(Measure), Pace.clone());
+	let Contract = CreateContract();
+	let Root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-corpus-here");
+	let Selectors = vec!["[data-rail]".to_string()];
+	let Outcome = BlockOn(VerifySkillPage(
+		&Contract,
+		&Verifier,
+		&Root.to_string_lossy(),
+		&Selectors,
+		&[],
+		Call(&Pace),
+	));
+	assert!(Outcome.Skills.is_empty());
+	assert!(Outcome.Findings.is_empty());
+	assert!(Outcome.Digest.starts_with("sha256:"));
+	assert!(Outcome.Verdict.is_some());
+	assert!(Outcome.Held());
+}
+
+#[test]
+fn the_composition_reports_a_corpus_that_broke_before_it_reports_a_page() {
+	let Pace = TestPace::New();
+	let Root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("workflow-corpus");
+	let _ = std::fs::remove_dir_all(&Root);
+	let Skill = Root.join("Broken");
+	std::fs::create_dir_all(&Skill).expect("the corpus is writable");
+	std::fs::write(Skill.join("SKILL.md"), "---\nname: broken\n---\n").expect("SKILL.md");
+	let Browse = FakeBrowse::Answering(json!([]));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse.clone(), "https://site.example/");
+	let Verifier = CreateVerifier(Arc::new(Measure), Pace.clone());
+	let Contract = CreateContract();
+	let Outcome = BlockOn(VerifySkillPage(
+		&Contract,
+		&Verifier,
+		&Root.to_string_lossy(),
+		&[],
+		&[],
+		Call(&Pace),
+	));
+	assert_eq!(Outcome.Skills.len(), 1);
+	assert!(!Outcome.Findings.is_empty());
+	assert!(!Outcome.Held());
+	assert_eq!(Browse.Opens.load(Ordering::SeqCst), 0, "no page was touched");
+}
+
+#[test]
+fn the_composition_judges_the_page_against_the_callers_invariants() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Answering(json!([
+		{ "selector": "[data-rail]", "present": true, "value": 320 }
+	]));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse, "https://site.example/");
+	let Verifier = CreateVerifier(Arc::new(Measure), Pace.clone());
+	let Contract = CreateContract();
+	let Root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-corpus-here");
+	let Selectors = vec!["[data-rail]".to_string()];
+	let Invariants = vec![Invariant::Equal(
+		"the rail is 320 wide",
+		|Measurements:&[Measurement]| Ok(Measurements[0].Value.clone()),
+		json!(320),
+	)];
+	let Outcome = BlockOn(VerifySkillPage(
+		&Contract,
+		&Verifier,
+		&Root.to_string_lossy(),
+		&Selectors,
+		&Invariants,
+		Call(&Pace),
+	));
+	let Verdict = Outcome.Verdict.expect("a verdict");
+	assert!(Verdict.Held);
+	assert_eq!(Verdict.Evidence[0].Label, "the rail is 320 wide");
+	assert_eq!(Outcome.Measurements.len(), 1);
+}
+
+#[test]
+fn the_composition_keeps_the_findings_when_the_page_cannot_be_measured() {
+	let Pace = TestPace::New();
+	let Browse = FakeBrowse::Failing(BrowserError::Unavailable("connection refused", "ws://none"));
+	let Measure = AgenticWorkflow::Struct::Binding::Measure::Create(Browse, "https://site.example/");
+	let Verifier = CreateVerifier(Arc::new(Measure), Pace.clone());
+	let Contract = CreateContract();
+	let Root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-corpus-here");
+	let Selectors = vec!["[data-rail]".to_string()];
+	let Outcome = BlockOn(VerifySkillPage(
+		&Contract,
+		&Verifier,
+		&Root.to_string_lossy(),
+		&Selectors,
+		&[],
+		Call(&Pace),
+	));
+	assert!(Outcome.Failure.as_deref().unwrap_or_default().contains("not-ready"));
+	assert!(Outcome.Verdict.is_none());
+	assert!(!Outcome.Held());
+}
+
+#[test]
+fn the_measurement_expression_can_be_read_back() {
+	let Selectors = vec!["[data-rail]".to_string()];
+	let Expression = MeasurementExpression(&Selectors);
+	let Parsed = AgenticWorkflow::Fn::Measure::MeasurementSelectors(&Expression).expect("parsed");
+	assert_eq!(Parsed, json!(["[data-rail]"]));
+}
+
+#[test]
+fn the_workflow_names_the_ports_it_needs_and_holds_no_design() {
+	let Manifest = include_str!("../module.json");
+	for Port in [
+		"agentic.browse",
+		"agentic.chat.ask",
+		"agentic.verify.design",
+		"agentic.skill.validate",
+	] {
+		assert!(Manifest.contains(Port), "{Port} is not in module.json");
+	}
+}
+
+--- FILE: Documentation/Design.md ---
+# Design
+
+What this workspace is for, and the decisions that shape it. Written after a research pass over the
+real inventory of the consuming repository, so the boundaries here are argued from that surface
+rather than from a taxonomy.
+
+Provenance convention: each section below opens with **Source:** naming the capture in
+`.hermes/research/` that states the claim, or **Decision: this repository** where no capture does.
+`Documentation/Research.md` indexes the captures.
+
+## The problem
+
+**Decision: this repository** - the 125 module / 13 skill / 17 script inventory, and the four
+capabilities it implies, are measurements of the consuming repository. No capture records them.
+`delo-e9b61659.md` is a research pass over one subsystem of that repository, which supports the
+premise in the opening paragraph rather than the numbers.
+
+A repository of 125 TypeScript modules, 13 documentation skills and 17 reference scripts has
+capabilities that are useful outside it - browser control, chat research, design measurement, skill
+validation - but each is entangled with the product it was written for. The goal is to lift those
+capabilities out without lifting the product with them.
+
+## The four layers
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` - the layer table, "the arrows point inward", "a
+capability importing an adapter is a defect" and "ports are owned by their consumers, not by a
+central crate" are stated there, and §1 answers the Cargo consequence: no shared ports crate, two
+consumer-owned `Browse` traits. **Decision: this repository** - the reason given for the defect (a
+capability untestable without its provider) and the rule that a shared contract is extracted only
+when two consumers genuinely share semantics and evolution policy.
+
+| Layer            | Owns                                       | May import                   |
+| ---------------- | ------------------------------------------ | ---------------------------- |
+| Capability       | a use case and the port it needs           | its own port and data shapes |
+| Adapter          | one port against one mechanism or provider | that port, that provider     |
+| Workflow         | a composition of capabilities              | capabilities only            |
+| Composition root | the binding of ports to adapters           | everything                   |
+
+The arrows point inward. Nothing imports a root, and a capability that imports an adapter is a
+defect: it makes the capability untestable without the provider, which is the property this
+workspace exists to keep.
+
+**Ports belong to their consumers, not to a centre.** A shared ports package becomes the dependency
+magnet at forty modules - one workflow's requirement then forces edits through unrelated modules.
+Extract a shared contract only when two consumers genuinely share semantics and evolution policy.
+
+**A port states more than data shapes.** Domain errors, ordering, pagination, cancellation,
+idempotency, consistency and resource ownership belong in the port, or two adapters type-check and
+still behave differently.
+
+## The manifest
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` - the four state classes and their admission role,
+the hashed `artefact` entry point and the cold/warm `cost` are stated there, and §3 answers how they
+survive into Rust: a checked-in `module.json`, serde validation in CI, read by a harness that never
+starts the application. **Decision: this repository** - the observation each class implies: a
+liveness probe for `holds-transport`, a freshness check for `holds-identity`, a reset proof for
+`holds-workspace`. The capture says what a harness must revalidate at admission, not which
+observation proves it.
+
+Every package carries `module.json`. The field that does the most work is `state`:
+
+- `stateless` - nothing to check at admission.
+- `holds-transport` - a liveness probe, because an open socket can be dead.
+- `holds-identity` - a freshness check, because a token expires while pooled.
+- `holds-workspace` - a reset proof, because a dirty workspace answers wrongly.
+
+`artefact` carries a hashed entry point, so a harness loads a built file and never builds at launch.
+`cost` carries cold and warm figures, so a pre-warm planner has something to budget against rather
+than guessing.
+
+## The lifecycle
+
+**Decision: this repository** - the seven-step order, and the claim that preparation and admission
+are different acts. The captures supply the vocabulary (admission, leases, budgets, cancellation,
+cleanup) but not this sequence. `delo-e9b61659.md` supplies the failure the paragraph below is
+about: a completed click accepted as a write, and an article's existence accepted as readiness
+(`:40-54`, `:96-116`).
+
+prepare reusable infrastructure → lease an isolated context → bind identity and task → validate
+credentials, connections and versions → execute within a fresh budget → persist only authorised
+artefacts → destroy or prove a reset.
+
+Preparation improves latency. Admission establishes correctness. Merging them is how a warm pool
+starts returning wrong answers quickly.
+
+## Why the packages are these five
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` - the five packages with their kinds, state classes
+and errors, and §1's decision that all five stay separate crates rather than becoming modules of
+one. **Decision: this repository** - the build order, and each reason for building that package when
+it is built. The capture says which crates exist, not which one to write first.
+
+Chosen in build order, each justified by a consumer that already exists:
+
+1. **browser-cdp** - the only execution substrate shared by chat research, design verification,
+   scraping and browser maintenance. Build it first because everything else needs it.
+2. **chat-driver** - a real reusable behaviour with identifiable failure semantics: turn
+   correlation, mode and model verification, completion deadlines, trace extraction.
+3. **design-verification** - separates a measurement engine from the particular design being
+   measured.
+4. **skill-contract** - gives a large skill corpus one validation path without pretending every
+   skill is executable infrastructure.
+5. **runtime** - admission, leases, budgets, cancellation, cleanup. Build it last, after the four
+   above expose real lifecycle needs; otherwise it is a harness designed around imagined
+   commonality.
+
+## What is deliberately not here
+
+**Decision: this repository** - the exclusion list. No capture discusses store, model, command,
+vote, ingest, board synchronisation or gateway maintenance as a capability domain; the words appear
+only in other senses (a probabilistic model, a cost model, a CLI command).
+
+Domain policy and write authority stay with their consumers until a second workflow demonstrates a
+stable contract: store, model, command, vote, ingest, board synchronisation, gateway maintenance. A
+generic name is not a port, and a package called `model` or `context` becomes foundational by
+default unless somebody refuses it.
+
+## The two failures this design expects
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` §2 for the ownership half -
+`Ownership::{Attached, Launched}`, attach and launch as separate operations, disposal of an attached
+session that must not terminate the browser, and a disconnected session that invalidates warm
+readiness. **Decision: this repository** - the five-surface inventory, the global warm browser
+scenario, and the extraction failure. No capture examines either.
+
+**Competing browser owners.** Five surfaces already touch browser execution with different ownership
+needs - a driver, a verifier, a scraper, a relaunch tool, an audit. A global warm browser can close
+a session someone else owns, reuse the wrong account, or couple an isolated audit to interactive
+state. The lease model has to make ownership explicit before any of it is shared.
+
+**Source-relative assumptions surviving extraction.** Bundling into `Target/` does not make
+`Reference/`, routes, tokens, configuration or sibling paths portable. The test is installing packed
+artefacts into a fixture with the original repository unavailable.
+
+## The warning metric
+
+**Decision: this repository** - the metric itself. Unrelated coordination per change is this
+document's proposal; nothing in the captures measures it or names it.
+
+After two years the bad version of this design has hundreds of package files, duplicated manifests,
+permissive graph exceptions, warm contexts nobody can safely evict, and consumers pinned to matching
+release trains. The useful signal is not package count: it is **unrelated coordination per
+change** - how many packages must be edited together for one workflow's requirement.
+
+--- FILE: Documentation/Diagram/00-rings/README.md ---
+# Rings
+
+The crates as concentric authority: what may know what, drawn as rings rather than as a dependency
+list. Each page below is separated by a rule; later pages are the intended shape, not the current
+one.
+
+## Page 1 - the rings as they are intended
+
+![The crates as authority, drawn as concentric rings](ring.svg)
+
+[`ring.mmd`](ring.mmd) · [`ring.svg`](ring.svg)
+
+The dotted edges are the point: a capability declares the port it needs and imports nobody.
+`browser-cdp` is the only crate in Ring 0 that touches the outside world, and `spacetime-catalog` is
+the only one that holds the rules the database enforces.
+
+---
+
+## Page 2 - what the rings are for
+
+![Who may know what, from a capability to the composition root](who-may-know.svg)
+
+[`who-may-know.mmd`](who-may-know.mmd) · [`who-may-know.svg`](who-may-know.svg)
+
+A crate that knows more than its ring is a defect even when it compiles, which is why
+`Scripts/Boundaries.mjs` exists and why `cargo tree -p agentic-chat-driver | grep -c browser` must
+answer `0`.
+
+---
+
+## Page 3 - the ring that is missing
+
+![A ticket issued by the database, presented to a destination that does not exist yet](missing-ring.svg)
+
+[`missing-ring.mmd`](missing-ring.mmd) · [`missing-ring.svg`](missing-ring.svg)
+
+`X` is drawn as an installable step because it does not exist yet. Until it does, the runtime crate
+is a second authority wearing the same vocabulary - see `Documentation/Review.md` and the card that
+names this gap.
+
+---
+
+## Page 4 - the ring that should disappear
+
+![The runtime holding lease state beside the database that should hold it](disappearing-ring.svg)
+
+[`disappearing-ring.mmd`](disappearing-ring.mmd) · [`disappearing-ring.svg`](disappearing-ring.svg)
+
+The lease, the fence and the generation are internalities. A process that owns them is a parallel
+system, however correct its fencing.
+
+--- FILE: Documentation/Diagram/10-runtime/README.md ---
+# Runtime
+
+The lease and effect lifecycle, as it is and as it should be. Pages are separated by a rule; the
+last page is the one with states nobody has built.
+
+## Page 1 - the lease as it exists today
+
+![Free, claimed, admitted, landed, expired and refused, with release closing the loop](lifecycle.svg)
+
+[`lifecycle.mmd`](lifecycle.mmd) · [`lifecycle.svg`](lifecycle.svg)
+
+`Refused` is the state the fence card added. It exists in the port and is exercised by tests;
+whether it exists at a _destination_ is the open question.
+
+---
+
+## Page 2 - the late arrival, which is the counterexample
+
+![Claim, admission, expiry, then a ticket presented to two different destinations](late-arrival.svg)
+
+[`late-arrival.mmd`](late-arrival.mmd) · [`late-arrival.svg`](late-arrival.svg)
+
+The page was a sequence diagram and is now a flowchart: `line9 render --out` serves flowcharts only,
+and a `sequenceDiagram` exits `9`. The order of the five events is the sequence.
+
+The second branch is what "fencing the caller" means. A write that landed is not retracted because
+the record of it was refused.
+
+---
+
+## Page 3 - missing states
+
+![Dispatched, ambiguous, reconciled and quarantined, none of which exist](missing.svg)
+
+[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+
+None of `Dispatched`, `Ambiguous`, `Reconciled` or `Quarantined` exists - they are drawn as
+installable steps. They are the handover rule the review demanded: what happens to work already in
+flight when its authority ends. `Refused` alone cannot cover it, because refusing a result says
+nothing about the effect that already happened.
+
+---
+
+## Page 4 - who owns which state
+
+![The process holding the transport and the effect, the database holding lease, phase and trace](ownership.svg)
+
+[`ownership.mmd`](ownership.mmd) · [`ownership.svg`](ownership.svg)
+
+The left column is effects. The right column is internalities. `Dispatched` and `Ambiguous` belong
+on the right, which is why the crate cannot be the authority for them.
+
+--- FILE: Documentation/Diagram/20-browser/README.md ---
+# Browser
+
+The CDP adapter's lifecycle: attach versus launch, and the two things that can be true of a session
+that is not alive.
+
+## Page 1 - attach or launch
+
+![Unbound becoming launched or attached, live, evaluated, unavailable or disposed](lifecycle.svg)
+
+[`lifecycle.mmd`](lifecycle.mmd) · [`lifecycle.svg`](lifecycle.svg)
+
+The distinction that must survive every refactor: `dispose` on a launched session may close the
+browser; on an attached session it must not, because somebody else owns it.
+
+---
+
+## Page 2 - the three failures, and the one that hides
+
+![An operation branching into three named failures and one that looks alive](failures.svg)
+
+[`failures.mmd`](failures.mmd) · [`failures.svg`](failures.svg)
+
+`looks alive` is the state the adapter cannot currently name. An open socket is not a live browser,
+and a liveness probe is the only thing that distinguishes them - which is why the manifest gives
+this crate the `holds-transport` state class and an admission check.
+
+---
+
+## Page 3 - identity, which the review says is conflated
+
+![A URL and an endpoint reaching a session, and ownership deciding what dispose may do](identity.svg)
+
+[`identity.mmd`](identity.mmd) · [`identity.svg`](identity.svg)
+
+Three things are called "the browser" here: an endpoint, a page, and a user. The review flagged the
+collision; the fix is that a `Target` carries its ownership, and that an endpoint is never treated
+as an identity.
+
+---
+
+## Page 4 - missing states
+
+![Stalled and reclaimed, the two states of a session that is not alive](missing.svg)
+
+[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+
+`Stalled` and `Reclaimed` do not exist - they are drawn as installable steps. Both are real: the
+first is the dead-but-open socket, the second is two debugger clients on one page - which is exactly
+what happens when a second tool attaches to a tab the extension already holds.
+
+--- FILE: Documentation/Diagram/30-chat/README.md ---
+# Chat
+
+Asking a chat product a question, and the three preconditions that must be read before anything is
+sent.
+
+## Page 1 - the ask
+
+![Mode checked, model checked, sent, streaming, settled, complete or refused](lifecycle.svg)
+
+[`lifecycle.mmd`](lifecycle.mmd) · [`lifecycle.svg`](lifecycle.svg)
+
+`Refused` is reached from four different places and means four different things. The manifest gives
+it four codes for that reason: `not-ready`, `wrong-mode`, `wrong-model`, `truncated`.
+
+---
+
+## Page 2 - completion, which is a rule and not a sleep
+
+![Baseline, submit, count, stability, and the Read more control deciding the outcome](completion.svg)
+
+[`completion.mmd`](completion.mmd) · [`completion.svg`](completion.svg)
+
+The three-read rule proves text stability, not that generation finished. That is the review's
+qualification, and it is why `truncated` is a separate outcome rather than a retry.
+
+---
+
+## Page 3 - the trace, which is not the answer
+
+![Answer text, step tree, sources and mode reaching the record, and nothing else excluded](trace.svg)
+
+[`trace.mmd`](trace.mmd) · [`trace.svg`](trace.svg)
+
+The trace is how the answer was reached and it is not in the answer text. A capture that keeps only
+prose has lost the evidence, which is why the extractor reads the tree separately from the
+transcript.
+
+---
+
+## Page 4 - missing states
+
+![Queued and interrupted, the two states the product has and nobody reports](missing.svg)
+
+[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+
+`Queued` and `Interrupted` are real and unmodelled - they are drawn as installable steps. The first
+is why a fixed sleep looks necessary; the second is why "text stable for three reads" can settle on
+a truncated answer that nobody marked as truncated.
+
+--- FILE: Documentation/Diagram/40-database/README.md ---
+# Database
+
+The rules the database enforces, as states. Everything here is an internality: a reducer moves it,
+and a subscriber sees the move.
+
+## Page 1 - a generation
+
+![Unbound, bound, superseded, and a refusal for an undeclared capability](generation.svg)
+
+[`generation.mmd`](generation.mmd) · [`generation.svg`](generation.svg)
+
+A generation is appended, never updated. The rule that makes it useful: a write under a generation
+that is not the latest bound one is refused, and the refusal names the generation it saw.
+
+---
+
+## Page 2 - a lease, and the fence
+
+![Free and held, renewal, expiry, and a claim refused while another holds it](lease.svg)
+
+[`lease.mmd`](lease.mmd) · [`lease.svg`](lease.svg)
+
+The fence increments on every grant. A write carrying an old fence is refused - not queued, not
+applied late. `Refused` is a result, never a panic.
+
+---
+
+## Page 3 - a probe, and why a receipt is not a disclosure
+
+```mermaid
+sequenceDiagram
+	participant A as Actor
+	participant R as Reducer
+	participant T as private truth
+	participant O as observation
+	A->>R: probe(target, action)
+	R->>R: check the actor's entitlement
+	R->>T: read the value
+	R->>O: write one audience-scoped row
+	R->>R: charge the cost, in the same transaction
+	R-->>A: only what was written
+	Note over T,O: the private value is never a column a reader can select
+```
+
+This is the one diagram in the set that has no `.mmd`: it cannot be exported, because
+`line9 render --out` serves flowcharts only and a `sequenceDiagram` exits `9` without writing
+anything. The lanes are doing the work here - four participants, a private read and an
+audience-scoped write inside one transaction - and a flowchart would flatten who may see what into a
+chain of steps.
+
+The review's point stands: a receipt is evidence that a probe happened, not a mechanism that
+prevented a leak. The leak is prevented by the private value never being selectable, and by the
+observation being tied to a property version so an old grant cannot silently authorise a future
+change.
+
+---
+
+## Page 4 - missing states
+
+![Abandoned and quarantined, the states a dead holder leaves behind](missing.svg)
+
+[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+
+`Abandoned` and `Quarantined` do not exist - they are drawn as installable steps. Expiry covers the
+clock; nothing covers the workspace a dead holder may have left dirty, which is the
+`holds-workspace` class the manifest names and the schema does not yet model.
+
+--- FILE: Documentation/Diagram/50-feed/README.md ---
+# Feed
+
+The tools that carry a corpus into a chat product: bundle, attach, observe. They are not part of the
+agent; they are how the agent reads a distant model.
+
+## Page 1 - the feed
+
+![Collected, batched, attached, confirmed, prompted, watching and settled, with the refusals](lifecycle.svg)
+
+[`lifecycle.mmd`](lifecycle.mmd) · [`lifecycle.svg`](lifecycle.svg)
+
+The gate that matters: `Confirmed` is reached only when the page itself shows the file name. A
+successful `setFileInputFiles` call is not evidence that the product accepted the file.
+
+---
+
+## Page 2 - why the batches must be deterministic
+
+![One tree, two runs, and the byte comparison that decides whether a batch can be reviewed](determinism.svg)
+
+[`determinism.mmd`](determinism.mmd) · [`determinism.svg`](determinism.svg)
+
+`Scripts/Feed.mjs` asserts exactly this, because a feed whose batches differ between runs cannot be
+reviewed - only re-read.
+
+---
+
+## Page 3 - the exclusion bug, as a state
+
+![Walking, excluded, included, and a file refused for its size](exclusion.svg)
+
+[`exclusion.mmd`](exclusion.mmd) · [`exclusion.svg`](exclusion.svg)
+
+The first version compared case-sensitively, so `Target/` walked past an exclude of `target` and
+three files of build scratch were attached as a batch. On a case-sensitive volume those are
+different directories, and the fix belongs in the walker, not in the prompt.
+
+---
+
+## Page 4 - missing states
+
+![Rate limited falling back to a context-only prompt](missing.svg)
+
+[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+
+`RateLimited` is real and unmodelled - it is drawn as an installable step. A weekly upload quota
+turns a feed into a text-only conversation, and the tool has no way to detect it other than by
+reading the product's own error. Until it is modelled, the fallback is a person saying so.
+
+--- FILE: Documentation/Diagram/Index.md ---
+# Diagrams
+
+One folder per category. Each folder holds a page, the `.mmd` source of every diagram on that page,
+and the `.svg` rendered from that source - so the set reads without the CLI, and a change is made in
+a file that renders the same way twice.
+
+A page is a storyboard: pages separated by a rule, the first page what exists, the last page the
+states nobody has built. That is deliberate - a diagram that shows only what exists is a
+description, and the useful part of a diagram is the gap between it and the goal.
+
+## The convention
+
+A diagram is a `.mmd` file with frontmatter and typed nodes:
+
+```mmd
+---
+title: <what this diagram shows>
+line9:
+  theme: boardroom
+---
+flowchart LR
+  A["a runtime surface"]:::host
+  B[("persisted state")]:::store
+  C["a refusal"]:::fail
+  A ==> B
+  B -.-> C
+```
+
+`line9 render <file>.mmd --out <file>.svg` writes the sibling. It serves flowcharts only: a valid
+`stateDiagram-v2` or `sequenceDiagram` exits `9` and writes nothing, so those stay fenced blocks in
+the page, with a sentence saying why.
+
+The legend is four class annotations and nothing else - no `note`, no subgraph of prose inside a
+drawing:
+
+| Annotation | Means                                          | Shape                       |
+| ---------- | ---------------------------------------------- | --------------------------- |
+| `:::host`  | an existing runtime surface                    | `["…"]`, `(["…"])` an event |
+| `:::hook`  | an installable step, including a missing state | `["…"]`                     |
+| `:::store` | persisted state                                | `[("…")]`                   |
+| `:::fail`  | an error or refusal                            | `["…"]`                     |
+
+Shapes carry kind: `(["event"])`, `[("store")]`, `{"decision"}`, `["process"]`. Arrows are graded:
+`==>` primary, `-->` secondary, `-.->` optional. Line breaks are `<br>`.
+
+## The folders
+
+| Folder                                  | Category    | What it draws                                                |
+| --------------------------------------- | ----------- | ------------------------------------------------------------ |
+| [`00-rings/`](00-rings/README.md)       | authority   | the crates as concentric rings, and the ring that is missing |
+| [`10-runtime/`](10-runtime/README.md)   | leases      | claim, admit, land, refuse - and the late arrival            |
+| [`20-browser/`](20-browser/README.md)   | effects     | attach versus launch, and the dead-but-open socket           |
+| [`30-chat/`](30-chat/README.md)         | research    | mode, model, completion, truncation                          |
+| [`40-database/`](40-database/README.md) | internality | generations, leases, probes, and the abandoned holder        |
+| [`50-feed/`](50-feed/README.md)         | transport   | bundle, attach, observe, and the rate limit                  |
+
+`Scripts/Legend.mjs` checks the set: frontmatter with a theme, at least one class annotation, a
+rendered sibling over 1000 bytes, and no prose legend anywhere. The check does not prove a diagram
+is right - only that it renders and that its terms are typed.
+
+--- FILE: Documentation/Observability.md ---
+# Observability: the database is the surface
+
+An earlier pass argued that SpacetimeDB is a poor fit for control flow and that orchestration
+belongs in Rust. That was too broad, and this document records the correction because it changes the
+architecture.
+
+## The rule, as a decision procedure
+
+For any new piece of behaviour, ask one question: **does it touch the outside world?**
+
+- Pushing JavaScript into a page, opening a socket, spawning a process, reading a file, waiting on a
+  network reply - that is an effect, and it lives in Rust, in a crate that owns the transport.
+- Everything that is a decision, a counter, a phase, a retry, a budget, a lease, a claim, a
+  cancellation request, an operator command, or a record of any of those - that is an internality,
+  and it lives in a table, changed by a reducer.
+
+The test is not "is it important" or "is it fast". It is whether the thing has an observable effect
+outside the database. A retry count is internal. The HTTP call it guards is external. A "we are now
+on phase three" is internal. The DOM evaluation that phase three performs is external.
+
+When a piece of work straddles the line - a scrape is a decision plus a page read plus a write -
+split it: the reducer moves the phase and grants the lease, the Rust effect runner performs the
+read, and a second reducer records the result. Two transactions, one truth, and the gap between them
+is visible as a lease that is held.
+
+## The corrected boundary
+
+The line is not control flow versus data. It is **effects versus state**.
+
+| Lives in SpacetimeDB                | Lives in Rust                          |
+| ----------------------------------- | -------------------------------------- |
+| workflow transitions between phases | the browser connection and its socket  |
+| admission decisions                 | DOM evaluation and input dispatch      |
+| leases, fences, expiry              | process and filesystem operations      |
+| budgets and their consumption       | the work an effect actually performs   |
+| cancellation requests               | honouring a cancellation mid-operation |
+| operator commands                   | the binary's own supervision           |
+
+Rust does not need a second authoritative workflow engine whose decisions are copied into the
+database afterwards. That copy is a second state machine, and the reconciliation between the two is
+the bug you spend the next year fixing.
+
+## Why a reducer is the right primitive
+
+A reducer is one transaction. That means a single call can:
+
+1. move an invocation into a new phase,
+2. reserve its budget,
+3. grant its resource lease,
+4. record the transition and its cause,
+5. and make the resulting state visible to every subscriber,
+
+and if any step fails, none of it happened. A log line cannot do the fourth step, and an out-of-band
+write cannot do the fifth. This is the difference between a dashboard that describes the system and
+a dashboard that _is_ the system's state.
+
+## What this buys over OTEL
+
+- **Subscriptions are a live view, not a query loop.** A panel sees a change because it was pushed,
+  not because it polled.
+- **The record and the state are the same bytes.** There is no window in which the trace says one
+  thing and the state another.
+- **Replay is re-reading.** A generation's rows are what happened; a subscription replayed from the
+  start is the history.
+- **Atomicity is the transaction, not a convention.** A partial transition is not a thing that can
+  be recorded.
+
+## What OTEL still does better
+
+- **Cross-process and cross-vendor traces.** A database only observes what writes to it; a process
+  that dies before its first write leaves no row. OTEL's collector sees the process, the crash and
+  the resource pressure around it.
+- **Cardinality at volume.** Metrics with unbounded label sets are cheap to emit and expensive to
+  store as rows.
+- **Ecosystem.** Existing dashboards, alerting and retention policies.
+
+The honest position: SpacetimeDB for the state machine and the operational surface; OTEL for what
+happens _around_ the process, if it is wanted at all.
+
+## The dashboard
+
+One surface, exported from inside the binary, able to attach to any deployment:
+
+- **Transport**: a subscription over the same database the workers write to. Not a second API,
+  because a second API is a second truth.
+- **Identity**: the panel connects as a client with its own identity and a role that grants read on
+  the operational tables and no write. The role is data, so it can be revoked without a redeploy.
+- **Federation**, in ascending order of effort: one shared control database for every enrolled
+  binary; several panel connections each labelled with its environment; or a designed replication
+  layer. SpacetimeDB's inter-database communication is outbox-based - a message row delivered as a
+  reducer call - which is evidence for that pattern, not proof of global transactions across
+  databases.
+- **Staleness is visible.** A disconnected panel or a worker whose heartbeat has expired must render
+  as unknown, never as healthy-because-of-its-last-row. The cheapest way to guarantee that is a
+  heartbeat table plus a view that computes freshness from the database's own clock.
+
+## What this rules out
+
+- A second scheduler in Rust that decides what the database then records.
+- A dashboard that polls a REST projection of the tables.
+- Any state that exists only in a process and is "synced later".
+
+--- FILE: Documentation/Open-Questions.md ---
+# Open Questions
+
+Every question the three captures left unanswered, gathered once. Each one names who asked it, the
+experiment or command that would settle it, and what it blocks. `Documentation/Research.md` says
+which thread each question came from; the captures themselves are the reasoning, and this file is
+only the worklist.
+
+A question is closed by a run, not by an argument. Where the experiment does not exist yet, that is
+stated - an unbuilt fixture is a finding about the work, not a gap in the record.
+
+## How to read an entry
+
+- **Asked** - the thread's own follow-up list, or a check embedded in its findings, or this
+  repository reading the capture. The three are not equal, and the difference is always written
+  down.
+- **Settle it with** - the run. Commands are literal; `<placeholders>` are not.
+- **Blocks** - the crate or document that cannot be decided until it is answered.
+
+---
+
+# Thread 1 - hidden properties and disclosure
+
+Source: `.hermes/research/research-575cb198.md`. Nothing in this workspace talks to SpacetimeDB yet,
+so every experiment below is a probe against a local instance rather than a test in this tree.
+`spacetime sql <database> "<query>"` is the shape of the check; `<database>` has to exist first.
+
+## Q1 - What does a failed transaction roll back?
+
+**Asked:** the thread's follow-up list (`research-575cb198.md:145`).
+
+**Settle it with:** a reducer that inserts a row, then panics; query the table afterwards. A
+surviving row means the insert is not part of the rollback.
+
+```sh
+spacetime sql < database > "SELECT * FROM Observation"
+```
+
+Repeat with a reducer that schedules a reducer and then fails - whether the schedule survives is a
+separate answer.
+
+**Blocks:** the `observe()` rule of charging and revealing in one transaction (`:135`). If rollback
+is partial, "pay and reveal is all-or-nothing" is false and the reducer has to be restructured.
+
+## Q2 - What is the exact concurrency model across modules?
+
+**Asked:** the thread's follow-up list (`:146`).
+
+**Settle it with:** two reducers in two different databases, each recording a start and end
+timestamp; run them concurrently and read the interleaving. Then repeat inside one database, where
+the thread says execution is serial (`:11`).
+
+**Blocks:** the nonleakage argument, which assumes an observer cannot learn from interleaving it did
+not cause.
+
+## Q3 - How are scheduled reducers sequenced internally?
+
+**Asked:** the thread's follow-up list (`:147`).
+
+**Settle it with:** schedule two reducers for the same timestamp and record invocation order across
+repeated runs. The thread already warns that no dispatch order is guaranteed (`:14`), so the
+experiment's job is to find out whether that is merely undocumented or actually unstable.
+
+**Blocks:** any probe-expiry or budget-refill design, both of which want a deterministic clock.
+
+## Q4 - What are the formal guarantees of client subscriptions?
+
+**Asked:** the thread's follow-up list (`:148`).
+
+**Settle it with:** two clients, identities A and B, each subscribing to every public table and
+every view, ignoring the intended UI; then compare the two transcripts field by field (`:127`,
+`:132`).
+
+**Blocks:** the nonleakage target itself (`:140`). A guarantee of "same visible values" is weaker
+than the transcript equality the thread specifies, and only a subscription guarantee can close the
+difference.
+
+## Q5 - How does state replication affect determinism?
+
+**Asked:** the thread's follow-up list (`:149`).
+
+**Settle it with:** two replicas fed the same transaction stream; compare the observable transcripts
+they serve. Divergence means the paired-world test cannot be run against a single node and
+generalised.
+
+**Blocks:** the paired-world experiment below (Q8), and with it the whole formal leakage claim.
+
+## Q6 - Does one probe action strictly dominate all the others?
+
+**Asked:** the thread's own check (`:122`).
+
+**Settle it with:** enumerate the legal probes for one capability, compute what each reveals per
+unit of cost, and check whether one action is weakly better in every belief state. If it is, the
+hidden-information mechanic is degenerate and the disclosure policy has failed its own fairness
+test.
+
+**Blocks:** the disclosure policy. A policy that permits a dominant probe has published the secret
+with extra steps.
+
+## Q7 - Can two racing probes exceed a one-use allowance?
+
+**Asked:** the thread's own check (`:135`).
+
+**Settle it with:** two clients probing a capability with an allowance of one, in the same
+transaction window; count the `Observation` rows written. The reducer authenticates and charges
+before revealing, so the count must be one.
+
+**Blocks:** the `observe()` reducer contract. This is the only place where the thread claims
+atomicity buys correctness, so it is the one that has to be run.
+
+## Q8 - Does a planted secret canary appear anywhere a client can see?
+
+**Asked:** the thread's own check (`:139`).
+
+**Settle it with:** plant a canary value in a private property, run a full probe, then read every
+client-visible row, trace, failure response, result-size field and exported artefact, and grep for
+the canary. Then run the paired worlds of `:140` - two databases differing only in the secret - and
+diff the complete observable transcripts.
+
+**Blocks:** the trace-projection rule and the claim that the schema provides nonleakage. The thread
+is explicit that timing, size, contention and operator access are outside it (`:141`); the
+experiment's job is to show those are the _only_ channels left.
+
+---
+
+# Thread 2 - the transport audit
+
+Source: `.hermes/research/delo-e9b61659.md`. Every finding in this thread is a source reading plus
+an inference, and the thread says so at `:14`. None of the nine has been run. The experiments below
+are the thread's own, restated as the assertion each one has to make.
+
+These block this workspace, not the repository they were read from: the audit is evidence about what
+a browser transport must carry, and `agentic-browser-cdp` is the crate that has to carry it.
+
+## Q9 - Does a reorder between read and click move the click to another post?
+
+**Asked:** the thread's experiment (`:26`).
+
+**Settle it with:** a fixture page with two articles; snapshot A at index 0, replace the article at
+index 0 with B, then run the exported selector expression for the toggle and record which button
+receives the click. No live account and no real mutation.
+
+**Blocks:** the port shape of `agentic-browser-cdp`. If the transport can address a post by
+position, the port has to accept an identity, not an index - which changes `Browse::Evaluate` as
+specified in `Documentation/Rust.md`.
+
+## Q10 - Does a URL target resolve the post named in the URL, or index 0?
+
+**Asked:** the thread's experiment (`:38`).
+
+**Settle it with:** a controlled page whose URL contains `/status/123` and whose articles are 999
+then 123. The resolved post must be 123 regardless of order.
+
+**Blocks:** `agentic-browser-cdp` and `agentic-chat-driver`, both of which take a URL target today.
+
+## Q11 - Does an unrelated article satisfy readiness for an id target?
+
+**Asked:** the thread's experiment (`:54`).
+
+**Settle it with:** a fixture that inserts an unrelated article immediately, the target article
+later, and its media later still; compare when the transport returns with when the fixture becomes
+complete.
+
+**Blocks:** the readiness rule in the transport port. "An article exists" is currently the whole
+condition (`:42`).
+
+## Q12 - Do `read({id})` and `read({url})` diverge on the same post?
+
+**Asked:** the thread's experiment (`:84`).
+
+**Settle it with:** one photo post, read four ways - by id with no existing tab, by id with a
+pre-existing background tab, by url with no tab, by url with a tab. Compare the media fields.
+
+**Blocks:** `agentic-browser-cdp`'s focus-emulation rule, which today applies to one of the four
+paths only (`:78`).
+
+## Q13 - Does "network idle" resolve with a request still in flight?
+
+**Asked:** the thread's experiment (`:94`).
+
+**Settle it with:** a fixture that starts a fetch whose response is held open, then
+`waitForIdle({quiet: 600})`. If it resolves while the request is pending, the semantic gap is proven
+rather than inferred.
+
+**Blocks:** the persistence verification of every mutation, which currently assumes a quiet network
+means a finished write.
+
+## Q14 - Does a permanent evaluation error survive as its own cause?
+
+**Asked:** the thread's experiment (`:128`).
+
+**Settle it with:** inject a permanently invalid expression and a transient execution-context
+destruction, and assert not only that both terminate but that the permanent error's cause is still
+available to the caller.
+
+**Blocks:** `agentic-browser-cdp`'s error taxonomy. A dead connection reported as "the page showed
+no posts" is the failure the port exists to prevent.
+
+## Q15 - Does an attachment failure leak the tab it opened?
+
+**Asked:** the thread's experiment (`:138`).
+
+**Settle it with:** inject an attachment failure after successful tab creation and assert that the
+close is attempted. Controlled test, not a run that leaves tabs behind.
+
+**Blocks:** `agentic-browser-cdp`'s disposal contract, which `Documentation/Reflection.md` leans on
+for its resource-ownership claims.
+
+## Q16 - Does a server rejection surface as an error, or as `now != want`?
+
+**Asked:** the thread's experiment (`:116`), and one step it explicitly did not trace - the CLI's
+treatment of the returned mismatch (`:114`).
+
+**Settle it with:** a fake session that reports a successful click, never settles, then loses the
+control; and a second test where the temporary-tab reload fails. Then read the caller's handling of
+`now != want`.
+
+**Blocks:** the port's result type. A mutation result that can be "not verified" is a different type
+from a boolean, and `Documentation/Design.md`'s lifecycle claims persistence is established at
+execution time.
+
+## Q17 - Can extraction distinguish unknown from zero, false and empty?
+
+**Asked:** the thread's check (`:74`).
+
+**Settle it with:** DOM fixtures with missing controls, localized count labels, absolute rather than
+relative permalinks, and a video poster with no playable source. The assertion is that each unknown
+is distinguishable from a real `0`, `false` or `""`, not merely that extraction returns an object.
+
+**Blocks:** `agentic-design-verification`. A measurement engine that cannot say "not observed"
+produces evidence that reads as a measurement.
+
+---
+
+# Thread 3 - the Rust port
+
+Source: `.hermes/research/rust-4ffde6d5.md`. The answer is cut off mid-sentence at `:378-383`, so
+the last two questions it was asked were never reached.
+
+## Q18 - Can a Rust adapter pass the TypeScript conformance suite?
+
+**Asked:** the thread (`:281`), which makes this the precondition for its own recommendation.
+
+**Settle it with:** the suite it names - attach/launch, navigation races, evaluation timeout,
+disconnect, disposal, shared-browser ownership - run against the current TS transport and against
+`chromiumoxide` behind the proposed session API, comparing results per case.
+
+**Blocks:** `agentic-browser-cdp` and the whole port. `Documentation/Rust.md` is written as if the
+backend decision is made; the capture makes it conditional on this run (`:226`).
+
+## Q19 - How do the manifest fields map onto Rust?
+
+**Asked:** the thread's question 6 (`:49`), never reached - the answer stops at `:378`.
+
+**Settle it with:** write one real `module.json` for `ChatDriver`, a serde struct that validates it
+in CI, and a harness that reads the packaged file alone and decides warm or cold from `state`,
+`cost` and `artefact.hash`. If the planner needs to execute anything, the mapping has lost the
+property it exists for.
+
+**Blocks:** `agentic-runtime` (the pre-warm planner) and the manifest section of
+`Documentation/Design.md`.
+
+## Q20 - What is the CI check that keeps the arrows pointing inward?
+
+**Asked:** the thread's question 5 (`:47`), asserted at `:58` but never specified.
+
+**Settle it with:** `cargo metadata --format-version 1`, walk the resolved dependency edges, and
+fail on any edge outside an allowlist - the Cargo analogue of `node Scripts/Boundaries.mjs`, which
+is what this workspace runs today.
+
+```sh
+cargo metadata --format-version 1 --no-deps
+```
+
+**Blocks:** the workspace CI, and `Documentation/Design.md`'s claim that the four layers are
+enforced rather than merely described.
+
+## Q21 - Is the house style what the thread was told it is?
+
+**Asked:** the thread's own caveat (`:60`) - it could not retrieve the repository and took the
+description as specification.
+
+**Settle it with:** clone the repository at the branch the request named and diff the described
+files against what is there: `.cargo/config.toml` (target-dir, opt-level, codegen-units, lto, panic,
+strip), the `[lib]` and `[[bin]]` layout, the `Fn`/`Struct` module trees, the CI workflow names.
+
+```sh
+git clone --branch Current https://github.com/PlayForm/Run < scratch > /Run
+```
+
+**Blocks:** `Documentation/Rust.md`'s opening claim about house style. If the clone fails, the house
+style stays an unverified assumption and should be labelled as one.
+
+## Q22 - Do the two consumer-owned `Browse` traits actually differ?
+
+**Asked:** this repository, reading the capture. The thread asserts they need not have identical
+methods (`:197`) but does not derive either trait from the existing call sites.
+
+**Settle it with:** write both traits from what `chat-driver` and `design-verification` actually
+call today, then diff them. Identical traits mean one trait belongs somewhere shared - or that the
+split is theatre.
+
+**Blocks:** `agentic-chat-driver`, `agentic-design-verification`, and the "ports belong to their
+consumers" section of `Documentation/Rust.md`.
+
+## Q23 - Does `panic = "abort"` survive the cancellation and cleanup ladder?
+
+**Asked:** this repository, reading the capture. The request asked for anything in the house style
+that fights the design (`:50`); the answer was cut off before that, and the style mandates
+`panic = "abort"` (`:25`) while the design mandates supervised cleanup after a bounded evaluation
+(`:259`).
+
+**Settle it with:** a probe crate with `panic = "abort"` and a capability that panics
+mid-evaluation; check whether the supervisor can still dispose the target and release the lease.
+With abort there is no unwinding, so any cleanup that depends on `Drop` does not run.
+
+**Blocks:** `agentic-runtime`'s cleanup supervision, and the release profile in
+`Documentation/Rust.md`.
+
+## Q24 - Which library behaviours must the session API be built around?
+
+**Asked:** this repository, reading the capture. It states the requirement - a continuously polled
+handler for `chromiumoxide`, an idle-disconnect policy for `headless_chrome` (`:234`) - without
+measuring either.
+
+**Settle it with:** two probes: stop polling the handler and see what pending commands do; hold a
+connection idle past the documented interval and see whether it is closed under a warmed lease.
+
+**Blocks:** `agentic-browser-cdp`'s lease model, whose whole premise is that a warm session is still
+usable (`Documentation/Rust.md` §Still open 1).
+
+---
+
+# What blocks the most work
+
+**Q18, Rust/TypeScript parity.** Everything in `Documentation/Rust.md` past the crate layout waits
+on it, and the thread's own recommendation is conditional on it. A failed parity run does not
+invalidate the port; it converts the sidecar from migration bridge to permanent component, which
+changes the crate count.
+
+**Q19 and Q20, manifest mapping and the arrows check.** These are the two halves of the answer that
+was cut off. Without them the manifest is a JSON file nobody has mapped and the layering rule is a
+convention, which is exactly the state the Rust port exists to leave behind.
+
+**Q9 and Q10, transport identity.** If a transport can address a post by position, the browser
+port's signature is wrong, and it is wrong in a way that every capability above it inherits. This is
+the cheapest of the blocking questions to settle - a fixture page and no live account - which makes
+it the one to run first.
+
+**Q1 and Q7, transaction rollback and probe allowance.** These decide whether the disclosure model
+in `research-575cb198.md` is implementable as written or only as a sketch. Nothing in this workspace
+depends on them yet, which is why they are last: the thread that produced them has no consumer in
+`Documentation/` today.
+
+--- FILE: Documentation/Parity.md ---
+# Parity
+
+What this file claims, and what it does not.
+
+Seventy-five green assertions establish that seventy-five assertions passed. They do not establish
+that the Rust port and the TypeScript one are the same program. This file is the evidence that they
+are: one scenario file per capability that both implementations read, the ordered effects each one
+produced, a mutation suite that proves the assertions bite, and a map from every TypeScript case to
+its Rust counterpart.
+
+The claim is narrow on purpose. It is not that the Rust port is correct, and not that the scenario
+files cover the whole of either implementation. It is that for the behaviours both suites already
+assert, both implementations produce the same result **and** the same ordered sequence of externally
+visible effects when driven by the same input.
+
+---
+
+## The shape of the differential run
+
+- **One file per capability is the input.** `scenarios/browser-cdp.json`,
+  `scenarios/chat-driver.json` and `scenarios/skill-contract.json` describe a fixture, a sequence of
+  operations, and the expected result. Nothing about a case lives in either language's test file:
+  the TypeScript side (`scenarios/lib/*.mjs`, driven by `Package/*/Test/Parity.test.ts`) and the
+  Rust side (`Crate/*/Test/Parity.rs`) both read the same JSON and answer the same `expect`
+  block, so the two suites cannot drift by being written twice.
+
+- **Effects are the protocol, not the result.** Every fixture records what the implementation did to
+  it, in order: `launch:`, `attach:`, `handed:`, `evaluate:`, `close:`, `detach:`, `report:` for the
+  browser; `open:`, `opened:`, `evaluate:<kind>`, `written:`, `sent:`, `refused:submit:disabled`,
+  `release:`, `report:` for the chat page; `discovered:` and `finding:` for a corpus. Equality is
+  asserted on that list as well as on the return value, so an implementation that answers correctly
+  by the wrong route fails. Two of the five mutations are caught by nothing else: the order of
+  `evaluate:model` against `evaluate:submit`, and the number of `evaluate:answers` reads.
+
+- **Timing cases are generated.** `scenarios/generate.mjs` produces
+  `scenarios/generated/browser-cdp.timing.json` and `scenarios/generated/chat-driver.timing.json`
+  from a (phase × event) matrix - cancellation mid-operation, deadline expiry, transport death
+  mid-operation, the three-read stability threshold, a hung release - and each case carries the
+  parameters that produced it. The files are committed so both sides can read them, and `run.mjs`
+  refuses to compare against a copy that no longer matches the generator.
+
+- **The referee is one script.** `node scenarios/run.mjs --compare` runs the TypeScript half
+  in-process, asks cargo for the Rust half through `AGENTIC_PARITY_OUT`, and reports per scenario.
+  `node scenarios/mutate.mjs --check` applies five deliberate defects to the real sources, one at a
+  time, and insists both suites reject each one.
+
+```
+node scenarios/run.mjs --compare        # 82 scenarios, both implementations
+node scenarios/mutate.mjs --check       # five mutations, both suites must fail
+cargo test --workspace                  # the Rust suite, including Test/Parity.rs
+cd Package/browser-cdp && node --test Test/*.test.ts   # and the other two packages
+```
+
+- **What the run reported.** 82 scenarios exist across the three capabilities; 79 agreed on both
+  sides, 3 are unported (below), 0 differed. The Rust halves are 23 browse scenarios, 29 chat
+  scenarios and 26 skill scenarios; the difference between those numbers and 82 is the browse case
+  whose release cannot fail in Rust, and the three chat cases neither side can express.
+
+---
+
+## The case map
+
+Seventy-five TypeScript cases, in suite order: 26 in `Browse.test.ts`, 27 in `Chat.test.ts`, 22 in
+`SkillContract.test.ts`. **Seventy run against both implementations** (69 through a scenario on both
+sides, one - `dispose-failing-release` - through a scenario on the TypeScript side only, for the
+reason given below). **Five have no executed scenario**: two are declaration checks that a manifest
+matches a type, three are JavaScript-only holes. **Three cases are unported**: no Rust counterpart
+of any kind exists, and each is listed with its reason. Every row names the Rust case and the
+scenario that drives it; `-` means there is none, and the reason is in the section after the table.
+
+The table is the only table in this file, and no other line in it contains a pipe, so counting the
+lines that do answers 77: these 75 case rows plus the header and the separator.
+
+| #   | TypeScript case                                                                                 | Rust case                                                                       | Scenario                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | the port declares exactly the errors the manifest promises                                      | `the_port_declares_exactly_the_errors_the_manifest_promises`                    | -                                                                                                     |
+| 2   | launches a browser when the caller names no endpoint                                            | `launches_a_browser_when_the_caller_names_no_endpoint`                          | `open-launches`                                                                                       |
+| 3   | attaches to a browser the caller already owns                                                   | `attaches_to_a_browser_the_caller_already_owns`                                 | `open-attaches`                                                                                       |
+| 4   | rejects with navigation-failed when the page does not load                                      | `fails_with_navigation_failed_when_the_page_does_not_load`                      | `open-navigation`                                                                                     |
+| 5   | rejects with browser-unavailable when the browser cannot be reached                             | `fails_with_browser_unavailable_when_the_browser_cannot_be_reached`             | `open-unavailable`                                                                                    |
+| 6   | rejects with timeout when the launcher never answers                                            | `fails_with_timeout_when_the_launcher_never_answers`                            | `generated/open-deadline`                                                                             |
+| 7   | rejects with timeout when the caller's signal fires                                             | `fails_with_timeout_when_the_callers_signal_fires`                              | `generated/open-cancel`                                                                               |
+| 8   | releases a transport that arrives already dead                                                  | `releases_a_transport_that_arrives_already_dead`                                | `open-dead-on-arrival`                                                                                |
+| 9   | returns the value the page produced                                                             | `returns_the_value_the_page_produced`                                           | `evaluate-answers`                                                                                    |
+| 10  | rejects with timeout when the page never answers                                                | `fails_with_timeout_when_the_page_never_answers`                                | `generated/evaluate-deadline`                                                                         |
+| 11  | rejects with timeout when the signal fires mid-flight                                           | `fails_with_timeout_when_the_signal_fires_mid_flight`                           | `generated/evaluate-cancel`                                                                           |
+| 12  | rejects with timeout before asking when the signal is already aborted                           | `fails_with_timeout_before_asking_when_the_signal_is_already_aborted`           | `evaluate-aborted-before`                                                                             |
+| 13  | still honours the deadline when the caller passes no signal                                     | `still_honours_the_deadline_with_a_cancellation_that_never_fires`               | `evaluate-no-signal`                                                                                  |
+| 14  | rejects with browser-unavailable when the transport closed during the call                      | `fails_with_browser_unavailable_when_the_transport_closed_during_the_call`      | `generated/evaluate-death`                                                                            |
+| 15  | never asks a transport it already knows is closed                                               | `never_asks_a_transport_it_already_knows_is_closed`                             | `evaluate-known-closed`                                                                               |
+| 16  | rejects with navigation-failed when the page throws                                             | `fails_with_navigation_failed_when_the_page_throws`                             | `evaluate-page-throws`                                                                                |
+| 17  | rejects with browser-unavailable on a target this session does not hold                         | `fails_with_browser_unavailable_on_a_target_this_session_does_not_hold`         | `evaluate-foreign-target`                                                                             |
+| 18  | closes a launched target                                                                        | `closes_a_launched_target`                                                      | `dispose-launched`                                                                                    |
+| 19  | detaches an attached target without closing it                                                  | `detaches_an_attached_target_without_closing_it`                                | `dispose-attached`                                                                                    |
+| 20  | is silent when called twice                                                                     | `is_silent_when_called_twice`                                                   | `dispose-twice`                                                                                       |
+| 21  | reports a failing release instead of throwing it                                                | `reports_a_failing_release_instead_of_returning_it`                             | `dispose-failing-release`                                                                             |
+| 22  | does not throw when its own reporter throws                                                     | `does_not_fail_when_its_own_reporter_panics`                                    | `dispose-reporter-throws`                                                                             |
+| 23  | reports a release that hangs instead of waiting forever                                         | `reports_a_release_that_hangs_instead_of_waiting_for_it`                        | `generated/dispose-hang`                                                                              |
+| 24  | resolves for a target this session never opened                                                 | `resolves_for_a_target_this_session_never_opened`                               | `dispose-foreign-target`                                                                              |
+| 25  | resolves even when handed something that is not a target                                        | -                                                                               | -                                                                                                     |
+| 26  | leaves the target unusable afterwards                                                           | `leaves_the_target_unusable_afterwards`                                         | `dispose-then-evaluate`                                                                               |
+| 27  | the port declares exactly the errors the manifest promises                                      | `the_port_declares_exactly_the_errors_the_manifest_promises`                    | `port-declares-its-errors`                                                                            |
+| 28  | returns the answer, its trace and its sources                                                   | `returns_the_answer_its_trace_and_its_sources`                                  | `answer-trace-sources`                                                                                |
+| 29  | opens the configured page and disposes the target once                                          | `opens_the_configured_page_and_disposes_the_target_once`                        | `open-and-release`                                                                                    |
+| 30  | presses the toggle when the composer is not in search mode                                      | `presses_the_toggle_when_the_composer_is_not_in_search_mode`                    | `mode-press`                                                                                          |
+| 31  | refuses with wrong-mode and sends nothing when the toggle never reads search                    | `refuses_with_wrong_mode_and_sends_nothing_when_the_toggle_never_reads_search`  | `mode-stuck`                                                                                          |
+| 32  | refuses a question that asks for a mode this port does not offer                                | `refuses_a_question_that_asks_for_a_mode_this_port_does_not_offer`              | `mode-question-unsupported`                                                                           |
+| 33  | refuses with wrong-model and sends nothing when the page is set to another model                | `refuses_with_wrong_model_and_sends_nothing`                                    | `model-wrong`                                                                                         |
+| 34  | matches the label across case and whitespace, and reports what it read                          | `matches_the_label_across_case_and_whitespace_and_reports_what_it_read`         | `model-normalised`                                                                                    |
+| 35  | returns the last text of an answer that stops changing                                          | `returns_the_last_text_of_an_answer_that_stops_changing`                        | `answer-streams-then-settles`, `generated/chat-answer-settles`                                        |
+| 36  | reads the answer this question caused, not the one already in the thread                        | `reads_the_answer_this_question_caused_not_the_one_already_in_the_thread`       | `answer-new-turn-only`                                                                                |
+| 37  | reads the steps and sources of this turn, not the earlier turn's                                | `reads_the_steps_and_sources_of_this_turn`                                      | `answer-this-turn-trace`                                                                              |
+| 38  | refuses with not-ready when the answer never stops changing                                     | `refuses_with_not_ready_when_the_answer_never_stops_changing`                   | `answer-never-settles`, `generated/chat-answer-deadline`                                              |
+| 39  | does not wait for ever on a page that ignores its deadline                                      | -                                                                               | `answer-hangs`                                                                                        |
+| 40  | refuses with truncated when the answer hides behind a Read more control                         | `refuses_with_truncated_when_the_answer_hides_behind_a_read_more_control`       | `answer-collapsed`                                                                                    |
+| 41  | reports not-ready when the page cannot be opened                                                | `reports_not_ready_when_the_page_cannot_be_opened`                              | `open-fails`                                                                                          |
+| 42  | does not wait for ever on a page that never opens                                               | -                                                                               | `open-hangs`                                                                                          |
+| 43  | reports not-ready when the page fails while it is being read                                    | `reports_not_ready_when_the_page_fails_while_it_is_being_read`                  | `evaluate-fails`, `generated/chat-answer-death`                                                       |
+| 44  | refuses to press a send control that never enables                                              | `refuses_to_press_a_send_control_that_never_enables`                            | `submit-disabled`                                                                                     |
+| 45  | reports not-ready before opening anything when the signal already fired                         | `reports_not_ready_before_opening_anything_when_the_signal_already_fired`       | `signal-aborted-before-open`                                                                          |
+| 46  | reports not-ready when the caller gives up while the answer is arriving                         | `reports_not_ready_when_the_caller_gives_up_while_the_answer_is_arriving`       | `answer-cancelled`, `generated/chat-answer-cancel`                                                    |
+| 47  | reports a release that hangs instead of waiting for it                                          | `reports_a_release_that_hangs_instead_of_waiting_for_it`                        | `release-hangs`, `generated/chat-release-deadline`                                                    |
+| 48  | refuses a mode that is not text with wrong-mode, and sends nothing                              | `refuses_a_mode_that_is_not_text_with_wrong_mode_and_sends_nothing`             | `mode-not-text`                                                                                       |
+| 49  | refuses a thread read that is not a thread with not-ready                                       | `refuses_a_thread_read_that_is_not_a_thread`                                    | `answers-not-a-thread`                                                                                |
+| 50  | refuses a trace that is not a list of steps with not-ready                                      | `refuses_a_trace_that_is_not_a_list_of_steps`                                   | `trace-not-a-list`                                                                                    |
+| 51  | refuses sources that are not a list with not-ready                                              | `refuses_sources_that_are_not_a_list`                                           | `sources-not-a-list`                                                                                  |
+| 52  | refuses a call with no options as not-ready, not a TypeError                                    | -                                                                               | `options-absent`                                                                                      |
+| 53  | refuses a call with no question as not-ready, not a TypeError                                   | -                                                                               | `question-absent`                                                                                     |
+| 54  | discover returns every skill directory, ordered by name, whatever order they were created in    | `discover_returns_every_skill_directory_ordered_by_name`                        | `discover-order`                                                                                      |
+| 55  | discover is deterministic: two runs over the same tree agree                                    | `discover_is_deterministic_across_two_runs`                                     | `discover-deterministic`                                                                              |
+| 56  | a symlinked skill directory is discovered like a real one                                       | `a_symlinked_skill_directory_is_discovered_like_a_real_one`                     | `discover-symlink`                                                                                    |
+| 57  | a valid skill has no findings                                                                   | `a_valid_skill_has_no_findings`                                                 | `valid-skill`                                                                                         |
+| 58  | a reference file the index does not name is one unlisted-reference finding                      | `a_reference_file_the_index_does_not_name_is_one_unlisted_reference`            | `unlisted-reference`                                                                                  |
+| 59  | a reference tree without an index reports each file as unlisted                                 | `a_reference_tree_without_an_index_reports_each_file_as_unlisted`               | `reference-tree-without-index`                                                                        |
+| 60  | an index that names a longer file does not name the shorter one                                 | `an_index_that_names_a_longer_file_does_not_name_the_shorter_one`               | `index-names-longer-file`                                                                             |
+| 61  | a skill directory without a SKILL.md is unparsable and uncited, not an exception                | `a_skill_directory_without_a_body_is_unparsable_and_uncited`                    | `no-skill-file`                                                                                       |
+| 62  | unparsable frontmatter is a finding, not a rejection                                            | `unparsable_frontmatter_is_a_finding_not_a_rejection`                           | `unparsable-frontmatter`                                                                              |
+| 63  | a frontmatter without a description is unparsable                                               | `a_frontmatter_without_a_description_is_unparsable`                             | `no-description`                                                                                      |
+| 64  | a frontmatter name that disagrees with the directory is unparsable                              | `a_frontmatter_name_that_disagrees_with_the_directory_is_unparsable`            | `name-mismatch`                                                                                       |
+| 65  | a corpus root that names its skills in AGENTS.md is read as well as one that uses Index.md      | `a_corpus_root_that_names_its_skills_in_agents_md_is_read_as_well`              | `corpus-index-agents`                                                                                 |
+| 66  | a skill the corpus index does not name is uncited                                               | `a_skill_the_corpus_index_does_not_name_is_uncited`                             | `uncited`                                                                                             |
+| 67  | every finding uses one of the three rules the manifest declares                                 | `every_finding_uses_one_of_the_three_rules_the_manifest_declares`               | `rules-are-declared`                                                                                  |
+| 68  | validate is stateless: the same skill answers the same findings twice                           | `validate_is_stateless_and_answers_the_same_findings_twice`                     | `validate-stateless`                                                                                  |
+| 69  | validate re-reads the directory, so a file added after the first call is reported by the second | `validate_re_reads_the_directory_so_a_later_file_is_reported`                   | `validate-rereads`                                                                                    |
+| 70  | a skill with no Reference tree is valid                                                         | `a_skill_with_no_reference_tree_is_valid`                                       | `no-reference-tree`                                                                                   |
+| 71  | a folded description is read as the description                                                 | `a_folded_description_is_read_as_the_description`                               | `folded-description`                                                                                  |
+| 72  | an unreadable root is an empty corpus, not a rejection                                          | `an_unreadable_root_is_an_empty_corpus_not_a_failure`                           | `absent-root`                                                                                         |
+| 73  | the digest ignores modification times                                                           | `the_digest_ignores_modification_times_and_directories`                         | `digest-ignores-mtimes`                                                                               |
+| 74  | the digest changes when a name, a description, a reference or the order changes                 | `the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes` | `digest-order`, `digest-name`, `digest-description`, `digest-references`, `digest-directory-excluded` |
+| 75  | the digest of the valid skill is the recorded one                                               | `the_digest_of_the_valid_skill_is_the_recorded_one`                             | `digest-recorded`                                                                                     |
+
+---
+
+## The three unported cases
+
+Each of these has no Rust counterpart of any kind - not a unit case, not a scenario - and the reason
+is a fact about the two type systems rather than about the two behaviours.
+
+- **`resolves even when handed something that is not a target`** (row 25). The TypeScript case calls
+  `dispose(undefined)` and asserts the port reports it rather than throwing, because a caller is not
+  a type checker. Rust's `Dispose` takes a `Target` by value: there is no value that is not a
+  target, so there is no hole to fall into and nothing to prove. The rule it protects - dispose
+  never fails - is covered in Rust by `resolves_even_when_handed_a_target_with_no_endpoint` and by
+  the scenario `dispose-foreign-target`.
+
+- **`refuses a call with no options as not-ready, not a TypeError`** (row 52). Same hole:
+  `undefined` where an `OperationOptions` is declared. In Rust a `Call` is a value the caller must
+  construct, and the deadline and cancellation are fields of it.
+
+- **`refuses a call with no question as not-ready, not a TypeError`** (row 53). Same hole again: a
+  missing `Question`. Rust's `Question` is a struct with no absent value.
+
+Two further cases have no executed scenario but are not unported, and are worth naming so the count
+is not mysterious:
+
+- **Row 1 and row 27** (`the port declares exactly the errors the manifest promises`) assert that a
+  package's `module.json` names the same codes its type declares. There is no operation to drive and
+  no page to open, so no scenario can express it; both suites keep the assertion in their own files.
+
+- **Row 21** (`reports a failing release instead of throwing it`) runs as a scenario on the
+  TypeScript side only. Rust's `Transport::Close` returns `()`, so a release cannot fail and there
+  is no cause to report - only a hang is reportable, which is `generated/dispose-hang`. The Rust
+  unit case `reports_a_failing_release_instead_of_returning_it` models the same rule with a hung
+  release, which is the only shape the Rust port has for it.
+
+- **Rows 39 and 42** (`does not wait for ever on a page that ignores its deadline` /
+  `... never opens`) run as scenarios on both sides but have no Rust unit case: `Test/Chat.rs` has
+  no hanging page. The parity fake does, so the rule is proved for the Rust port by the differential
+  run and not by its own suite. That is a gap in `Test/Chat.rs`, not in the port.
+
+One more thing the table does not say: eight skill-contract cases assert on the _text_ of a
+finding's detail as well as on its rule. The scenario compares findings by rule only, because an
+`unparsable` detail embeds the absolute skill directory and necessarily differs between two runs in
+two temporary directories. Detail wording is compared by the two contract suites, which build their
+corpora in process.
+
+---
+
+## The five mutations
+
+`node scenarios/mutate.mjs --check` applies each defect to the real source of both implementations,
+runs both suites, and restores every file from a snapshot taken before the edit - verified by hash
+afterwards, and audited again at the end of the run. The output of the run that shipped this file:
+
+```
+mutation                     typescript  rust
+------------------------------------------------------------
+attached-page-closed         rejected    rejected
+  closing an attached page on dispose
+  typescript: not ok 2 - detaches an attached target without closing it
+  rust:       ---- detaches_an_attached_target_without_closing_it stdout ----
+model-after-send             rejected    rejected
+  checking the model after the send instead of before
+  typescript: not ok 1 - refuses with wrong-model and sends nothing when the page is set to another model
+  rust:       ---- refuses_with_wrong_model_and_sends_nothing stdout ----
+partial-text-on-deadline     rejected    rejected
+  returning partial text on deadline expiry
+  typescript: not ok 4 - refuses with not-ready when the answer never stops changing
+  rust:       ---- refuses_with_not_ready_when_the_answer_never_stops_changing stdout ----
+eof-as-timeout               rejected    rejected
+  classifying a transport EOF as a timeout
+  typescript: not ok 6 - rejects with browser-unavailable when the transport closed during the call
+  rust:       ---- fails_with_browser_unavailable_when_the_transport_closed_during_the_call stdout ----
+threshold-one-read           rejected    rejected
+  changing the stability threshold from three reads to one
+  typescript: not ok 9 - scenario answer-trace-sources
+  rust:       ---- the_settlement_state_settles_on_the_third_agreement_and_not_before stdout ----
+------------------------------------------------------------
+5/5 mutations rejected by both suites; 6/6 files restored byte-for-byte
+```
+
+- **Two of the five are caught by the effect list alone.** `model-after-send` moves the model check
+  after the send: the result is still `wrong-model` with the same detail, and only the order of
+  `evaluate:model` against `evaluate:submit` gives it away. `threshold-one-read` changes
+  `StableReads` from 3 to 1: the answer's text is unchanged and the number of `evaluate:answers`
+  reads is not.
+- **A mutation that does not compile is not a catch.** The harness distinguishes a suite that failed
+  an assertion from a suite that failed to build, and counts the second as a hole. It caught a bad
+  mutation of its own on the way: `Error::Timeout(...)` written as a bare match arm value left the
+  original arm's comma behind and produced `),,`.
+- **The restore is the dangerous part.** The first version of this harness snapshotted the file
+  _after_ editing it, so it restored the mutation and then verified the mutation against itself; two
+  source files were left mutated by a run that reported success. The snapshot is now taken before
+  the edit, `originals` and `current` are separate maps, and a run-level audit re-hashes every
+  touched file at the end.
+
+---
+
+## Where the two ports differ today, and why the scenarios tolerate it
+
+These are real differences, recorded rather than smoothed over. None of them changes a code, an
+effect, or a report count - which is why the differential run is green - but a reader comparing the
+two sources would find them.
+
+- **The sentence and the observation are split differently.** TypeScript writes its own sentence and
+  keeps the reason in `detail`; the Rust port has one error type with `Message` and `Detail` and
+  reaches for whichever it has. `open-unavailable` therefore asserts that the token `ECONNREFUSED`
+  survives somewhere in the failure, not which field it sits in.
+
+- **Deadline wording.** TypeScript's message carries the budget that was left when the read started
+  (`answer exceeded its 38ms deadline`); Rust's carries the whole budget
+  (`answer exceeded the 40ms deadline`). The code and `detail` are identical, so the scenarios
+  assert those.
+
+- **Rust's open timeout loses the word "deadline".** TypeScript says
+  `open exceeded its 60ms deadline`; Rust says `the chat page could not be opened` and puts
+  `the page never answered` in `detail`. The scenario `open-hangs` asserts the code and the
+  observation. This is a defect in the Rust port's wording, not in its behaviour.
+
+- **`Names` disagrees on a non-ASCII boundary.** TypeScript's `Names` spells the boundary as a
+  negated character class over word characters, dots and hyphens - and JavaScript's `\w` is ASCII,
+  so `é` ends a name; the Rust port uses `char::is_alphanumeric`, which is Unicode, so `é` continues
+  one. With `Reference/Notes.md` on disk and `Reference/Index.md` containing `caféNotes.md`, the
+  TypeScript port answers no findings and the Rust port answers `unlisted-reference`. No scenario
+  covers it, because it would fail on one side; every ASCII case in the file agrees. The fix belongs
+  in one of the two `Names` implementations.
+
+---
+
+## The one place they agree today that would diverge under load
+
+**The Rust chat driver's poll pause is not cancellable.** In the settle loop, `Driver.rs` awaits
+`self.Pace.Sleep(Wait)` directly, where `Wait = Poll.min(Call.Remaining(..))`. TypeScript's
+`pause()` races the same wait against the caller's signal and resolves the moment the signal fires.
+
+Today the two agree, because the loop re-reads on the next iteration and the next read starts with
+`Call.Cancelled()` - which is why `generated/chat-answer-cancel` passes on both sides. The
+difference is _when_ the caller hears about it. With the default `pollMs` of 250ms, a TypeScript
+caller that cancels mid-answer is released immediately, and a Rust caller waits out the remainder of
+the current poll interval. Under load - many sessions sharing one process, a page that has stopped
+answering, a signal that fires while a slow read is in flight - that is up to a quarter of a second
+per call of indistinguishable extra latency, and it lands exactly when the caller is trying to shed
+work. Worse, the guarantee is not local: it holds only because the _pace_ eventually resolves. A
+`Pace` whose `Sleep` never resolves - a stalled executor, a test with a virtual clock that does not
+advance - turns a cancelled `ask` into a call that never returns, while the TypeScript driver
+returns at once.
+
+The fix is one combinator: `Race(self.Pace.Sleep(Wait), Call.Cancellation.Cancelled())`, which is
+the same shape `Bound` already uses for the read itself. It is not applied here because it is a
+change to the port's implementation, and this card owns the scenarios, not the port.
+
+--- FILE: Documentation/Reflection.md ---
+# Reflection and Coherence
+
+How a system that can rewrite its own capability definitions stays honest about what it is running.
+The formal apparatus is worth using only up to a point; this note says where that point is.
+
+## The property worth naming
+
+**Decision: this repository** - the term, the definition and the three things a safety claim may
+name. No capture uses "manifest-enforcement coherence". The observation-boundary half of the third
+item is the subject of `.hermes/research/research-575cb198.md`, which argues what an observation
+must name and record; no section here draws on it yet.
+
+**Manifest-enforcement coherence:** the capability manifest a runtime reports is the manifest it
+actually enforces.
+
+Not "the manifest is correct" - correctness is a separate, unprovable-in-general claim. Coherence is
+checkable: read what the system says it is, then exercise the system and compare. Every safety claim
+in this workspace should name one of three things: a state invariant, an observation boundary, or an
+equivalence theorem. A claim that names none of them is prose.
+
+## The trust boundary comes first
+
+**Decision: this repository** - the argument that a self-check has no independent basis, and the
+choice of the composition root plus the process that launches it as the party outside the mutation
+authority. **Source:** `.hermes/research/rust-4ffde6d5.md` §3 for the mechanism the section relies
+on: a source descriptor embedded in the crate and an external release descriptor binding it to the
+delivered bytes, so a manifest read from the mutable store is not the only copy that exists.
+
+If the mutation path can rewrite the reporter, the enforcer and the verifier, an internal self-check
+has no independent basis for detecting coordinated deception - it is checking the story against
+itself.
+
+So one component must sit **outside** the mutation authority, and something external must attest to
+its identity. In this system that is the composition root plus the process that launches it: the
+root holds the manifest it bound, and the runtime can only report what it was given. A manifest read
+from the mutable store alone is not evidence.
+
+## The obligation, reduced to induction
+
+**Decision: this repository** - the induction shape, the four-part mutation obligation
+(authorisation, validation, migration, publication) and the transition table as the cheap version
+that is still honest. No capture states any of them.
+
+Coherence is an invariant, so the proof shape is an induction over transitions:
+
+- establish `Inv(s0)` - the manifest bound at start-up is the manifest enforced at start-up;
+- show `Inv(s) ∧ s →ℓ s' ⇒ Inv(s')` for every state-changing transition: admission, invocation,
+  mutation, recovery, lease reuse, revocation.
+
+For a mutation specifically, four things must jointly establish the invariant for the new
+generation: authorisation, validation, migration, publication. If any one of them is missing, the
+new generation is coherent only by accident.
+
+Tests check instances of this; a general claim needs a proof or exhaustive checking of a finite
+model. The cheap version that is still honest: a transition table listing every state-changing
+operation beside the invariant it must preserve, and a conformance run per generation.
+
+## Where the apparatus collapses
+
+**Decision: this repository** - the boundary at declarative records under a fixed interpreter, and
+the reduction to ordinary versioning. No capture discusses reflection; this is why
+`research-575cb198.md` cannot be read as the source of this section despite the name the brief gave
+it.
+
+If reflection only reads and replaces **declarative records under a fixed interpreter** - which is
+what this workspace is - then none of the higher-order machinery is needed. The requirement is
+ordinary versioning:
+
+- a versioned contract,
+- a validator,
+- a compiler or installer,
+- a migration `m: Vn → Vn+1`,
+- and a test that the migration composed with enforcement preserves the contract.
+
+No reflective tower is required merely because the records describe executable capabilities. The
+check is: demonstrate that every admitted record is interpreted by the same trusted semantics.
+
+## Where it stops being ordinary migration
+
+**Decision: this repository** - the three changes that defeat record validation (interpreter,
+authorisation semantics, the manifest language itself), and the "new policy approved versus old
+policy preserved" distinction.
+
+If an authorised update can change the **interpreter**, the **authorisation semantics**, or the
+**meaning of the manifest language**, record-shape validation is not enough. Then you need either a
+semantics-preservation or refinement obligation between interpreter versions, or an explicit
+declaration that the policy changed.
+
+The distinction to enforce in every upgrade: _new policy approved_ versus _old policy preserved_.
+Conflating them is how a rewrite gets described as a refactor.
+
+## What gets built
+
+**Decision: this repository** - all four items. Nothing in the captures proposes a `reflect`
+operation, a generation-scoped conformance run, a transition table or the semantics-change refusal.
+
+1. A `reflect` operation that returns the enforced manifest **and its generation id**, answered from
+   the composition root rather than from the mutable store.
+2. A generation-scoped conformance run: the contract test suite executes against the generation, and
+   its result is recorded with that id.
+3. A transition table in the runtime package listing each state-changing operation beside the
+   invariant it preserves.
+4. A refusal: a mutation that would change interpreter semantics is rejected unless the caller
+   states which policy changed, so the audit trail records the difference between preservation and
+   replacement.
+
+Bisimulation is used where it belongs - comparing executions across two implementations of the same
+port, or across two interpreter versions. Congruence is the obligation when claiming those
+comparisons survive inspection and mutation contexts. Neither is needed to say "this generation
+enforces what it reports".
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` §2 - the acceptance suite the capture requires
+before the TypeScript sidecar is removed (attach/launch, navigation races, evaluation timeout,
+disconnect, disposal, shared-browser ownership) is one such comparison, named concretely rather than
+gestured at. **Decision: this repository** - the bisimulation and congruence framing, and the claim
+that neither is needed for enforcement coherence.
+
+--- FILE: Documentation/Research.md ---
+# Research
+
+The three captures in `.hermes/research/` are the raw record of the threads this workspace came out
+of. They are evidence, not documentation: they hold the reasoning, the confidence labels and the
+experiments in the order they were produced, and they are never edited. This file is the index that
+makes them usable - one row per thread, what it settled, what it left open, and which
+`Documentation/` file consumed it.
+
+**The rule:** every claim in `Documentation/` carries a `Source:` line naming a capture, or a
+`Decision: this repository` line saying no capture makes it. One hop from statement to origin. A
+claim with neither is unfinished, not merely undocumented.
+
+## Index
+
+| Capture                                                            | Thread                                                              | Answered                                                                                                                                                                                                                | Left open                                                                                                                                                           | Consumed by                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`research-575cb198.md`](../.hermes/research/research-575cb198.md) | hidden properties, disclosure, and how a subscription leaks them    | the execution model that makes atomic disclosure possible; the formal frame (action-conditioned POMDP, epistemic logic as a separate question); a relational design and a reducer rule for revealing without publishing | five SpacetimeDB questions - rollback, cross-module concurrency, scheduled ordering, subscription guarantees, replication determinism - and three of its own checks | nothing yet - `Documentation/Open-Questions.md` Q1-Q8                                                                                                                                                                                                          |
+| [`delo-e9b61659.md`](../.hermes/research/delo-e9b61659.md)         | an audit of `Maintain/Source/Transport` in the consuming repository | nine assumptions the CDP transport makes, each with file and line, its break, and whether the break is silent                                                                                                           | whether any inferred break occurs on a live page - nine experiments, none run                                                                                       | nothing yet - `Documentation/Open-Questions.md` Q9-Q17                                                                                                                                                                                                         |
+| [`rust-4ffde6d5.md`](../.hermes/research/rust-4ffde6d5.md)         | the port of five TypeScript packages into a Cargo workspace         | crate boundaries, consumer-owned ports in Cargo terms, the CDP backend recommendation, manifest representation, the cancellation and budget traits                                                                      | manifest field mapping and the CI check for the arrows - both cut off mid-answer - plus parity and house-style verification                                         | `Documentation/Rust.md` throughout; `Documentation/Design.md` §The four layers, §The manifest, §Why the packages are these five, §The two failures; `Documentation/Reflection.md` §The trust boundary, and the bisimulation paragraph closing §What gets built |
+
+## What the captures are not
+
+The brief for this pass described the first two captures as the design thread (adapter schema,
+ports-belong-to-consumers, five packages, homotopy/bisimulation, reflection) and the repository
+thread (verifier defects, workflow defects, RFC board, event collision, issue triage). Neither
+description matches its file.
+
+- `research-575cb198.md` is a SpacetimeDB and hidden-information thread. It contains no occurrence
+  of `adapter`, `bisimulation`, `homotopy` or `reflection`.
+- `delo-e9b61659.md` is a CDP transport audit of another repository's `Maintain/Source/Transport`.
+  It contains no occurrence of `RFC`, `verifier`, `event collision` or `issue triage`.
+- `rust-4ffde6d5.md` matches its description.
+
+Check it rather than believing it:
+
+```sh
+grep -ciE "adapter|bisimulation|homotopy|reflection" .hermes/research/research-575cb198.md
+grep -ciE "RFC|verifier|event collision|issue triage" .hermes/research/delo-e9b61659.md
+```
+
+Both answer `0`. Provenance that invents a consumer is worse than provenance that reports a gap, so
+the rows above say "nothing yet" where that is the truth, and the consequence for the design
+documents is in the next section.
+
+## The consequence for `Documentation/`
+
+`Documentation/Rust.md` is downstream of a capture and reads as one. `Documentation/Design.md` and
+`Documentation/Reflection.md` are this repository's own position: their claims are argued from the
+consuming repository's surface and from this workspace's constraints, and most of them are marked
+`Decision: this repository` for exactly that reason.
+
+`delo-e9b61659.md` is the only capture that looks at the consuming repository, and it looks at one
+subsystem - the CDP transport. It is therefore evidence for the premise that the boundaries were
+argued from a real surface, not evidence for any particular boundary. The inventory numbers in
+`Documentation/Design.md` are measurements that no capture records.
+
+`research-575cb198.md` is the odd one out: nothing in `Documentation/` consumes it. It answers a
+question this workspace has not asked yet - how an actor's knowledge of a capability's hidden
+properties is disclosed, bounded and recorded - and its answer is a data model (private truth,
+audience-scoped immutable evidence, derived belief) rather than an architecture. It becomes
+load-bearing the moment `Documentation/Reflection.md` needs an observation boundary instead of a
+state invariant; until then it is indexed here and left alone.
+
+## Thread 1 - hidden properties and disclosure
+
+**Source:** [`research-575cb198.md`](../.hermes/research/research-575cb198.md), 154 lines.
+
+**Asked:** (1) is SpacetimeDB's execution model reactor-style, and what is actually documented about
+concurrency and ordering; (2) what formal frame fits capabilities whose properties are hidden at
+first and revealed by traces or by other actors - POMDP, epistemic logic, hidden Markov model - and
+what Netrunner teaches about disclosure that is fair, legible and not degenerate; (3) how to
+represent those properties in a relational database whose subscriptions push rows to clients without
+leaking through the subscription itself, with the table design, the reducer rule, and where the leak
+is unavoidable.
+
+**Settled** (`:11-142`):
+
+- Each database is a single-threaded actor: transactions in one database execute serially, different
+  databases concurrently. "Reactor" is not the documented word; the architecture article says
+  "actor" (`:11`, `:17`).
+- Transaction guarantees are not scheduling guarantees. There is no global FIFO across clients and
+  no guaranteed dispatch order for overdue scheduled reducers, so ordering has to be made explicit
+  with sequence or version preconditions (`:14`).
+- An action-conditioned POMDP is the frame for discovery, with an epistemic MDP as the close special
+  case when properties are fixed; the belief update is Bayesian filtering, and a stored confidence
+  number is not a calibrated model (`:21`, `:24`, `:112`).
+- Epistemic logic answers a different question - what each actor knows, and what they know about
+  others' knowledge - and probabilities are degrees of belief rather than knowledge (`:115`).
+- Latent truth, authorised evidence and actor belief are three records with three authorities;
+  another actor's statement is testimony, not a mutation of truth (`:118`).
+- Netrunner's lesson is rule-governed access, not face-down storage: every reveal must name the rule
+  authorising its target, audience and extent, repeated probing must be bounded, a persistent
+  property must not be rerolled on inspection, and "hidden again" is not "unknown again" (`:119`,
+  `:122`, `:123`).
+- Never publish a secret-bearing row and conceal it client-side: subscriptions synchronise
+  authorised rows into the client cache, private tables are inaccessible, and a caller-aware view
+  can project by `ctx.sender` (`:127`, `:132`).
+- A schema (`CapabilityPublic` / `CapabilitySecret` / `Observation`), an `observe(target, action)`
+  reducer that charges and reveals in one transaction, recorded disclosure preferred over a live
+  join to current truth, traces treated as a subscription surface, and a nonleakage target stated as
+  observable- transcript equality rather than equal visible values (`:131-141`).
+
+**Left open:** the five follow-ups the thread lists (`:145-149`) - rollback, cross-module
+concurrency, scheduled-reducer sequencing, subscription guarantees, replication determinism - plus
+the checks embedded in its findings (dominance, racing probes, canary, paired worlds). All eight are
+`Documentation/Open-Questions.md` Q1-Q8.
+
+## Thread 2 - the transport audit
+
+**Source:** [`delo-e9b61659.md`](../.hermes/research/delo-e9b61659.md), 155 lines.
+
+**Asked:** read `Maintain/Source/Transport` in the consuming repository, name the invariants it
+assumes about browser and page, where each breaks, which breaks are silent, with file and line for
+every claim, saying where it infers and what it would run.
+
+**Settled** (`:12-144`) - nine findings, in the thread's order:
+
+1. Post identity is stable, article _position_ is not; `toggle()` sends an index, so a reorder
+   between read and click is a time-of-check/time-of-use failure that still returns the original
+   identity (`:16-26`).
+2. A URL is a locator, not an identity constraint: `wanted` is populated only for the id variant, so
+   a URL target snapshots index 0 (`:28-38`).
+3. "An article exists" is treated as "the post is ready"; a partial render is silent, and an
+   unrelated article can satisfy readiness (`:40-54`).
+4. Extraction assumes the DOM preserves meaning - relative permalinks, `data-testid`, English metric
+   keywords - and turns "not observed" into `0`, `false` or `""` (`:56-74`).
+5. Background visibility is handled asymmetrically: `reveal()` runs only for an id target in a
+   temporary tab, and swallows its own errors (`:76-84`).
+6. "Network idle" is a quiet timestamp, not an empty in-flight set (`:86-94`).
+7. A completed click is not a verified write: the settle result is discarded, `now` defaults to the
+   desired state when the control is unreadable, reload verification can return null, and existing
+   tabs are never reloaded (`:96-116`).
+8. CDP failures are loud, but `waitFor()` catches every evaluation error and keeps polling, so a
+   permanent error surfaces as a generic readiness timeout (`:118-128`).
+9. Cleanup assumes attachment succeeded: `withPage()` attaches before its cleanup try, so an
+   attachment failure leaks the tab, and close errors are suppressed (`:130-138`).
+
+The sentence worth keeping is the thread's own conclusion: the strongest signals concern connection
+and element availability, the weakest concern the _meaning_ of a successful result (`:144`).
+
+**Left open:** every finding is a source reading plus an inference - the thread says so at `:14` -
+and none was run. It names the experiment for each and five follow-ups (`:146-150`). Nine
+experiments, `Documentation/Open-Questions.md` Q9-Q17.
+
+## Thread 3 - the Rust port
+
+**Source:** [`rust-4ffde6d5.md`](../.hermes/research/rust-4ffde6d5.md), 383 lines.
+
+**Asked:** convert the five TypeScript packages into a Rust workspace in the house style of
+`github.com/PlayForm/Run`, answering crate boundaries under "ports belong to consumers", whether the
+CDP adapter can be Rust or needs a TypeScript sidecar, how the manifest and its four state classes
+survive, where the runtime and cancellation live, how the inward arrows become a CI check, and how
+the manifest fields map.
+
+**Settled:**
+
+- Keep all five as separate crates, add a composition root, add a workflow crate only when a real
+  composition exists; the five must not collapse into modules of one crate (`:56-58`, `:161`).
+- Ports belong to consumers concretely: two distinct `Browse` traits inside the two capabilities,
+  concrete substrate types exported by the adapter, and one root-owned wrapper implementing both -
+  with the warning that a shared "universal browser request" type quietly becomes the forbidden
+  ports crate (`:189-218`).
+- CDP in Rust with `chromiumoxide` behind a small session API; a TypeScript sidecar only as a
+  migration bridge, with four options' failure modes tabulated and an explicit acceptance suite
+  before the sidecar is removed (`:220-281`).
+- Session semantics: `Ownership::{Attached, Launched}`, attach and launch as separate operations,
+  disposal rules per ownership, a disconnected session means cold readiness, cancellation distinct
+  from navigation failure, and "bounded evaluation" as two bounds with an escalation ladder
+  (`:238-259`).
+- Manifest: a checked-in `module.json` embedded with `include_str!`, validated by serde in CI, read
+  by the harness without starting the application; descriptor identity separated from artifact
+  identity in two stages; never `cargo run`, never `cargo test` as an admission command
+  (`:283-312`).
+- Runtime: Tokio in the runtime, the adapter and the root entry point only; capabilities stay
+  executor-independent, with the `Call` / `Cancellation` / `Browse` trait shapes given (`:314-383`).
+
+**Left open:** the answer is cut off mid-sentence at `:378-383`, before the manifest field mapping;
+the CI check for the arrows is asserted (`:58`) but never specified; and the house style is taken
+from the request because the repository could not be retrieved (`:60`). Those, plus parity, the
+two-trait derivation, the `panic = "abort"` conflict and the library behaviours, are
+`Documentation/Open-Questions.md` Q18-Q24.
+
+## Capture integrity
+
+`.hermes` is excluded by a global gitignore, so `git status` cannot tell you whether a capture has
+been edited - it reports nothing either way. These digests can:
+
+| Capture                | Lines | SHA-256                                                            |
+| ---------------------- | ----- | ------------------------------------------------------------------ |
+| `research-575cb198.md` | 154   | `e6755c3aed5852dedfdb01db2642c161d6b87832e833992955ce34ed59d6248a` |
+| `delo-e9b61659.md`     | 155   | `ed2fcc9f0d9b9b4dcc7bb05725b398916519bb4f30a1081785cc089ae4ea781e` |
+| `rust-4ffde6d5.md`     | 383   | `ada96a1e3a121c99fcb3a143758792dd018579e674368749a69ba0232fa6baa7` |
+
+```sh
+shasum -a 256 .hermes/research/*.md
+```
+
+A capture that has been tidied is no longer evidence.
+
+--- FILE: Documentation/Review.md ---
+# Review of the first pass
+
+An external review of the whole corpus - five batches, 111 files - was asked for after the Rust port
+landed. This records its verdict and the defect it found, because the verdict is not a list of nits.
+
+## The finding, in its own words
+
+> The central problem is **authority**: the documents specify one coherent authority over admission,
+> leases, generations and effects, but the code implements several disconnected approximations. The
+> CLI can run browser operations without the lease engine; the lease engine authorizes an arbitrary
+> future rather than fencing the destination; and the database-as-authority design has no
+> corresponding implementation in the supplied Rust sources. These are not small omissions around an
+> otherwise implemented contract. They are different architectures.
+
+Three separate claims, each checkable:
+
+1. **The CLI can bypass the lease engine.** A browser operation reachable from the composition root
+   without going through admission is an effect with no authority behind it.
+2. **`WithLease` fences the caller, not the destination.** The counterexample it gave:
+
+    ```
+    lease is live
+    WithLease admits the callback
+    callback waits
+    lease expires
+    callback performs the external write
+    WithLease returns success
+    ```
+
+    The in-flight counter stops a second local claimant from taking over during that callback. It
+    does not stop the old callback writing after expiry.
+
+3. **The database-as-authority design has no implementation.** `Documentation/Observability.md` says
+   a reducer is where a transition happens; the Rust sources contain no reducer call on that path,
+   so the authority is described and not built.
+
+## Why the existing test does not catch it
+
+`a_claim_during_an_effect_on_an_expired_lease_is_refused` blocks takeover until the future settles
+or is dropped. That substitutes "wait for the old effect" for the specification's "revoke authority
+despite a physically live worker" - the test agrees with the implementation rather than with the
+requirement.
+
+And dropping the future decrements the in-flight count, while dropping a Rust future does not prove
+the browser-side operation stopped. The count therefore measures unsettled local futures, not
+unsettled external effects.
+
+## The revision it proposes
+
+Stop presenting arbitrary callback admission as fencing. An effect should carry its lease and
+generation identifiers and be **checked by the destination** - the reducer that records it - rather
+than trusted because a wrapper admitted it earlier. That is the same conclusion
+`Documentation/Reflection.md` reached for schema generations, applied to effects: the check belongs
+where the write lands.
+
+## What this changes about the plan
+
+The port is not finished; it is a second architecture that agrees with the first only in vocabulary.
+The next card is not "more crates" but "one authority": admission, lease and generation checked at
+the point of effect, with a test that fails when the check is moved back into the caller.
+
+--- FILE: Documentation/Rust.md ---
+# Rust Port
+
+How the five packages become a Cargo workspace, in the house style of `github.com/PlayForm/Run`:
+`Source/` with `Fn/` and `Struct/` trees, PascalCase modules, one `Library.rs` per crate, `Target/`
+as the build directory.
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` throughout. The house style is unverified: the
+capture says the repository could not be retrieved and takes the description as specification
+(`:60`), so nothing here should be read as a measurement of that repository.
+
+## Crates
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` §1 - the directory tree, the package and library
+names, and the decision that the five stay separate crates (`:56-58`, `:152-161`). The capture makes
+the workflow crate conditional on a real composition (`:133`); the rows below are the full proposed
+set.
+
+| Directory             | Package                       | Library                     | Responsibility                          |
+| --------------------- | ----------------------------- | --------------------------- | --------------------------------------- |
+| `BrowserCDP/`         | `agentic-browser-cdp`         | `AgenticBrowserCDP`         | concrete browser substrate              |
+| `ChatDriver/`         | `agentic-chat-driver`         | `AgenticChatDriver`         | chat use case and its browse contract   |
+| `DesignVerification/` | `agentic-design-verification` | `AgenticDesignVerification` | measurement and evidence                |
+| `SkillContract/`      | `agentic-skill-contract`      | `AgenticSkillContract`      | corpus discovery, validation, packaging |
+| `Runtime/`            | `agentic-runtime`             | `AgenticRuntime`            | execution policy and resource ownership |
+| `Workflow/`           | `agentic-workflow`            | `AgenticWorkflow`           | adapter-independent compositions        |
+| `Agentic/`            | `agentic`                     | `Agentic`                   | wiring and executable entry points      |
+
+The five existing packages do **not** become modules of one crate. Collapsing them would turn the
+import-direction rule into a convention inside a single compiler boundary, which is the thing the
+rule exists to prevent. Their internal operations - attach/launch/dispose, ask/verify/read,
+discover/validate/package - stay modules.
+
+## Dependencies
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` §1's dependency graph, and its reading of `Runtime`
+as a policy engine rather than a registry (`:163-187`).
+
+```
+Agentic  → Runtime, BrowserCDP, ChatDriver, DesignVerification, SkillContract, Workflow
+Workflow → ChatDriver, DesignVerification, SkillContract
+BrowserCDP, ChatDriver, DesignVerification, SkillContract, Runtime → no domain crate
+```
+
+`Runtime` is a policy engine, not a registry: it does not import every capability. The root
+registers capability invocations and cleanup operations with it.
+
+## "Ports belong to their consumers", in Rust
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` §1 (`:189-218`) - the two consumer-owned traits, the
+root-owned wrapper, and the warning that a universal request type quietly becomes the ports crate.
+Whether the two traits actually differ is `Documentation/Open-Questions.md` Q22.
+
+There is no shared `ports` crate. There are two distinct traits with the same name in different
+crates:
+
+```rust
+AgenticChatDriver::Struct::Port::Browse::Browse
+AgenticDesignVerification::Struct::Port::Browse::Browse
+```
+
+They need not have identical methods. Chat may require turn observation; design verification may
+require screenshots and layout measurements. Neither grows operations merely because the other needs
+them.
+
+`BrowserCDP` exports concrete substrate operations using its own types, and the composition root
+owns a wrapper implementing both consumer traits:
+
+```rust
+// Agentic/Source/Struct/Binding/Browser.rs
+pub struct Browser { /* holds the CDP client */ }
+```
+
+That wrapper is the only place that knows both sides, which is exactly what a composition root is
+for.
+
+## Module shape per crate
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` §1 for the module paths (`:67-81`) and the
+house-style `.cargo/config.toml` values (`:25`, `:150`). One crate is reproduced here; the capture
+gives the tree for all seven.
+
+```
+ChatDriver/
+  Cargo.toml
+  module.json
+  Source/
+    Library.rs
+    Fn.rs
+    Struct.rs
+    Fn/Ask.rs
+    Fn/Verify.rs
+    Struct/Port/Browse.rs
+    Struct/Call.rs
+    Struct/Turn.rs
+    Struct/Error.rs
+```
+
+`.cargo/config.toml` sets `build.target-dir = "Target"`, and the release profile follows the house
+style: `opt-level 3`, `codegen-units 1`, `debug false`, `lto true`, `panic "abort"`, `strip true`.
+
+## Still open
+
+**Source:** `.hermes/research/rust-4ffde6d5.md` - and the list below is stale against it. The
+capture answers 1 (`:220-281`), 2 (`:283-312`) and 3 (`:314-383`); it asserts 4 (`:58`) without
+specifying the check; it never reaches 5, because the answer is cut off at `:378`. The questions
+stay here as they were asked, and each is tracked with its experiment and blocker in
+`Documentation/Open-Questions.md` Q18-Q24.
+
+These were asked. The capture answered the first three and left the rest below; nothing here should
+be built on a guess:
+
+1. **CDP in Rust or a TypeScript sidecar.** `chromiumoxide`, `headless_chrome`, or raw CDP over a
+   websocket, against keeping a small TS process driven over stdio JSON-RPC. Each has different
+   failure modes around connection loss and event ordering.
+2. **The manifest in Rust.** A build script generating static data, a serde-loaded file per crate,
+   or const data in the crate. The constraint is that a harness must read it without building
+   anything at launch.
+3. **Cancellation and budgets.** The trait shape for a port with a deadline that does not leak
+   `tokio` into every capability.
+4. **Enforcing the arrows.** Cargo permits any dependency direction; the check has to be a
+   workspace-level CI step over the dependency graph.
+5. **Manifest field mapping.** How `state`, `cost` and `artefact.hash` survive without losing what
+   the pre-warm planner needs.
+
+--- FILE: Documentation/Scope.md ---
+# Scope, and the parity with TimeLine
+
+Agentic is not TimeLine's toolkit. It is a local agent and swarm: it gathers links, browses,
+researches, and organises that work in SpacetimeDB. TimeLine is a product - an archive, a site, a
+decision corpus and the tooling that maintains them.
+
+They share a vocabulary (capabilities, ports, leases, evidence) and one direction of travel:
+**research done here can be fed into the DELO project as findings.** Nothing travels the other way,
+and nothing here is required for TimeLine to build.
+
+## What Agentic is
+
+| Capability            | What it does                                                             | State class     |
+| --------------------- | ------------------------------------------------------------------------ | --------------- |
+| `browser-cdp`         | attach to or launch a browser, evaluate in a page, dispose               | holds-transport |
+| `chat-driver`         | ask a chat product, verify mode and model, read the answer and its trace | holds-transport |
+| `design-verification` | measure a built page and produce evidence, with no design baked in       | stateless       |
+| `skill-contract`      | discover, validate and digest a corpus of skill documents                | stateless       |
+| `runtime`             | admission, leases with a fence, per-run budgets, cleanup                 | holds-workspace |
+| `spacetime-catalog`   | the database rules: capabilities, generations, leases, probes, trace     | stateless       |
+
+## What TimeLine is
+
+| Surface          | What it does                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| the archive      | posts, authors, observations, media, membership - written only through `observe`          |
+| the site         | a prerendered Astro surface that reads the archive and never scrapes                      |
+| the RFC corpus   | 76 decision records, their frontmatter contract and the issue board that publishes them   |
+| design verifiers | three probes that measure the built workspace, showcase and spread against a written spec |
+| the tool layer   | 125 TypeScript modules: CLI, transport, store, model, command                             |
+| the gates        | `pnpm run check`: RFC frontmatter, skills, compatibility, state, tokens, position, tests  |
+
+## Parity: what one has that the other does not
+
+| Concern                           | Agentic                                                            | TimeLine                                     |
+| --------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| A browser session                 | yes - attach or launch, with ownership recorded                    | yes, but only to verify its own pages        |
+| Asking a chat product             | yes - mode and model verified, trace captured                      | no                                           |
+| Research corpus                   | yes - threads captured as records with frontmatter and a catalogue | no                                           |
+| A published site                  | no                                                                 | yes                                          |
+| An archive of records             | no                                                                 | yes                                          |
+| A decision corpus with a contract | no                                                                 | yes - 76 records, gated                      |
+| Issue-board synchronisation       | no                                                                 | yes - `rfc_board.py`, read-only by default   |
+| Leases and admission              | yes - the runtime's whole purpose                                  | no                                           |
+| Design measurement                | yes - the engine, with no design in it                             | yes - the engine plus the site's own numbers |
+| Skill validation                  | yes - generic corpus rules                                         | yes - its own 13 skills and their contract   |
+| Persistence                       | SpacetimeDB, as the scheduler and the record                       | files plus SpacetimeDB for the live view     |
+
+## The one direction of travel
+
+A research finding from Agentic becomes a card in the DELO board, and the card is written in
+TimeLine's terms: a file, a claim, a command that settles it. That is the whole interface. Agentic
+does not import TimeLine's code, does not read its database, and is not a dependency of its build.
+
+## What this rules out
+
+- Agentic does not grow a copy of the site, the archive or the RFC board.
+- TimeLine does not grow a copy of the runtime, the chat driver or the research corpus.
+- A capability that both need - measurement, skill validation - lives in Agentic as the engine and
+  in TimeLine as the site's own expectations, which is why the two versions of `design-verification`
+  are not duplicates.
+
+--- FILE: Documentation/Skill/Bounded-Sequences/Reference/Index.md ---
+# Reference
+
+Files in this directory, and what each one carries.
+
+- `Index.md` - this list.
+
+A reference file is added when a worked instance outgrows a rule in `SKILL.md`, not before: the rule
+stays in the skill and the instance moves here.
+
+--- FILE: Documentation/Skill/Bounded-Sequences/SKILL.md ---
+---
+name: bounded-sequences
+description: Use when several page operations must run in order, gated and verified.
+version: 1.0.0
+license: MIT
+platforms: [macos, linux]
+metadata:
+    hermes:
+        tags: [cdp, rust, sequence, batch, verification, pagination]
+---
+
+# Bounded Sequences
+
+A sequence of page operations is a sequence of budgets, not a script with sleeps in it. Each step is
+one `Call`: a deadline, a cancellation, and a result that is classified before the next step runs.
+
+---
+
+## One budget per step, and stop on the first refusal
+
+```sh
+Target/debug/agentic browse --attach <ws> --bind <target-id> \
+  --expression '<step 1>' --timeout 20000
+Target/debug/agentic browse --attach <ws> --bind <target-id> \
+  --expression '<step 2>' --timeout 20000
+```
+
+Two rules make a sequence trustworthy:
+
+- **A failed step ends the sequence.** A step whose result is `null`, `false` or an error is a
+  refusal, not a no-op, and the next step's premise has just become a guess.
+- **The budget belongs to the step, not the run.** One long deadline shared by ten steps hides which
+  step spent it; ten short ones name the step that hung.
+
+Between steps, re-read the state the next step depends on. A page that re-rendered between two
+evaluations can leave the second expression pointing at an element that no longer exists, and the
+failure then looks like a bad selector rather than a stale handle.
+
+---
+
+## A batch mutation is verified by the server, not by the click
+
+A click that returns `true` proves the element was there and was clicked. It does not prove the
+action happened. Verify each mutation by a scalar the server owns - a count, a state field, a row
+that is now absent - and record it beside the input:
+
+```
+item=<id> clicked=true after=<state> ok=true
+```
+
+A batch that reports "12 of 12 clicked" and no state has reported nothing. The audit line is the
+deliverable; the clicks are how it was produced.
+
+Prefer an idempotent form where the product offers one (set-to-value over increment), because a
+batch interrupted halfway is then re-runnable.
+
+---
+
+## A paginated read ends on a repeated key, not on a page count
+
+Collect until the page yields an identity you have already seen, and cap the walk independently of
+that. A count is a guess about a page that may add rows while you read it; a repeated id is evidence
+that you have come back around.
+
+Deduplicate on a stable id, never on position: a virtualised list re-renders rows and a positional
+key renames them mid-read.
+
+---
+
+## A wait that settles before anything changed has not seen the change
+
+"The value stopped changing" is true the instant the wait begins on a page that has not started
+changing yet. A watcher must observe at least one change since it began before "stable" is allowed
+to mean "finished", and the deadline stays the only other exit.
+
+The symptom is a step that finishes in one poll with the old value while the new one lands seconds
+later. For a chat product the same rule is why `busy` is read before stability is counted.
+
+---
+
+## Reference
+
+`Reference/Index.md` - the file list for this skill.
+
+---
+
+## Claim → test
+
+| Claim                                 | Test                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| A sequence stops on the first refusal | make step 2 return `false`; step 3 is never sent                                                        |
+| A budget names the step that hung     | give one step `--timeout 2000` against a page that never answers; the error names that step's operation |
+| A batch mutation is verified          | after the run, the audit line's `after=` value matches a fresh read of the same state                   |
+| A paginated read stops on a repeat    | run twice over the same list: the second run's item count equals the first                              |
+| A stale handle is reported as such    | remove the target element between two steps; the second step fails instead of reporting success         |

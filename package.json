@@ -9,7 +9,7 @@
 		"check": "node Scripts/Boundaries.mjs && node Scripts/Feed.mjs && node Scripts/Legend.mjs",
 		"Format": "prettier --write .",
 		"Format:Check": "prettier --check .",
-		"Test": "node --test \"packages/*/Test/*.test.ts\"",
+		"Test": "node --test \"Package/*/Test/*.test.ts\"",
 		"Test:Feed": "node Scripts/Feed.mjs",
 		"Test:Legend": "node Scripts/Legend.mjs"
 	},

@@ -97,13 +97,13 @@ const rustObservations = (crate) => {
 	const directory = mkdtempSync(join(tmpdir(), "parity-"));
 	const out = join(directory, "rust.json");
 	try {
-		execFileSync("cargo", ["test", "-p", crate, "--test", "parity"], {
-			cwd: join(Root, "rust"),
+		execFileSync("cargo", ["test", "-p", crate, "--test", "Parity"], {
+			cwd: Root,
 			env: { ...process.env, AGENTIC_PARITY_OUT: out },
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 	} catch (error) {
-		console.error(`cargo test -p ${crate} --test parity failed:`);
+		console.error(`cargo test -p ${crate} --test Parity failed:`);
 		console.error(String(error.stdout ?? ""));
 		console.error(String(error.stderr ?? ""));
 		process.exit(1);

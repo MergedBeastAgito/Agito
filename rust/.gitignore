@@ -1,3 +1,0 @@
-# The build directory the house style names, and nothing else: a port is a
-# source tree, so the only thing this workspace produces is `Target/`.
-/Target/

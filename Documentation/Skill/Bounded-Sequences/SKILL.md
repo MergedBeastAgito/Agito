@@ -19,9 +19,9 @@ one `Call`: a deadline, a cancellation, and a result that is classified before t
 ## One budget per step, and stop on the first refusal
 
 ```sh
-rust/Target/debug/agentic browse --attach <ws> --bind <target-id> \
+Target/debug/agentic browse --attach <ws> --bind <target-id> \
   --expression '<step 1>' --timeout 20000
-rust/Target/debug/agentic browse --attach <ws> --bind <target-id> \
+Target/debug/agentic browse --attach <ws> --bind <target-id> \
   --expression '<step 2>' --timeout 20000
 ```
 

@@ -1,0 +1,1170 @@
+--- FILE: Documentation/Skill/Browser-Connect/Reference/Index.md ---
+# Reference
+
+Files in this directory, and what each one carries.
+
+- `Index.md` - this list.
+
+A reference file is added when a worked instance outgrows a rule in `SKILL.md`, not before: the rule
+stays in the skill and the instance moves here.
+
+--- FILE: Documentation/Skill/Browser-Connect/SKILL.md ---
+---
+name: browser-connect
+description: Use when reaching a running browser over CDP from Rust. Attach, bind a tab, launch.
+version: 1.0.0
+license: MIT
+platforms: [macos, linux]
+metadata:
+    hermes:
+        tags: [cdp, rust, chromiumoxide, attach, target]
+---
+
+# Browser Connect
+
+Reach a browser this process did not start, and bind the tab a person is looking at. The Rust
+substrate is `agentic-browser-cdp`; the executable is `agentic browse`.
+
+---
+
+## The three operations
+
+They differ in who owns the process and which page is touched, so they are three statements, not one
+boolean.
+
+**Launch** starts a browser this session owns and may close. `OpenOptions::Launch(call)`.
+
+**Attach** connects to a browser somebody else owns and opens a new page in it.
+`OpenOptions::Attach(endpoint, call)`.
+
+**Bind** connects to that browser and drives a page it already has.
+`OpenOptions::Existing(endpoint, page, call)`.
+
+Disposal reads the ownership: a launched browser is closed, an attached one is only let go of. A
+bind that closed the page would take away the tab the person was reading, which is the whole reason
+ownership is recorded.
+
+---
+
+## Find the endpoint
+
+Two endpoints exist and they are not interchangeable. `/json/version` carries the browser-level one
+that attach needs; `/json/list` carries per-tab ones and is the only honest tab inventory.
+
+```sh
+curl -s http://127.0.0.1:<debug-port>/json/version | python3 -c 'import sys,json;print(json.load(sys.stdin)["webSocketDebuggerUrl"])'
+curl -s http://127.0.0.1:<debug-port>/json/list | python3 -c 'import sys,json;[print(t["id"],"|",t["type"],"|",t["url"][:80]) for t in json.load(sys.stdin)]'
+```
+
+The `id` from `/json/list` is the target id a bind takes. Filter `type == "page"`: a listing also
+carries extension pages, service workers and iframes, and a bind by URL prefix will happily match a
+non-page.
+
+---
+
+## Bind an existing tab
+
+```sh
+Target/debug/agentic browse \
+  --url https://example.test/ \
+  --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
+  --bind <target-id> \
+  --expression '({title: document.title, url: location.href})' \
+  --timeout 40000
+```
+
+`--bind` without `--attach` is refused, because a browser this tool launched has no page to bind.
+The refusal is deliberate: silently opening a tab instead is the failure this flag exists to
+prevent.
+
+**Why a bind needs a fetch first.** A browser announces no `targetCreated` event for the tabs that
+were already open when a client connected, so the handler's own map is empty and `Browser::pages()`
+returns nothing. `Chrome::Bind` calls `Browser::fetch_targets()` before matching, which registers
+those targets and starts an `AttachToTarget` round trip per target.
+
+**Why the match is retried.** A page cannot be handed out until its session arrives, so a first
+match can legitimately miss. The match is retried every 25 ms up to a 2 s grace
+(`Chrome::PageGrace`); past it, the failure names every page the browser does hold, which is how a
+race is told apart from a wrong id:
+
+```
+navigation-failed: the browser holds no page matching the one asked for
+no target id or URL starts with AAAA...; it holds [1111... https://... | 2222... chrome-extension://...]
+```
+
+Matching is target id first, URL prefix second. The id is exact and the prefix is not, so a caller
+that knows only the URL gets the first page that starts with it.
+
+**What a bind costs.** `fetch_targets` attaches a CDP session to _every_ target in that browser. On
+a browser that also hosts an extension holding its own debugger, a second client on a tab can detach
+the first. Bind deliberately, on the tab you mean, and do not enumerate a browser you do not intend
+to drive.
+
+---
+
+## Failure codes
+
+The port has three codes and the substrate maps every `chromiumoxide` error onto one of them, so a
+caller never has to guess which library failed.
+
+| Code                  | Means                                                  | Typical cause                                                        |
+| --------------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
+| `browser-unavailable` | there is no browser to talk to                         | socket closed, connect refused, process exited, no answer            |
+| `navigation-failed`   | the transport is alive and the page is what went wrong | JavaScript exception, page not found, protocol error naming the page |
+| `timeout`             | a deadline passed                                      | the caller's own budget, or silence                                  |
+
+A closed transport wins over a page defect: once the socket is gone, the next failure is classified
+`browser-unavailable` rather than as the page misbehaving.
+
+---
+
+## Never attach to a tab a debugger already holds
+
+Two debugger clients cannot share one tab; the second attach detaches the first. If a tab is being
+driven by an extension or another session, drive a different tab or a browser you launched. This is
+a correctness rule, not a courtesy.
+
+---
+
+## Reference
+
+`Reference/Index.md` - the file list for this skill.
+
+---
+
+## Claim → test
+
+| Claim                                       | Test                                                                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| A bind drives the page that is already open | `agentic browse --attach <ws> --bind <id> --expression 'location.href'` returns that tab's URL, and `/json/list` gains no target |
+| An attach without a bind opens a page       | the same command without `--bind` makes `/json/list` show one more `page` target                                                 |
+| A bind without an attach is refused         | `agentic browse --bind <id>` exits non-zero naming `--attach`                                                                    |
+| A wrong target id is reported, not guessed  | `--bind deadbeef` exits non-zero and lists the pages the browser holds                                                           |
+| Ownership is honoured on release            | after a bind, the bound tab is still in `/json/list`; after a launch, the browser is gone                                        |
+| The browser-level endpoint is the one used  | attaching with a per-tab `/json/list` websocket fails as `browser-unavailable`                                                   |
+
+--- FILE: Documentation/Skill/Browser-Eval/Reference/Index.md ---
+# Reference
+
+Files in this directory, and what each one carries.
+
+- `Index.md` - this list.
+
+A reference file is added when a worked instance outgrows a rule in `SKILL.md`, not before: the rule
+stays in the skill and the instance moves here.
+
+--- FILE: Documentation/Skill/Browser-Eval/SKILL.md ---
+---
+name: browser-eval
+description: Use when one expression must answer a question about a live page. One bounded read.
+version: 1.0.0
+license: MIT
+platforms: [macos, linux]
+metadata:
+    hermes:
+        tags: [cdp, rust, evaluate, expression, probe]
+---
+
+# Browser Eval
+
+Ask a live page one question and read the answer as JSON. The verb is `agentic browse`; the
+operation is `Browse::Evaluate`.
+
+---
+
+## The shape of a call
+
+```sh
+Target/debug/agentic browse \
+  --url https://example.test/ \
+  --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
+  [--bind <target-id>] \
+  --expression '<expression>' \
+  --timeout 40000
+```
+
+The result is `{"url", "ownership", "value"}`, where `url` is the URL the page was actually on when
+it was bound - not the `--url` argument. A bound tab keeps whatever it was showing, so the two
+disagree by design and the reported one is the truthful one.
+
+---
+
+## Write an expression that returns data, not prose
+
+An expression is one JavaScript expression. Make it an immediately-invoked function that returns an
+object, so a probe answers several questions in one round trip instead of several:
+
+```js
+(() => ({
+	title: document.title,
+	editables: document.querySelectorAll("[contenteditable='true']").length,
+	visible: [...document.querySelectorAll("button")].filter((b) => b.getClientRects().length > 0)
+		.length,
+}))();
+```
+
+Rules that keep a probe honest:
+
+- **Return a value.** `undefined` arrives as `null`, and `null` is indistinguishable from "the page
+  does not have it" unless the expression says which.
+- **Trim what you read.** A page's whitespace is not part of what it said, and two reads that differ
+  only in trailing spaces have not changed.
+- **Count, do not assume.** `querySelectorAll(...).length` tells you whether a selector is unique;
+  `querySelector(...) !== null` does not.
+- **Visibility is a computed style, not a rect.** `getClientRects().length` is the cheap test and it
+  is wrong for a `display: contents` wrapper (no box, renders children) and for a
+  `content-visibility: auto` subtree (no rects while offscreen). Use it only where you have checked
+  the element's own layout.
+
+---
+
+## A read is not a write
+
+`browse` evaluates whatever it is given, so it can click and type. Keep the distinction explicit in
+what you run: a probe reads, and a probe that mutates is a mutation wearing a probe's clothes. When
+the intent is to act, say so in the command you keep, because the next reader will assume a `browse`
+call was read-only.
+
+An expression that throws is `navigation-failed` with the exception in the detail, not a silent
+`null`. That is the useful direction: a broken selector in a probe should look broken.
+
+---
+
+## Budgets
+
+`--timeout` is the whole operation's budget in milliseconds and covers open plus evaluate. Silence
+is a `timeout`, never a dead transport, so a page that never answers is reported as slow rather than
+as missing.
+
+The caller's cancellation and the deadline race the work; whichever loses is reported as `timeout`
+with a different sentence. That is how "I gave up" is told apart from "the browser broke".
+
+---
+
+## Reference
+
+`Reference/Index.md` - the file list for this skill.
+
+---
+
+## Claim → test
+
+| Claim                                            | Test                                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| One expression returns structured data           | `--expression '({a: 1+1})'` prints `"value": {"a": 2}`                                    |
+| The reported URL is the page's, not the argument | bind a tab on `https://a/` and pass `--url https://b/`; the result says `https://a/`      |
+| A throwing expression is reported                | `--expression '(() => { throw new Error("x") })()'` exits non-zero as `navigation-failed` |
+| An undefined result is `null`                    | `--expression 'undefined'` prints `"value": null`                                         |
+| A silent page is a timeout, not a dead socket    | `--expression 'new Promise(() => {})'` exits non-zero as `timeout`                        |
+
+--- FILE: Documentation/Skill/Chat-Research/Reference/Index.md ---
+# Reference
+
+Files in this directory, and what each one carries.
+
+- `Index.md` - this list.
+- `Perplexity.md` - the verified selectors and DOM facts for the reference product: where the mode
+  toggle, model label, composer, send control, answer and busy signal actually live, and the two
+  places its markup disagrees with a naive reading.
+
+--- FILE: Documentation/Skill/Chat-Research/Reference/Perplexity.md ---
+# Perplexity: what the page actually is
+
+Every selector here was read from a live tab with
+`agentic browse --bind <target-id> --expression '<probe>'`, not guessed from a framework. Markup is
+not a contract: re-probe before trusting any line below.
+
+---
+
+## The selectors the defaults use
+
+| Role     | Selector                                                                                                              | What it matched                                                         |
+| -------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| mode     | `[data-command-menu-control] button`                                                                                  | two buttons, `aria-label` `Search` / `Computer`, `aria-pressed` on each |
+| model    | `[class*='composer-row'] button[aria-haspopup='dialog'], [data-appearance='framed'] button[aria-haspopup='dialog']`   | one button whose `aria-label` is the model name                         |
+| composer | `textarea, [contenteditable='true']`                                                                                  | one `div[contenteditable=true]`                                         |
+| submit   | `[data-testid='submit-button'], button[aria-label='Submit']`                                                          | one button, `disabled` while the composer is empty                      |
+| answer   | `.prose[data-renderer='lm']`                                                                                          | the answer body, one per turn                                           |
+| busy     | `button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i]` | `Stop response (Esc)`, visible only while generating                    |
+| collapse | `button` (scoped inside the answer)                                                                                   | no control matched: nothing is clamped behind a "read more"             |
+| trace    | `[data-testid='trace-step'], [role='listitem']` (scoped inside the answer)                                            | nothing: the trace lives outside the answer body                        |
+| sources  | `a[href^='http']` (scoped inside the answer)                                                                          | nothing: citations are not anchors inside the body                      |
+
+---
+
+## The two places a naive reading is wrong
+
+**The question is rendered by the same renderer as the answer.** Both carry `data-renderer="lm"`, so
+a selector of `[data-renderer='lm']` counts the question as an answer, and a stability loop settles
+on the question the moment it appears - returning the prompt as the answer. The discriminator is the
+`prose` class, which only the answer body carries; the question's renderer sits inside
+`[data-message-bubble='right']` and has no `prose` class.
+
+**The answer body is not the turn.** The turn is a `[data-workflow-items]` block holding the body,
+the step list, the duration and the source chips. The body alone is the right container for text and
+the wrong one for provenance: `trace` and `sources` come back empty because they are siblings of the
+body, not descendants. Widening `answer` to the workflow block fills them in and makes the text
+noisy with the trace and the chips. Pick one, and say which in the report.
+
+---
+
+## Facts worth carrying
+
+- The mode toggle is two buttons, not one cycling control. `aria-pressed="true"` is on the selected
+  one, so "the label of the single pressed toggle" is a well-defined read.
+- The model button carries no `data-testid`; its `aria-label` _is_ the model name. That is why the
+  driver compares the label rather than asserting a model id.
+- The send control is `disabled` until the composer has a real edit in it, which is what makes a
+  property-write typing path fail loudly instead of silently.
+- A session started from a project page's composer is filed in the project while its URL is the
+  ordinary `/search/<id>` form. The project owns membership and instructions; the thread owns the
+  transcript. Read the thread URL for text, the project URL for where the next question lands.
+- The project page's own composer is a valid research surface: binding it and submitting starts a
+  thread in that project without opening a tab.
+
+---
+
+## What a live turn actually does
+
+Sampled at 250 ms through a bound tab, with the stop selector and the turn text recorded on every
+tick:
+
+| When                  | New answer exists | Stop control | Turn header         |
+| --------------------- | ----------------- | ------------ | ------------------- |
+| 0 - ~3 s after submit | no                | no           | the previous turn's |
+| ~3 s                  | no                | **yes**      | previous turn's     |
+| ~5 s                  | yes, 64 chars     | yes          | `Finished 4s …`     |
+| +250 ms each          | growing           | yes          | `Finished 4s …`     |
+| last ~250 - 500 ms    | still growing     | **no**       | `Finished 4s …`     |
+| after                 | final             | no           | `Finished 4s …`     |
+
+Three consequences, each of which cost a wrong implementation to find:
+
+**The stop control appears late and disappears early.** It is absent for the first ~3 s after
+submit - the search phase - and absent again for the last few hundred milliseconds while text is
+still landing. So `busy` is a gate, not a proof: it blocks the pre-generation window (where the
+thread still holds the previous answer) and the streaming window, and the three-stable-reads rule
+covers the tail it misses.
+
+**`Finished` is a duration label, not a completion marker.** The turn header reads `Finished 4s`
+from the first streamed token, so a `done` pattern of `^Finished` matches a turn that has just
+begun - the exact false settle the check exists to prevent. That is why `done` and `turn` default to
+empty and why a pattern must be enabled only after watching one live turn end to end.
+
+**A long thread is virtualised.** The oldest turn unmounts as the newest arrives, so the answer
+count stops growing - and a driver that identifies the new turn by `count > before.count` waits out
+its whole deadline on a page whose answer is plainly there. The turn is identified by text identity
+as well, which survives the unmounting.
+
+---
+
+## The model control's role attribute is not stable
+
+The model button has been observed with `aria-haspopup="dialog"` and, on a later build,
+`aria-haspopup="menu"`. A selector pinned to `dialog` reads `null` on the build that uses `menu`,
+and the driver then refuses the call as `wrong-model` with `the page reads nothing` — a correct
+refusal about a selector that aged out.
+
+Select on the attribute's presence, not its value, and scope it to the composer:
+`[class*='composer-row'] button[aria-haspopup]`. On the observed builds the only composer button
+carrying it is the model control.
+
+## The scroll control and the in-flight flag
+
+Two things on the page carry the state a driver needs, and neither is the one a naive read would
+pick.
+
+**`button[aria-label="Scroll to end"]`** is how the thread returns to its end, and it is visible
+whenever the newest turn is off-screen. Measured on a long thread: the last answer sat at y = 25,910
+in a 779 px viewport, so a read taken there measured older turns. Pressing it (or
+`scrollIntoView(false)` on the last answer) puts the newest answer's bottom exactly at the viewport
+edge. Note that `window.scrollY` stays 0 — the app scrolls an inner container, so a driver that
+checks `window.scrollY` to decide "am I at the end" always thinks it is not.
+
+**`[data-in-flight]`** on the scroll-to-end icon is the page's own "still producing" flag: `"true"`
+while generating, `"false"` when idle, always present and always visible. It is a better busy signal
+than the stop control because it exists for the whole turn rather than flickering, and it costs one
+attribute read in the same expression that reads the text.
+
+## A composer that keeps its draft
+
+`document.execCommand('insertText')` reports `true` over a draft that the editor still holds.
+Measured here: a question was typed over a 642-character leftover, the call reported success, and
+the answer came back to the _leftover_ question - 7,133 characters of confident answer to something
+nobody asked.
+
+Two rules follow, and both are in the driver now:
+
+- replace an existing draft through the editor (`execCommand('delete')` after selecting), not by
+  writing the DOM under it;
+- read the composer back before clicking send, and refuse with `mismatch` rather than sending a
+  question that is not the one that was typed.
+
+An empty composer is the easy case and it hides this: every early probe passed because the composer
+started empty. The failure only appears on the second consecutive call in the same tab.
+
+## The cold-start race on a newly opened page
+
+`chat` without `--bind` opens a page and probes it immediately. On a fresh page the composer can be
+present before the model button has rendered, and the read then returns `nothing` - which the driver
+reports as `wrong-model: the page is set to a different model … the page reads nothing`. That is a
+page still arriving, not a different model; the selector is fine (the same selector reads
+`GPT-6.1 Sol` on that page a moment later).
+
+Bind an already-open tab for research, and treat that particular `wrong-model` whose detail says the
+page reads nothing as "retry", not as "wrong model".
+
+--- FILE: Documentation/Skill/Chat-Research/SKILL.md ---
+---
+name: chat-research
+description: Use when a web chat UI must answer a research question from Rust. Ask, settle, read.
+version: 1.0.0
+license: MIT
+platforms: [macos, linux]
+metadata:
+    hermes:
+        tags: [cdp, rust, research, chat-ui, perplexity, chat-driver]
+---
+
+# Chat Research
+
+Ask a web chat product a question and read the answer once the page says it has finished. The
+capability is `agentic-chat-driver`; the verb is `agentic chat`.
+
+There is no API to call. The product is a composer, a send control and a block of text, so the
+driver's rules are about what a page is allowed to claim.
+
+---
+
+## The call
+
+```sh
+Target/debug/agentic chat \
+  --url https://example.test/ \
+  --model '<the label the page shows>' \
+  --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
+  [--bind <target-id>] \
+  [--selectors <file.json>] \
+  --question '<text>' \
+  --timeout 300000
+```
+
+The result is `{"url", "text", "model", "mode", "trace", "sources"}`. `--bind` drives the tab a
+person is already looking at; without it the call opens a page of its own. Use a bind for research
+that belongs in an existing thread, and a new page for a probe you intend to throw away.
+
+---
+
+## Four preconditions, refused rather than assumed
+
+**The mode is a precondition.** The composer's toggle is read before anything is typed. Not `search`
+means it is pressed once, read again, and then refused as `wrong-mode` - nothing was sent. One
+press, not a loop: a toggle that does not move on the first press will not move on the fifth, and a
+retry loop spends the caller's deadline proving it.
+
+**The model is a precondition.** The label is compared to `--model` before anything is typed, and a
+mismatch is `wrong-model`. A driver that cannot say which model answered cannot defend its output.
+
+**Completion is a rule, not a sleep.** See below.
+
+**A collapsed answer is `truncated`.** The control that hides the rest of an answer is looked for
+inside the newest answer once it has settled, because at that point the text in the DOM is
+demonstrably not all of it.
+
+Everything else the page does that is not one of those four is `not-ready`, with the cause in the
+detail. The manifest has four codes and the driver does not invent a fifth.
+
+---
+
+## Completion: the page's own signal, then stable text
+
+Text stability alone false-settles. A pause between tokens, a reasoning step and a slow code block
+all leave the text unchanged while the answer is demonstrably unfinished, and a driver that only
+counts stable reads returns a partial answer that looks whole.
+
+So `ReadAnswers` returns `{count, text, busy}` in one read, where `busy` is the page's own statement
+that it is still producing - a visible stop or cancel control. The rule is:
+
+- a **busy** read resets the confirmations and confirms nothing;
+- otherwise three consecutive reads with no change settle the answer.
+
+`busy` is read in the same expression as the text, not in a probe of its own: a separate read
+describes a different instant, and the two disagree exactly when it matters.
+
+**The new turn is identified by membership, not by position or count.** A long thread is
+virtualised, so the oldest turn unmounts as the newest arrives and the count stops growing while the
+answer is plainly there; and the last element in document order is not reliably the newest turn.
+Each read carries one identifier per answer - its length in code points and its opening - so "is
+this answer new" is answered by membership: an answer whose identifier was not in the thread before
+the question is the only reading that survives unmounting and reordering.
+
+A page that is **already** producing when the call begins is refused rather than typed into: the
+question would land in a turn that is still being written, and the answer read back would belong to
+neither.
+
+The honest limit: `busy` false is not proof of success. A cancelled or failed turn also stops
+generating. The driver's own turn identity and deadline are what distinguish those, and a caller
+that needs certainty reads the trace and the text rather than trusting the settle alone.
+
+---
+
+## Typing is an edit, not a property write
+
+A contenteditable editor keeps its own document model. Writing `innerText` changes the DOM and
+leaves the send control disabled, because no edit happened - the symptom is
+`not-ready: the send control is disabled after the question was typed`.
+
+`TypeQuestion` therefore performs a real edit: focus, select the contents, and
+`document.execCommand('insertText', …)`, falling back to a written `innerText` plus an `input` event
+only when the browser refuses. A `textarea` or `input` is set through its prototype's own value
+setter, so a framework tracking the value sees the change. An existing draft is replaced through the
+editor as well - select, `execCommand('delete')`, then insert - because overwriting the DOM under an
+editor that already holds a question leaves its model holding the old one.
+
+**The composer is read back before the send, and a mismatch sends nothing.** `PressSubmit` compares
+the composer's text with the question, normalised, and returns `mismatch` instead of clicking. An
+editor can report a successful insert while keeping the previous draft; sending that asks a question
+nobody wrote, and nothing in the result would say so. That is the one failure worse than sending
+nothing, so it is refused as `not-ready` with the cause in the detail.
+
+The CDP-native alternative is `Input.insertText` after focusing the editable host. It is the better
+primitive for an editor that resists `execCommand`, and it is the next step this substrate does not
+yet expose.
+
+---
+
+## Observing instead of only asking
+
+`Ask` is `Observe` with the inside hidden. `Observe` runs the same preconditions, turn correlation
+and completion rule, and pushes one `Observation` to a sink for every read it takes:
+
+```rust
+let mut Sink = |Seen:&Observation| {
+    // count, text, busy, fresh, settled
+    Control::Continue
+};
+Driver.Observe(Question, Call, &mut Sink).await
+```
+
+`Control::Stop` is a mutation observer's `disconnect()`: it ends the wait and the answer so far
+comes back, because stopping is not failing. The `Call`'s cancellation is the abort from the
+outside, and it is also not an error. The `--observe` flag prints one JSON line per read on stderr,
+which is how a stalled or flickering completion signal becomes visible instead of being averaged
+into a single result.
+
+**A read returns to the end of the thread first.** A virtualised thread does not mount what is
+off-screen, so a read taken with the page scrolled to the top measures whichever turns happen to be
+mounted — and an old answer is read as a new one. The page's own scroll control is pressed first,
+and scrolling the last answer into view is the fallback for a product that has none.
+
+## Ask, then weigh
+
+- **Over-supply, under-read.** Send the real inventory - names, paths, counts - and read only the
+  part where the verdict lands. The remote model's context is cheap; yours is not.
+- **A long answer is not a truncated one.** The tell is the text, not a `Read more` control, which
+  is a display clamp over text already in the DOM.
+- **Ask for the answer, not a format.** Impose a shape only for status you will act on mechanically.
+- **An answer is a hypothesis until the line it names is read.** A chat product sees the web and
+  other repositories, not your working tree or your commits.
+- **Make it argue against itself.** Paste the artefact rather than a description, ask for the
+  strongest case against its own advice, and ask where the design is worse. A concession with no
+  downside is a sales pitch.
+
+---
+
+## One question per thread, and say which tab answered
+
+A follow-up in an existing thread carries that thread's history, so it does not have to restate
+facts a fresh thread would need. A second question dropped into a saturated thread comes back
+truncated, because the answer budget is shared with everything already in it.
+
+Report the mode, the model and the tab. A reader who cannot tell which of the three produced an
+answer cannot weigh it.
+
+---
+
+## Reference
+
+- `Reference/Index.md` - the file list for this skill.
+- `Reference/Perplexity.md` - the verified selectors and DOM facts for the reference product, and
+  the two places its markup disagrees with a naive reading.
+
+---
+
+## Claim → test
+
+| Claim                                            | Test                                                                                                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A question is answered and read back             | `agentic chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                   |
+| The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                           |
+| The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                    |
+| A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                               |
+| Typing produces a real edit                      | after a failed send, the composer holds the question text and the send control is enabled                                                           |
+| A settled answer is the answer, not the question | the returned `text` is not equal to `--question`                                                                                                    |
+| A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                       |
+| A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                     |
+| A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM |
+| A stale draft is replaced, not appended          | type question A, abandon it, then ask B: the answer is to B, and the composer never sends A                                                         |
+| A composer that kept the old draft is refused    | with a draft present, ask a different question: the call exits non-zero as `not-ready` naming `mismatch`, and no turn is added                      |
+| A settled answer equals the page's               | compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                       |
+
+--- FILE: Documentation/Skill/Chat-Selectors/Reference/Index.md ---
+# Reference
+
+Files in this directory, and what each one carries.
+
+- `Index.md` - this list.
+
+A reference file is added when a worked instance outgrows a rule in `SKILL.md`, not before: the rule
+stays in the skill and the instance moves here.
+
+--- FILE: Documentation/Skill/Chat-Selectors/SKILL.md ---
+---
+name: chat-selectors
+description: Use when chat markup must be described as selectors.
+version: 1.0.0
+license: MIT
+platforms: [macos, linux]
+metadata:
+    hermes:
+        tags: [cdp, rust, selectors, adapter, configuration]
+---
+
+# Chat Selectors
+
+The chat driver knows what to read, never where it lives. The where is a `Selectors` value: eight
+strings, merged over the defaults from a JSON file.
+
+---
+
+## The file
+
+`--selectors <path>` takes a JSON object. Keys that are absent keep their default; a key that is
+present replaces it.
+
+```json
+{
+	"answer": ".prose[data-renderer='lm']",
+	"busy": "button[aria-label*='Stop' i]"
+}
+```
+
+The merge is deliberate. A caller changing one selector should not have to restate the seven it is
+happy with, and an absent key must keep the default rather than become an empty selector that
+matches everything.
+
+---
+
+## The eight keys
+
+| Key        | What it must find                                                                                  | What breaks without it                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `mode`     | the composer's mode toggles, each carrying its mode as a label and its selection as `aria-pressed` | the search-mode precondition cannot be read, and the call is refused as `wrong-mode` |
+| `model`    | the element naming the model the composer will send to                                             | the model precondition cannot be read, and the call is refused as `wrong-model`      |
+| `composer` | the editable that accepts text                                                                     | nothing can be typed                                                                 |
+| `submit`   | the control that sends                                                                             | nothing can be sent                                                                  |
+| `answer`   | every answer in the thread, in document order                                                      | the thread cannot be counted, so a new turn cannot be told from an old one           |
+| `collapse` | the control that hides the rest of an answer, searched **inside** the newest answer                | a truncated answer is returned as if it were whole                                   |
+| `trace`    | one step of the answer's trace, searched **inside** the newest answer                              | the trace comes back empty                                                           |
+| `sources`  | one cited source, searched **inside** the newest answer                                            | the sources come back empty                                                          |
+| `busy`     | the control that means the page is still producing, searched **across the page**                   | text stability alone settles partial answers                                         |
+| `turn`     | the answer's turn container, searched for as an **ancestor** of the answer                         | the turn-scoped checks below have nothing to read                                    |
+| `done`     | a pattern the turn's text matches **once the turn is over**                                        | completion stays on text stability alone                                             |
+| `scroll`   | the control that returns the thread to its end                                                     | the newest turn is never mounted, so reads measure old turns                         |
+
+---
+
+## Three keys must never be inferred
+
+`model`, `busy` and `answer` are the three the driver refuses to guess at:
+
+- **`model`** because a driver that cannot say which model answered cannot defend its output;
+- **`busy`** because without it completion is a guess about silence;
+- **`answer`** because without a turn boundary a driver returns an old answer and calls it new.
+
+A missing `busy` is not fatal the way a missing `answer` is: the driver reads "nothing says it is
+still working" and leaves the text rule in charge. That is a degraded mode, not a correct one, and
+the report should say so.
+
+---
+
+## Scoping is part of the selector
+
+`collapse`, `trace` and `sources` are queried **inside the newest answer**, so an earlier turn's
+control is never this answer's. `busy` is queried across the page, because a product keeps its stop
+control in the composer: it is a fact about the turn, not about the text the turn has produced.
+
+A selector that is right about the element and wrong about the scope produces a confident wrong
+answer, which is worse than an empty one.
+
+---
+
+## Write selectors that survive a re-render
+
+Prefer, in order: a stable `data-` attribute, an accessible label, a structural relationship that is
+part of the component's meaning. A generated class name is the last resort, and a positional
+selector (`div:nth-child(3)`) is not a selector at all - it is a description of today's markup.
+
+Two specific traps:
+
+- **`[class*='…']` matches any class containing that substring**, including one that means something
+  else. Scope it to a parent that has the meaning you want.
+- **The first match in document order is not the visible one.** A panel or dialog can leave a hidden
+  editor earlier in the tree, and a send into it looks like a dead page.
+
+---
+
+## Reference
+
+`Reference/Index.md` - the file list for this skill.
+
+---
+
+## Claim → test
+
+| Claim                                                 | Test                                                                                      |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| An override replaces one key and keeps the rest       | a file with only `answer` set still reads mode and model from the defaults                |
+| An absent key is not an empty selector                | a file with `{}` behaves identically to no `--selectors`                                  |
+| A malformed file is refused                           | `--selectors` pointing at invalid JSON exits non-zero naming the file                     |
+| A wrong `answer` selector is visible, not silent      | point `answer` at `body` and the returned text contains the product's chrome              |
+| `busy` is read across the page, not inside the answer | a stop control in the composer still gates settlement when `answer` is scoped to the body |
+
+--- FILE: Documentation/Skill/Index.md ---
+# Skill corpus
+
+The skills this repository ships, and the contract that keeps them loadable.
+
+---
+
+## The skills
+
+- `Browser-Connect/` - reaching a running browser from Rust: launch, attach, and binding the tab a
+  person is already looking at, with the target enumeration a bind needs and the three failure
+  codes.
+- `Browser-Eval/` - one expression, one budget: how to ask a live page a question and read the
+  answer as data, and why a probe that mutates is not a probe.
+- `Chat-Research/` - asking a web chat product a research question from Rust: the mode and model
+  preconditions, the typing path that is a real edit, completion as the page's own signal plus
+  stable text, and how to weigh what comes back.
+- `Chat-Selectors/` - the eight strings the chat driver reads the page through, the three it refuses
+  to infer, and the scoping that makes each one correct.
+- `Bounded-Sequences/` - several operations in order: one budget per step, a stop on the first
+  refusal, and verification by server-side state rather than by a click.
+
+---
+
+## The contract
+
+Each skill is a directory holding `SKILL.md` and, when it has supporting files,
+`Reference/Index.md`. `agentic skills Documentation/Skill` checks three rules and reports rather
+than returns early:
+
+- **parsable** - the frontmatter block is closed, states a non-empty `description`, and its `name`
+  matches the directory;
+- **cited** - every file under `Reference/` is named in `Reference/Index.md`;
+- **listed** - this file names the skill, so nothing in the corpus is orphaned.
+
+A finding is a rule, a skill and a sentence. An empty finding list is a valid corpus.
+
+```sh
+Target/debug/agentic skills Documentation/Skill
+Target/debug/agentic skills Documentation/Skill --json
+```
+
+The digest the command prints is over each skill's name, description and reference file list - not
+over its prose. So it changes when a skill is added, renamed, re-described or gains a reference, and
+it does **not** change when only the body text does; two checkouts of the same corpus agree on it
+because no path or modification time enters it.
+
+--- FILE: Documentation/Spacetime-Catalog.md ---
+# SpacetimeDB Catalog
+
+The agentic database model as rules and data: capabilities, generations, leases with a fence,
+probes, beliefs and trace. It lives here rather than in the consuming repository because none of it
+needs SpacetimeDB to be true, and a module that imported the server SDK to hold it could not be
+tested without a published database.
+
+This is an adoption note. It says what the catalog is, which invariant each rule enforces, and
+exactly what TimeLine copies to adopt it in one step.
+
+## What this package is
+
+- **`Source/Tables.ts` is the catalog** - six tables described as data: name, columns with a type and a
+  key, and whether a table is append-only. A module's `Schema.ts` renders its `table(...)`
+  declarations from this, and a reader diffs two versions of it to see what a generation changed.
+- **`Source/Context.ts` is the seam** - the whole of what a rule is given: who is calling, what time it
+  is, and a way to read, insert, update and delete one row by key. Five members, and no more,
+  because everything else on a module's `ctx` is a way to escape the rules rather than to state
+  them.
+- **`Source/Reducers.ts` is the behaviour** - `bind`, `claim`, `renew`, `probe` and `recordTrace` as
+  pure functions over `Context`. Each answers a result rather than throwing, so a refusal is a value
+  a caller handles and a test asserts.
+- **`Test/Fake.ts` is the instrument** - an in-memory context that records every write, refuses to
+  rewrite a table the catalog marks append-only, and checks every row against the catalog's columns
+  and types.
+
+The seam is the point. `spacetimedb/server` is not a dependency of this workspace, and adding one to
+test rules would be backwards: the rules are what must be true of the module, so they have to be
+checkable before a module exists.
+
+## The six tables
+
+- **`capability`** - keyed by `<name>@<version>`, append-only. What a manifest may name. Rows are
+  declared by the module's `init`, from its own package manifests; there is no reducer that declares
+  one, because a declaration is a deployment.
+- **`generation`** - keyed by a sequence number as a decimal string, append-only. What was bound, by
+  whom, at what time, and which capabilities the manifest named. A generation is superseded by the
+  existence of its successor, never by a column someone rewrote.
+- **`lease`** - keyed by the resource id, current state. Who holds what, under which generation, at
+  which fence, until when. Never deleted: deleting the row would erase the fence, and a fence that
+  restarts at one is a fence a late worker can satisfy.
+- **`probe`** - keyed by `<property>:<version>:<audience>`, append-only. What a specific audience
+  learned about a specific property version, and when. It has no column for the private value, and
+  no rule is ever given it.
+- **`belief`** - keyed by `<audience>:<property>:<version>`, disposable. What an audience inferred
+  from the observations it holds. A belief grants no access, which is why it may carry an
+  interpretation while `probe` may not carry the truth.
+- **`trace`** - keyed by `<at>:<kind>:<subject>`, append-only. What happened, keyed by content so a
+  replay appends nothing. Evidence, not authority.
+
+## The four invariants
+
+### Coherence - one bound generation, and no writes under an old one
+
+`bind` appends a generation and refuses a manifest that names a capability the catalog does not
+declare. Every other rule refuses to write under a generation that is not the latest bound one.
+
+The mechanism is worth stating, because it looks like a trick and is a consequence. Generation ids
+are dense sequence numbers, and `bind` computes a successor's id as its parent's sequence plus one.
+So "is this generation the latest?" is answered by one key lookup - does `sequence + 1` exist - in a
+context that finds by key and cannot scan. The same property is what leaves the predecessor
+byte-identical: a bind inserts a row and updates nothing, and the catalog marks the table
+append-only so a context cannot quietly rewrite it.
+
+A bind names its predecessor and that predecessor must still be the latest, so two binds of the same
+parent are a compare-and-swap rather than a fork: in a serialised database the second sees the first
+one's successor and is refused.
+
+Proved by: `bind appends a successor and leaves the previous generation untouched`,
+`bind refuses a manifest that names a capability the catalog does not declare, and writes nothing`,
+`bind refuses a predecessor that is already superseded, or that was never bound`, and
+`a claim or a probe under a superseded generation is refused, and writes nothing`.
+
+### Fence - a late worker cannot write
+
+`claim` increments the fence. `renew` and `probe` refuse a fence that is not the lease's current
+one, and refuse without writing, so a worker whose lease expired cannot write as though it still
+held it.
+
+Expiry is a comparison, not a stored transition: a row that says `held` but whose deadline has
+passed is expired, because no timer has to have run for that to be true. An expired lease is
+re-claimed, which increments the fence - renewal extends a lease and never resurrects one. The row
+is never deleted, so the fence never restarts at one.
+
+Proved by: `the fence: a claim past expiry increments it, and the first fence can no longer renew`,
+`a claim while a lease is live is lease-held, and writes nothing`,
+`an expired lease cannot be renewed back to life`, and
+`a probe carrying a stale fence is refused, and writes nothing`.
+
+### Disclosure - one row, to one audience, at one version
+
+`probe` writes exactly one audience-scoped row and returns only that row. The private value is never
+an argument, so it is never a column: a reader cannot select what the database was never told.
+
+The row id is `<property>:<version>:<audience>`, which makes the reveal its own receipt and its own
+allowance. A second probe by the same audience at the same version finds the row and is refused as
+`budget-exhausted`, so no second row has to record a charge, and two racing probes cannot both spend
+a one-use allowance - the database serialises them and the loser finds the winner's row.
+
+The audience is `ctx.sender`, never an argument: a caller-supplied audience would be a
+caller-supplied identity, and the recipient of a reveal is not something the caller names.
+
+Proved by:
+`a probe writes exactly one row, carrying the audience and the property version, not the private value`,
+`a second probe by the same audience at the same property version is budget-exhausted, and writes nothing`,
+and `the allowance is per audience, so another holder gets its own observation`.
+
+### Time - one clock, and it is the context's
+
+Every timestamp a row carries is `ctx.now`. No function reads a wall clock, and the lags between
+times are differences the caller computes, because a reducer that read `Date.now()` could not be
+replayed and a test could not decide what time it is.
+
+Proved by: `every timestamp a row carries is ctx.now, so a fake clock decides the whole transcript`.
+
+## Adopting it in TimeLine, in one step
+
+One deliberate step, five parts. Everything but the fourth is a copy.
+
+1. **Copy the rules and the catalog, unchanged.** The exact list is below. They compile as they are;
+   nothing in them names TimeLine.
+2. **Render `Schema.ts` from `Tables.ts`.** Each table becomes one `table(...)` declaration, each
+   column one `t.*` call. The mapping is mechanical: `string` is `t.string()`, `number` is
+   `t.u64()`, `boolean` is `t.bool()`, `json` is `t.string()` holding the array's text,
+   `optional-string` is `t.string().optional()`, `optional-number` is `t.u64().optional()`, a
+   `primary` key takes `.primaryKey()` and an `index` key `.index()`.
+3. **Write the adapter that satisfies `Context`.** This is the only new code TimeLine writes, and it
+   is the five members below.
+4. **Seed `capability` in `init`** from the package manifests TimeLine already has, so the first
+   `bind` has something to check against.
+5. **Register the five rules as reducers**, with their arguments as the `t.*` declarations the
+   module already uses for `observe` and `record`.
+
+### The declarations to copy
+
+From `Source/Tables.ts`: `ColumnTypes`, `ColumnType`, `Column`, `Table`, `TableName`, `Tables`,
+`TableNames`, `PrimaryKey`.
+
+From `Source/Context.ts`: `Value`, `Row`, `Context`.
+
+From `Source/Reducers.ts`: `Reason`, `Refusal`, `Result`, `ProbeResult`, `Bind`, `Claim`, `Renew`,
+`Probe`, `Trace`, `bind`, `claim`, `renew`, `probe`, `recordTrace`, and `Latest` - the coherence
+predicate, which a view that lists live generations needs for the same reason a rule does.
+
+That is all of both files. Nothing is copied selectively, because a rule that travelled without its
+table description would be a rule checked against a different catalog than the module renders.
+
+### The adapter, which is the only code TimeLine writes
+
+- **`sender`** - `ctx.sender`, the module's `Identity`, rendered to a string once at the boundary.
+  Every rule compares that rendering, so a rule never compares an identity to a caller-supplied
+  argument.
+- **`now`** - `ctx.timestamp` in whatever integer unit the module uses. The rules only add, compare
+  and store it, so the unit is TimeLine's choice; a `ttl` passed to `claim` or `renew` has to be in
+  that same unit. A `u64` column is a `bigint` in the module's TypeScript, so the adapter converts
+  at the boundary and the rules stay on `number`.
+- **`find(table, id)`** - `ctx.db[table].id.find(id)`.
+- **`insert(table, row)`** - `ctx.db[table].insert(row)`.
+- **`update(table, row)`** - `ctx.db[table].id.update(row)`.
+- **`delete(table, id)`** - `ctx.db[table].id.delete(id)`. No rule in `Reducers.ts` deletes a row;
+  the member exists because the context has it.
+
+### The one thing that cannot be copied
+
+The module's own `spacetimedb` import: `schema()`, `table()`, `reducer()`, `ctx.db`, `t.*`, `init`
+and the client callbacks. Those exist only inside a published module - there is no `ctx.db` before a
+module is compiled and no `table()` without the server package - so a rule that named them could not
+be tested without a database, and would pin the rules to one server version.
+
+That is the whole of what stays behind in TimeLine: `Schema.ts`, the `Context` adapter, `init`, and
+the five `spacetimedb.reducer(...)` registrations. The rules, the catalog and the interface travel
+unchanged, and the tests that prove them travel with them.
+
+## What is deliberately absent
+
+- **No reducer declares a capability.** A declaration is a deployment, and a reducer that could add
+  one would let a caller widen the set its own manifest is checked against.
+- **No belief writer.** Deriving a belief is the actor's own act on observations it already holds;
+  the table is described because its shape is the third thing the disclosure rule needs, and
+  deleting a belief loses nothing.
+- **No `release` reducer.** These five rules never end a lease early; expiry is the recovery
+  mechanism and every write checks it. `lease.state` is read by every fenced write, so a module that
+  wants early release adds `release` and the rules already treat `released` as claimable.
+- **No scan.** Every question a rule asks is one key lookup, which is why generation ids are dense
+  sequence numbers and why a probe's key is its receipt. A rule that needed `iter()` would be a rule
+  that cannot be stated here.
+- **No wall clock, no credentials, no private values.** The catalog describes what is stored; a
+  secret the rules are never given is not merely filtered from a reader, it never enters the
+  database.
+
+## What proves it
+
+```
+cd Package/spacetime-catalog
+node --test Test/*.test.ts
+```
+
+25 tests, no `spacetimedb` package installed, and no dependency in `package.json`. The workspace
+gate is `npm run check`, and the formatting gate is
+`pnpm exec prettier --check Package/spacetime-catalog Documentation/Spacetime-Catalog.md`.
+
+--- FILE: README.md ---
+# Agentic
+
+Capabilities, adapters and the runtime that leases them. A local agent and swarm: it gathers links,
+browses, researches, and organises that work. Nothing here knows about a particular product - the
+product consumes this workspace and supplies its own composition root.
+
+---
+
+## The shape of it
+
+Two trees and one specification. `Package/` states what each capability must do, in TypeScript that
+runs directly on Node. `Crate/` is the port of that specification into a Cargo workspace.
+`Documentation/` records the decisions the two share, `scenarios/` is the evidence that they agree,
+and `Scripts/` is the gate that keeps the arrows pointing inward.
+
+The arrows point inward and nothing imports a root. A capability may import its own port and data
+shapes; an adapter implements one port against one mechanism; a workflow composes capabilities; the
+composition root binds ports to adapters. A capability that imports an adapter is a defect rather
+than a shortcut: it makes the capability untestable without the provider, which is the one property
+this workspace exists to keep.
+
+Every package and every crate carries `module.json`. The field that does the most work is `state`,
+because it decides what a harness may warm and what it must revalidate at admission:
+
+- **`stateless`** - nothing to check.
+- **`holds-transport`** - a liveness probe, because an open socket can be dead.
+- **`holds-identity`** - a freshness check, because a token expires while pooled.
+- **`holds-workspace`** - a reset proof, because a dirty workspace answers wrongly.
+
+The lifecycle those states belong to is: prepare reusable infrastructure, lease an isolated context,
+bind identity and task, validate credentials and connections and versions, execute within a fresh
+budget, persist only authorised artefacts, then destroy or prove a reset. Preparation improves
+latency and admission establishes correctness. They are different acts, and merging them is how a
+warm pool starts returning wrong answers quickly.
+
+---
+
+## Package/
+
+Six TypeScript packages, one per capability, each with a port, the data shapes it names and a
+fake-based suite. They are the specification the Rust port mirrors: a change to a port or a failure
+code belongs here first, and `scenarios/` is what holds the other tree to it.
+
+- **`browser-cdp`** - the shared execution substrate: attach versus launch, bounded evaluation, and
+  disposal that closes only what it launched.
+- **`chat-driver`** - ask a chat product, correlate turns, verify mode and model, then read the
+  answer and its step trace.
+- **`design-verification`** - measure a built page and produce evidence; the expectations stay with
+  the consumer.
+- **`runtime`** - admission, leases with a fence, per-run budgets, cancellation, cleanup and
+  lifecycle telemetry.
+- **`skill-contract`** - discover, validate and package a skill corpus, with a stable digest.
+- **`spacetime-catalog`** - the database model as rules and table descriptions: capabilities,
+  generations, leases, probes, beliefs and trace.
+
+The suites are fake-based throughout. A page is a scripted responder, a browser is a scripted
+launcher, and a deadline passes because the test advanced a clock it owns. Nothing in this tree
+starts Chromium or opens a socket.
+
+---
+
+## Crate/
+
+The same specification as a Cargo workspace of seven crates, in the house layout: one directory per
+crate under `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/`
+for data and contracts, PascalCase module names, and one `Target/` at the workspace root.
+`Crate/README.md` carries the per-crate dependency lists.
+
+- **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
+  `Bound`/`Race` combinators, and the policy engine. No dependencies.
+- **`agentic-skill-contract`** - corpus discovery, validation and a stable digest.
+- **`agentic-chat-driver`** - `agentic.chat.ask` over a page it declares itself. No browser.
+- **`agentic-browser-cdp`** - the concrete substrate; the only crate that names `chromiumoxide`.
+- **`agentic-design-verification`** - measurement and evidence, holding no design of its own.
+- **`agentic-workflow`** - the bridge from the substrate to the consumer-owned ports, and one
+  composition that uses four capabilities.
+- **`agentic`** - wiring, the manifest table and the executable.
+
+**A capability's required surface stays runtime-neutral.** The three capability crates do not name
+`tokio` and nothing they pull in resolves it: time arrives as a `Call` (a deadline and a
+cancellation) and a `Pace` (a clock and a wait), both supplied by the composition root. **No
+capability imports an adapter**: each declares the trait it needs, and the workflow owns the
+bindings that implement them. Both rules are checkable with `cargo tree`, and both are checked in
+`Crate/README.md`'s verification block.
+
+`Package/spacetime-catalog` has no crate yet. The port covers the five packages that carry a port;
+the catalogue is rules and table descriptions with nothing to execute, and a crate for it would be a
+shape the TypeScript side has not settled.
+
+---
+
+## scenarios/
+
+One scenario file per capability, read by both implementations, with the ordered effect list each
+one produced. `node scenarios/run.mjs --compare` runs both sides and reports every disagreement;
+`scenarios/mutate.mjs` applies the mutations both suites must reject, so a green run is not merely a
+green run. `Documentation/Parity.md` says exactly what that evidence establishes and what it does
+not.
+
+---
+
+## Documentation/
+
+The design record. Every claim names its source - a capture in `.hermes/research/` - or is marked as
+a decision, and a document that changes its mind says so rather than rewriting the earlier position.
+
+- **`Scope.md`** - what this workspace is and is not, and the parity it claims with the consuming
+  product.
+- **`Design.md`** - the decisions that shape the tree, argued from the consumer's real surface
+  rather than from a taxonomy.
+- **`Observability.md`** - why the database is the surface, and where control flow belongs instead.
+- **`Reflection.md`** - how a system that can rewrite its own capability definitions stays honest
+  about what it is running.
+- **`Review.md`** - the external review's verdict and the defect it found.
+- **`Rust.md`** - the port: layout, manifest, and the questions it left open.
+- **`Spacetime-Catalog.md`** - the catalogue as rules and data, and why it lives here rather than in
+  a module that imports the server SDK.
+- **`Parity.md`** - the evidence that the two implementations are the same program.
+- **`Research.md`** - the index over the captures: what each thread settled, what it left open, and
+  which document consumed it.
+- **`Open-Questions.md`** - every question still open, with the experiment that would settle it and
+  what it blocks.
+- **`Diagram/`** - the same design as storyboards: one page per category, each ending with the
+  states nobody has built yet, indexed by `Diagram/Index.md`.
+
+---
+
+## Scripts/
+
+The gate. Plain Node, no build step and no dependency of their own:
+
+- **`Boundaries.mjs`** - walks every package's source and refuses an import that reverses an arrow
+  or crosses a boundary its `module.json` does not declare.
+- **`Feed.mjs`** - drives `.hermes/tools/bundle.mjs` over a fixture and asserts that it splits,
+  excludes and orders deterministically. A bundler that is not deterministic is a bundler whose
+  batches cannot be compared between runs.
+- **`Legend.mjs`** - fails when a page under `Documentation/Diagram/` carries a Mermaid block
+  without the shared legend, because a page added without one leaves its terms undefined for the
+  next reader.
+
+---
+
+## .hermes/
+
+The record and the tooling. `research/` holds the captures this workspace came out of, never edited,
+with `catalog.mjs` indexing them into `Index.md`. `tools/` holds the feed, and every tool there is a
+standalone script that takes a DevTools websocket URL:
+
+- **`bundle.mjs`** - turn a tree into deterministic batches: `tree.txt`, `batch-NN.txt` per payload,
+  and a `manifest.json` of what went where and what was left out.
+- **`attach.mjs`** - set those batches on a chat composer's hidden file input through
+  `DOM.setFileInputFiles`, the only path that both sets the files and lets the page react to them.
+- **`observe.mjs`** - watch a chat page and report only what changed, so a caller waits for the page
+  to settle instead of sleeping for a fixed time.
+- **`cdp-extract.mjs`** - serialise a rendered answer to Markdown with the maths kept as maths, read
+  from `<annotation encoding="application/x-tex">` rather than from `innerText`.
+- **`cdp-trace.mjs`** - read a step trace as the tree the page actually nests, and write `id` and
+  `parent` on every line instead of counting depth.
+
+---
+
+## Before you start
+
+- **Node ≥ 22.23.0** - the suites run TypeScript directly by type stripping, so there is no compile
+  step and no `tsc` in the gate.
+- **pnpm** - `pnpm install` reads `pnpm-workspace.yaml`, which lists the root and `Package/*`.
+- **Rust ≥ 1.88** - `Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`.
+
+## The gate
+
+```
+npm run check          # the boundaries and the bundler
+npm run Test           # the six TypeScript suites, fakes only
+npm run Format:Check   # prettier, the same rules the sibling repositories use
+cargo test --workspace
+```
+
+`cargo test --workspace` never starts Chromium and never opens a socket: a page is a scripted
+responder, a browser is a scripted launcher, and a deadline passes because the test advanced a clock
+it owns.
+
+---
+
+## Deliberately not here
+
+Domain policy and write authority stay with their consumers until a second workflow demonstrates a
+stable contract: store, model, command, vote, ingest, board synchronisation, gateway maintenance. A
+generic name is not a port.

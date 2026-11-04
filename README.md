@@ -8,10 +8,10 @@ product consumes this workspace and supplies its own composition root.
 
 ## The shape of it
 
-Two trees and one specification. `packages/` states what each capability must do, in TypeScript that
-runs directly on Node. `rust/` is the port of that specification into a Cargo workspace. `docs/`
-records the decisions the two share, `scenarios/` is the evidence that they agree, and `Scripts/` is
-the gate that keeps the arrows pointing inward.
+Two trees and one specification. `Package/` states what each capability must do, in TypeScript that
+runs directly on Node. `Crate/` is the port of that specification into a Cargo workspace.
+`Documentation/` records the decisions the two share, `scenarios/` is the evidence that they agree,
+and `Scripts/` is the gate that keeps the arrows pointing inward.
 
 The arrows point inward and nothing imports a root. A capability may import its own port and data
 shapes; an adapter implements one port against one mechanism; a workflow composes capabilities; the
@@ -35,7 +35,7 @@ warm pool starts returning wrong answers quickly.
 
 ---
 
-## packages/
+## Package/
 
 Six TypeScript packages, one per capability, each with a port, the data shapes it names and a
 fake-based suite. They are the specification the Rust port mirrors: a change to a port or a failure
@@ -59,12 +59,12 @@ starts Chromium or opens a socket.
 
 ---
 
-## rust/
+## Crate/
 
 The same specification as a Cargo workspace of seven crates, in the house layout: one directory per
 crate under `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/`
-for data and contracts, PascalCase module names, and one `Target/` at the workspace root.
-`rust/README.md` carries the per-crate dependency lists.
+for data and contracts, `Source/Script/` for the JavaScript sent to a page, PascalCase module names,
+and one `Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency lists.
 
 - **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
   `Bound`/`Race` combinators, and the policy engine. No dependencies.
@@ -81,9 +81,9 @@ for data and contracts, PascalCase module names, and one `Target/` at the worksp
 cancellation) and a `Pace` (a clock and a wait), both supplied by the composition root. **No
 capability imports an adapter**: each declares the trait it needs, and the workflow owns the
 bindings that implement them. Both rules are checkable with `cargo tree`, and both are checked in
-`rust/README.md`'s verification block.
+`Crate/README.md`'s verification block.
 
-`packages/spacetime-catalog` has no crate yet. The port covers the five packages that carry a port;
+`Package/spacetime-catalog` has no crate yet. The port covers the five packages that carry a port;
 the catalogue is rules and table descriptions with nothing to execute, and a crate for it would be a
 shape the TypeScript side has not settled.
 
@@ -94,11 +94,12 @@ shape the TypeScript side has not settled.
 One scenario file per capability, read by both implementations, with the ordered effect list each
 one produced. `node scenarios/run.mjs --compare` runs both sides and reports every disagreement;
 `scenarios/mutate.mjs` applies the mutations both suites must reject, so a green run is not merely a
-green run. `docs/Parity.md` says exactly what that evidence establishes and what it does not.
+green run. `Documentation/Parity.md` says exactly what that evidence establishes and what it does
+not.
 
 ---
 
-## docs/
+## Documentation/
 
 The design record. Every claim names its source - a capture in `.hermes/research/` - or is marked as
 a decision, and a document that changes its mind says so rather than rewriting the earlier position.
@@ -119,8 +120,8 @@ a decision, and a document that changes its mind says so rather than rewriting t
   which document consumed it.
 - **`Open-Questions.md`** - every question still open, with the experiment that would settle it and
   what it blocks.
-- **`diagram/`** - the same design as storyboards: one page per category, each ending with the
-  states nobody has built yet, indexed by `diagram/Index.md`.
+- **`Diagram/`** - the same design as storyboards: one page per category, each ending with the
+  states nobody has built yet, indexed by `Diagram/Index.md`.
 
 ---
 
@@ -133,8 +134,9 @@ The gate. Plain Node, no build step and no dependency of their own:
 - **`Feed.mjs`** - drives `.hermes/tools/bundle.mjs` over a fixture and asserts that it splits,
   excludes and orders deterministically. A bundler that is not deterministic is a bundler whose
   batches cannot be compared between runs.
-- **`Legend.mjs`** - fails when a page under `docs/diagram/` carries a Mermaid block without the
-  shared legend, because a page added without one leaves its terms undefined for the next reader.
+- **`Legend.mjs`** - fails when a page under `Documentation/Diagram/` carries a Mermaid block
+  without the shared legend, because a page added without one leaves its terms undefined for the
+  next reader.
 
 ---
 
@@ -161,8 +163,8 @@ standalone script that takes a DevTools websocket URL:
 
 - **Node ≥ 22.23.0** - the suites run TypeScript directly by type stripping, so there is no compile
   step and no `tsc` in the gate.
-- **pnpm** - `pnpm install` reads `pnpm-workspace.yaml`, which lists the root and `packages/*`.
-- **Rust ≥ 1.88** - `rust/Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`.
+- **pnpm** - `pnpm install` reads `pnpm-workspace.yaml`, which lists the root and `Package/*`.
+- **Rust ≥ 1.88** - `Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`.
 
 ## The gate
 
@@ -170,7 +172,7 @@ standalone script that takes a DevTools websocket URL:
 npm run check          # the boundaries and the bundler
 npm run Test           # the six TypeScript suites, fakes only
 npm run Format:Check   # prettier, the same rules the sibling repositories use
-cd rust && cargo test --workspace
+cargo test --workspace
 ```
 
 `cargo test --workspace` never starts Chromium and never opens a socket: a page is a scripted

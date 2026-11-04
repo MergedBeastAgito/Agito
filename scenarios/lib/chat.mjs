@@ -40,8 +40,8 @@ import {
 	ReadSources,
 	ReadTrace,
 	TypeQuestion,
-} from "../../packages/chat-driver/src/Expressions.ts";
-import { ChatError, Create, DefaultSelectors } from "../../packages/chat-driver/src/index.ts";
+} from "../../Package/chat-driver/Source/Expressions.ts";
+import { ChatError, Create, DefaultSelectors } from "../../Package/chat-driver/Source/index.ts";
 
 const S = DefaultSelectors;
 

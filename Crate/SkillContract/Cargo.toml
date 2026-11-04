@@ -1,0 +1,32 @@
+[package]
+name = "agentic-skill-contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Corpus discovery, validation and packaging: a stateless contract over a directory of skills."
+
+[lib]
+name = "AgenticSkillContract"
+path = "Source/Library.rs"
+
+[dependencies]
+agentic-runtime = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "SkillContract"
+path = "Test/SkillContract.rs"
+
+[[test]]
+name = "Parity"
+path = "Test/Parity.rs"

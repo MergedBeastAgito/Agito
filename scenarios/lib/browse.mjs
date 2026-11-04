@@ -11,8 +11,8 @@
  * scenario that could only be expressed against a different fake would be a
  * scenario the real suite does not cover.
  */
-import { BrowseError } from "../../packages/browser-cdp/src/Port.ts";
-import { createSession } from "../../packages/browser-cdp/src/Session.ts";
+import { BrowseError } from "../../Package/browser-cdp/Source/Port.ts";
+import { createSession } from "../../Package/browser-cdp/Source/Session.ts";
 
 /** The error a launcher throws, as the scenario describes it. */
 const failureOf = (failure) => {

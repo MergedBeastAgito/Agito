@@ -1,3 +1,1876 @@
+--- FILE: .hermes/notes/benchmark-harness-research.md ---
+# Benchmark harness for UI research
+
+A research call through `agentic chat --bind <target-id>` on a freshly reset session, asking how to build a harness
+that grades a UI-driving driver - first on one product, then across any UI - using ordinary human use as the source
+of tasks and labels. Reproduced in full; the question is summarised, the answer is not.
+
+| Field | Value |
+| --- | --- |
+| Characters | 19,940 |
+| Mode | search |
+| Model | GPT-6.1 Sol |
+| Answer URL | https://www.perplexity.ai/ |
+
+> The three tables below were rebuilt from the same captured text: the extractor read
+> `innerText`, which keeps a table's cells as tab-separated lines and loses the pipes.
+> The content was never lost - only its structure. `t_8c607c7e` fixes the extractor.
+
+**Asked.** Design a benchmark harness for UI-driving agents: (1) harness shape; (2) Perplexity first; (3) any UI; (4) human training and tracking; plus the five things to build first.
+
+**Answered.**
+
+Build the harness around contracts, not recorded click sequences or exact answer strings. The central test is: given a declared starting state, can this driver submit the intended request exactly once, identify the corresponding response, distinguish completion from interruption, and return the right content with auditable evidence?
+
+Keep three scores separate: driver correctness, product availability, and answer quality. Otherwise a Rust port can look worse because the product rate-limited it-or look correct because it confidently returned the previous answer.
+
+The design below treats your existing preconditions, turn correlation, completion rule, observation stream, and TypeScript differential suite as the starting point-not components to replace.
+
+1. HARNESS SHAPE
+Task, trial, and run
+
+Use these definitions consistently:
+
+| Entity | Definition | Example |
+| --- | --- | --- |
+| Task | Versioned intent, starting-state requirements, allowed actions, budgets, and outcome predicates. Independent of a particular execution. | “In a fresh conversation, submit this prompt and return its completed answer, not the welcome text or another turn.” |
+| Trial | One execution of one task against one driver and one environment instance. Includes every retry and recovery action. | Rust executes task fresh-answer@3 once and encounters a streaming interruption. |
+| Run | An immutable manifest plus a collection of trials for a planned comparison. | Rust commit A versus TypeScript commit B, on 30 tasks with five repetitions each. |
+
+Retries do not become new independent trials. A deliberate repetition does. Otherwise an implementation can inflate its success rate by hiding failed attempts.
+
+A task should contain:
+
+text
+id: followup-answer
+version: 3
+intent: ask_and_read
+fixture: existing_conversation_v2
+preconditions:
+  authenticated: true
+  composer: enabled
+  active_generation: false
+input:
+  prompt: "Now give only the second item's name."
+expect:
+  submission_count: 1
+  response_parent: submitted_turn
+  terminal_state: completed
+  extraction_scope: correlated_assistant_turn
+  answer_predicate: fixture_second_item_name
+budget:
+  wall_ms: 90000
+  submissions: 1
+  recoveries: 1
+required_capabilities: [conversation, followup, completion_detection]
+
+The task expresses what must happen. The adapter decides which controls and observations establish it.
+
+Runner and observation stream
+
+The runner owns isolation, deadlines, scheduling, artifacts, and grading. The driver owns UI interaction. The grader should not have to trust the driver’s final success flag.
+
+Use an append-only event stream with:
+
+Trial ID, sequence number, monotonic timestamp, and wall-clock timestamp.
+
+Action intent, dispatched action, acknowledgment, and causal parent.
+
+Browser target/frame/navigation identifiers.
+
+Normalized UI observations and their supporting DOM, accessibility, screenshot, or network references.
+
+Correlation candidates and confidence/evidence-not just the selected turn.
+
+Lifecycle transitions, retries, timeouts, and final extraction.
+
+Record both raw evidence and normalized events. A normalization bug must be diagnosable without rerunning a changed website.
+
+A useful lifecycle is:
+
+text
+preflight → ready → submitting → submitted → response_observed
+          → streaming → completed
+                      ↘ stopped | failed | timed_out | ambiguous
+
+An empty answer is not necessarily “still generating”; a disconnected browser is not “completed”; a stopped answer is not a successful complete answer.
+
+CDP provides domain-specific commands and events, rather than one universal semantic interaction log. Build a semantic observation layer above it and retain the protocol evidence underneath.
+chromedevtools
+
+Correlation and completion are first-class assertions
+
+Correlation should combine:
+
+The pre-submit conversation snapshot.
+
+Evidence that the intended user turn appeared.
+
+A newly created or newly advanced assistant turn associated with that submission.
+
+Conversation identity and navigation continuity.
+
+Product turn/request identifiers when legitimately observable.
+
+Do not use “the last assistant element” as the contract. It fails on stale answers, concurrent tabs, regeneration, optimistic rendering, and delayed hydration.
+
+Likewise, do not define completion as “text unchanged for two seconds.” Prefer an adapter-specific terminal signal, supported by UI lifecycle evidence and final extraction. A quiet period can be a fallback, but must produce an explicitly weaker completion classification. Network idleness alone is not a semantic terminal condition.
+
+Grader and failure taxonomy
+
+Grade independently along these axes:
+
+Preconditions satisfied.
+
+Intended action executed, with no duplicate submission.
+
+Correct turn correlated.
+
+Terminal state classified correctly.
+
+Extracted answer faithful to that turn.
+
+Task-specific outcome satisfied.
+
+Budgets respected.
+
+Assign a primary failure cause and preserve contributing causes:
+
+SETUP, PRODUCT_UNAVAILABLE, RATE_LIMIT, ACTION, CORRELATION, PREMATURE_COMPLETION, EXTRACTION, ANSWER_QUALITY, BUDGET, HARNESS, UNKNOWN.
+
+When attribution is uncertain, retain UNKNOWN. Forced attribution creates misleading dashboards.
+
+Metrics and result store
+
+Record more than pass/fail:
+
+| Metric | Definition or caution |
+| --- | --- |
+| End-to-end success | Successful tasks / all planned eligible trials; report setup failures and exclusions separately. |
+| Driver-contract success | Correct submission, correlation, terminal classification, and extraction, independently of answer usefulness. |
+| First-attempt success | No recovery or retry required. |
+| Turns | Separate user submissions, assistant generations, and agent planning turns. |
+| Action count | Semantic actions and low-level CDP commands separately. |
+| Latency | Preflight, submit acknowledgment, first observed answer content, completion, extraction; report p50/p95. |
+| Retries and interventions | By reason; include human rescue and browser restarts. |
+| Tokens | Agent-model usage when metered; product usage only when actually exposed. Otherwise mark unknown, or label estimates explicitly. |
+| Flake | Across repeated matched trials: proportion of tasks with mixed outcomes, plus per-task success probabilities and intervals. |
+| Cost per success | Total attributed cost of all attempts, including failures, divided by successful tasks. State subscription allocation assumptions. |
+| Safety/correctness defects | Duplicate submissions, wrong-turn returns, false completion, unapproved actions. |
+
+Store manifests and summaries in SQLite initially; put large artifacts in content-addressed storage. Every result references task, grader, adapter, driver, browser, configuration, and artifact hashes. A regrade creates a new grading record; it does not overwrite history.
+
+Comparability and the TypeScript original
+
+Use two evaluation lanes:
+
+Controlled replay: feed identical recorded observations into Rust and TypeScript logic, testing correlation, lifecycle transitions, extraction, and error handling.
+
+Live differential: execute matched tasks in separate equivalent sessions, randomize driver order, and interleave pairs closely in time.
+
+Replay controls the evidence but cannot establish that live UI interaction still works. Live evaluation measures deployment reality but cannot perfectly control a changing service.
+
+Compare semantic results-not byte-for-byte answers or identical click traces. Maintain explicit cases for stale answers, long streaming pauses, replacement of DOM nodes, missing terminal signals, interrupted streams, navigation, stop, regeneration, rate limits, and duplicate-submit hazards.
+
+The TypeScript implementation is a reference, not an oracle. Both implementations can share the same bug.
+
+2. PERPLEXITY FIRST
+The smallest honest single-product harness
+
+Start with roughly 10-15 task templates covering:
+
+Fresh question.
+
+Follow-up in an existing thread.
+
+Long answer requiring scrolling.
+
+Delayed first content and pauses during streaming.
+
+Stop during generation.
+
+Ask again after stopping.
+
+Regenerate, if supported by the tested product configuration.
+
+Stale answer already on screen.
+
+Navigation or reload during generation.
+
+Explicit failure and rate-limit handling.
+
+Use recorded or injected observations for failures you cannot safely and reliably trigger live. Label those results as simulated, never live product results.
+
+Capture account tier, selected mode/model where visible, locale, viewport, browser version, conversation state, visible experiment indicators, and timestamp. If a backend model version or experiment assignment is unavailable, record it as unknown.
+
+What to record from ordinary human use
+
+A consented recorder should capture:
+
+Semantic typing/input events, paste, composition completion, and the final submitted value.
+
+Submit mechanism: keyboard shortcut or button.
+
+Scroll gestures, viewport position, and relevant content visibility.
+
+Stop, regenerate, navigation, and thread changes.
+
+DOM/accessibility snapshots at important transitions.
+
+Screenshots at submission, first response, stop, and completion.
+
+Relevant network lifecycle metadata, with sensitive values removed.
+
+The observer’s turn-correlation and completion decisions.
+
+Do not assume attaching CDP automatically records all physical human typing and clicking. Instrument input listeners and browser/UI state changes; combine them with CDP observations. Chrome’s Network tooling exposes request-level information, but that is only one part of the interaction record.
+chromedevtools
++1
+
+Capture full text only where necessary and consented. For many timing or lifecycle tests, lengths, hashes, and structure are sufficient.
+
+From a recording to a task
+
+A recording is evidence of one route through the UI-not a specification.
+
+Convert it through a short review:
+
+Extract the user’s intended outcome.
+
+Declare the minimum initial state needed.
+
+Replace accidental coordinates and delays with semantic requirements.
+
+Define acceptable terminal states and outcome predicates.
+
+Remove personal data and parameterize reusable inputs.
+
+Preserve the original recording as provenance.
+
+Validate the task with a fresh execution.
+
+For example, “human scrolled three times” should usually become “the extractor returns the full correlated answer despite viewport changes,” not “the agent must scroll three times.”
+
+A human pressing Stop provides a valuable interruption scenario. It does not prove the preceding answer was complete, correct, or satisfactory.
+
+Grading free text without making the judge the benchmark
+
+Separate extraction correctness from answer quality.
+
+For extraction, compare the driver’s returned text against an independently captured representation of the correlated answer, using documented normalization. Verify meaningful preservation of paragraphs, code, links, and citations where required.
+
+For answer quality, prefer:
+
+Deterministic transformations with known results.
+
+Structured outputs with schema and field predicates.
+
+Stable factual questions with versioned accepted facts.
+
+Source-grounded claims with manually reviewed rubrics.
+
+Open-ended questions graded only for driver behavior unless human quality labels exist.
+
+Use a small human-reviewed calibration set. An LLM judge can triage ambiguous cases, but should be versioned, blinded to driver identity, and audited against human decisions. Its uncertain judgments should not silently become release blockers.
+
+Do not reward exact wording, a particular citation count, or inclusion of a magic phrase unless that is actually the task.
+
+Non-determinism and live-product failure modes
+
+For every repeated live task:
+
+Keep prompt, initial state, configuration, budgets, and grading version fixed.
+
+Randomize implementation order.
+
+Separate fresh-conversation tests from history-dependent tests.
+
+Record rate limits and product errors rather than silently waiting until success.
+
+Use declared backoff rules; do not bypass controls or rotate accounts to evade limits.
+
+Mark configuration changes as new comparison strata.
+
+Preserve unresolved experiment/version information as a comparability limitation.
+
+Report two views: all-attempt operational success and driver correctness conditional on independently established product availability. Never discard rate-limited attempts merely because they make the headline worse.
+
+A changed answer is not automatically a regression. A wrong-turn extraction is.
+
+3. ANY UI
+
+A shared environment abstraction is useful: BrowserGym, for example, supports multiple browser benchmarks through a unified framework. That is evidence for sharing execution infrastructure-not for treating every application as equivalent.
+arxiv
+
+Capability matrix
+
+Declare capabilities with support level and verification method:
+
+| Capability | Relevant distinction |
+| --- | --- |
+| Authentication | Anonymous, authenticated, role-specific |
+| Input | Plain text, rich text, file upload |
+| Conversation | Fresh thread, follow-up, branching |
+| Generation | Streaming, atomic response |
+| Lifecycle | Observable completion, stop, regenerate |
+| Retrieval | Citations, linked sources, browsing |
+| Persistence | History, saved artifacts |
+| Side effects | Draft-only, reversible write, irreversible action |
+| Observation | DOM, accessibility, screenshots, permitted network signals |
+
+Unsupported is not failed. But an adapter must declare support before evaluation; it cannot relabel failed tasks as unsupported afterward.
+
+Adapter contract
+
+Keep the core interface narrow:
+
+text
+capabilities()
+prepare(fixture) -> precondition_evidence
+observe() -> normalized_observation
+act(semantic_action) -> dispatch_evidence
+correlate(submission, observations) -> turn_binding
+classify_lifecycle(binding) -> state + evidence
+extract(binding) -> answer_artifact
+cleanup() -> cleanup_evidence
+
+The runner owns deadlines and retry policy. Otherwise each adapter quietly receives a different evaluation budget.
+
+Provide an observation-permission profile. A DOM-only agent and an agent allowed to inspect private application state are not comparable just because both use CDP.
+
+The DSL should express intent, fixtures, constraints, budgets, and predicates. Product-specific selectors belong in adapters, not task definitions. Shared temporal assertions can express rules such as “never emit completed before terminal evidence” or “eventually return the submitted turn or an explicit error.”
+
+What stays product-specific
+
+Keep these in adapters or product task packs:
+
+Composer behavior and controls.
+
+Thread, turn, and regeneration identity.
+
+Meaning of terminal UI signals.
+
+Source/citation representation.
+
+Authentication, subscriptions, and rate-limit behavior.
+
+Fixture setup and cleanup.
+
+Product-specific answer rubrics.
+
+Do not force a fake universal “message ID” where the product exposes no reliable equivalent.
+
+Honest cross-product reporting
+
+Publish:
+
+Common-core scores on an identical supported task intersection.
+
+Per-capability scores.
+
+Product-specific extension scores.
+
+Coverage: which tasks and capabilities were tested.
+
+Operational results, including availability and cost.
+
+Repetition counts, uncertainty, and observation permissions.
+
+If an overall score is necessary, predeclare task weights and show its components. A product evaluated only on easy fresh questions should not outrank one evaluated on follow-ups, stop/recovery, citations, and long answers without that difference being explicit.
+
+Keep agent UI competence separate from the underlying product’s answer quality.
+
+4. HUMAN TRAINING AND TRACKING
+Mine candidates, not automatic ground truth
+
+Ordinary use can yield candidate task episodes:
+
+text
+intent → starting state → actions → observed outcome → optional correction
+
+Segment around submissions and thread transitions. Cluster redacted episodes by interaction pattern, then sample across frequency, novelty, failures, and product features.
+
+Do not infer success from “the user stopped interacting.” They may have been satisfied, distracted, or frustrated.
+
+Collect lightweight labels at useful moments:
+
+“Did this achieve your goal?”
+
+“Was this the right answer turn?”
+
+“Complete, intentionally stopped, or broken?”
+
+Optional failure category.
+
+Use occasional targeted review for ambiguous cases, plus periodic audits of apparently successful ones. Reviewing only failures misses false-positive grading.
+
+Consent, privacy, and retention
+
+Make recording explicit, pausable, and scoped to a designated browser profile or tab. Redact locally before upload where feasible. Exclude credentials, cookies, authorization headers, payment data, and unrelated tabs.
+
+Separate permissions for recording, internal evaluation, human review, and training. Access to operational telemetry is not automatically permission to turn it into training examples.
+
+Perplexity documents account controls governing AI data usage and separate Enterprise privacy arrangements; these product settings do not replace consent and retention controls for your own recorder.
+perplexity
++2
+
+Use short retention for raw sensitive artifacts, longer retention for de-identified task definitions and aggregates, encryption, access auditing, and deletion propagation into derived datasets.
+
+Drift over weeks
+
+Maintain two cohorts:
+
+Frozen sentinels: stable tasks and graders used for longitudinal comparisons.
+
+Rolling production samples: recent consented episodes, used to measure current relevance.
+
+Track weekly changes in:
+
+Success and failure categories.
+
+Correlation ambiguity and completion evidence.
+
+Selector or adapter fallback use.
+
+Latency distributions and retries.
+
+Configuration and observed UI fingerprints.
+
+Human-grader disagreement.
+
+Task mix and operator mix.
+
+When a sentinel regresses, rerun a small matched diagnostic set. Determine whether the cause is the driver, adapter, grader, browser, or product before changing expectations.
+
+Keep old and new grader scores side by side during migrations. Otherwise a “quality improvement” may only be a relaxed grader.
+
+Avoid operator overfitting, gaming, and leakage
+
+Sample across consenting operators, languages, prompt styles, input methods, viewport sizes, and usage intensity. Split related episodes by operator, template family, and time-not randomly by individual recording.
+
+Maintain three pools:
+
+Development tasks visible to implementers.
+
+Held-out release tasks with restricted artifacts.
+
+Rotating recent-production tasks.
+
+Use parameterized variants, varied valid wording, different starting states, and hidden grader predicates. Keep hidden labels out of the browser and agent context.
+
+Defend against shortcuts:
+
+Validate final state independently of the driver’s report.
+
+Count hidden retries and duplicate submissions.
+
+Detect hard-coded answers with task variants.
+
+Treat page content as untrusted, including instructions to alter logs or grading.
+
+Version the rubric before comparison.
+
+Log exclusions and manual overrides.
+
+Track dataset access and exposure.
+
+Human-trained improvements should be evaluated on untouched operators, task families, or later time windows. Testing on the same episodes that informed a fix measures memorization as much as generalization.
+
+The five highest-value things to build first, ordered
+
+Versioned task/trial/run records and an append-only evidence stream. Establish identity, provenance, budgets, and diagnostic artifacts before building dashboards.
+
+An independent grader for submission, correlation, completion, and extraction. Prioritize wrong-turn returns and false completion over subjective answer quality.
+
+A small Rust-versus-TypeScript suite with controlled replay and interleaved live trials. Include interruption, stale state, duplicate-submit risk, and explicit product failures.
+
+A consented human-session recorder with a lightweight task-review workflow. Turn recordings into reviewed specifications, not brittle macros or presumed success labels.
+
+A longitudinal report showing first-attempt success, failure causes, latency, flake, coverage, and cost per success. Add frozen sentinels and rolling samples before attempting a cross-product leaderboard.
+
+--- FILE: .hermes/notes/convention-inventory.md ---
+# Convention inventory
+
+Every place this workspace's layout departs from the house layout, and what each departure is:
+`rename`, `merge`, `delete`, or `leave with a reason`. Phase 1 of this pass changed nothing; the
+moves it authorised are recorded in [After](#after), which is where the test counts before and after
+live.
+
+The scan is of the tracked tree at the repository root, read with `git ls-files` and `find`. It
+excludes `Target/`, `node_modules/`, `.hermes/tmp/`, `.hermes/research/` and the generated bundles,
+which the card puts out of scope and which no layout rule governs.
+
+---
+
+## The references, as read from their trees
+
+The card names `PlayForm/LFC` as the layout this repository is meant to follow, with
+`PlayForm/Cargo/Run` adding the `Source/{Fn,Struct}` split. Both were read directly rather than
+taken from the card's summary, because the summary is a sketch and the trees are the rule.
+
+**`PlayForm/LFC`** - one workspace root, eight crates, nothing duplicated:
+
+- `Cargo.toml` holds `[workspace] members = ["Crate/Binary", …]`, `resolver = "2"`, and
+  `[workspace.package] edition = "2024"`, `publish = false`, `version = "0.0.1"`.
+- `.cargo/config.toml` is two lines: `[build] target-dir = "Target"`.
+- Every crate is `Crate/<Name>/{Cargo.toml, Source/}`. No crate carries `Test/`, `tests/`, or a
+  `[[test]]` stanza - the reference has no tests at all.
+- One documentation root, `Documentation/`, holding `Documentation/StateMachine.md`.
+- `Concept/Registry.tsv` and `Catalog/LFC.catalog` are data directories, not layout: they are this
+  product's knowledge inputs.
+- Root also carries `Mandate.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`,
+  and a **tracked** `Cargo.lock`.
+- Its `.gitignore` lists `Target/` **and** `target/`. The working tree carries an untracked
+  lowercase `target/` beside `Target/` - a build that ran before the config was read. The reference
+  therefore shows the exact failure this repository's `Scripts/Feed.mjs` fixture guards against ("A
+  Rust workspace builds into `Target/`, and the exclude list is written by hand in lower case. On a
+  case-sensitive volume those are two directories"), and this tree does **not** repeat it:
+  `find rust -maxdepth 1 -name target` prints nothing.
+
+**`PlayForm/Cargo/Control`** - the house sibling that does carry tests, and the source of the form
+this tree already uses:
+
+- `Crate/ControlPane/Test/Harness.rs`, declared as `[[test]]` / `name = "Harness"` /
+  `path = "Test/Harness.rs"`.
+- One documentation root, `Documentation/`, with PascalCase section directories (`Design/`,
+  `Research/`, `Provenance/`, `SimulatedTurns/`). No `docs/`.
+- A root `Test/` exists for its Python suites - so a root test directory is house-compatible, and
+  this tree carrying none is not a deviation.
+
+**`PlayForm/Cargo/Run`** - one crate, no workspace, and no tests either:
+
+- `Source/Library.rs` is the `[lib]` and every `[[bin]]`; `Source/Fn/` holds functions and
+  `Source/Struct/` holds types.
+- `autobins = false`, `autotests = false`, `autoexamples = false`, `autobenches = false`.
+- `.cargo/config.toml` sets `[build] target-dir = "Target"` plus the release profile.
+- No `Documentation/`, no `Test/`, no `tests/`: Run says nothing about either, so it cannot be the
+  reference for documentation roots.
+
+---
+
+## Where the references disagree, and which one this tree follows
+
+**Tests have a location, and it is `Test/` with an explicit stanza.** LFC has no test directory;
+Control declares each suite by name and path. This tree follows Control, and already does so in all
+seven crates. LFC's silence is not a rule - a repository that tests needs a location - and the
+explicit stanza is the stronger form because it is the only thing that can keep a second location
+from being legal.
+
+**The lockfile is local-only here, tracked there.** LFC commits `Cargo.lock`; this root ignores it,
+with the reason written in `.gitignore`: "a clone resolves its own versions, and a committed lock
+made the tree fight `cargo update` for no benefit." Followed here: ignore. Recorded, not changed.
+
+**`publish = false` is absent here, present there.** See R1 below.
+
+**`Concept/` and `Catalog/` have no analogue, and are not imported.** Those are LFC's product data.
+This tree's data directory is `scenarios/`, which plays the same role for a different contract, so
+the shape is already represented and a second data root would be the duplication this pass exists to
+remove.
+
+---
+
+## Baseline, before any change
+
+Run from `rust/`, after `source ~/.envsh`:
+
+```
+cargo test --workspace
+```
+
+Exit `0`, **177 tests**, over ten test targets:
+
+- `agentic`: `Test/Composition.rs` 12, `Source/Library.rs` 0, `Source/Main.rs` 0
+- `agentic-browser-cdp`: `Test/Browse.rs` 27, `tests/parity.rs` 1
+- `agentic-chat-driver`: `Test/Chat.rs` 30, `tests/parity.rs` 1
+- `agentic-design-verification`: `Test/Verification.rs` 28
+- `agentic-runtime`: `Test/Runtime.rs` 40
+- `agentic-skill-contract`: `Test/SkillContract.rs` 24, `tests/parity.rs` 2
+- `agentic-workflow`: `Test/Workflow.rs` 12
+- seven `Doc-tests` targets, 0 each
+
+And from the repository root:
+
+```
+node Scripts/Boundaries.mjs
+```
+
+prints `RESULT: every import points inward`, exit `0`.
+
+`rust/README.md` claimed `161 tests` beside that command. The command says `177`; the number was
+stale and is corrected in this pass (see [Also corrected](#also-corrected)).
+
+---
+
+## Findings
+
+### F1, F2, F3 - a second test directory beside `Test/`
+
+`rename`.
+
+- `rust/Crate/BrowserCDP/tests/parity.rs`
+- `rust/Crate/ChatDriver/tests/parity.rs`
+- `rust/Crate/SkillContract/tests/parity.rs`
+
+Three crates carry two test roots at once. The `tests/` copy is not dead: Cargo's `autotests`
+defaults to true, so `tests/parity.rs` is a live, auto-discovered target that runs beside the
+declared `Test/<Name>.rs`. The house form has no auto-discovered home at all - Control declares
+every suite - which is why the duplicate could appear without anyone editing a manifest.
+
+Rule: one location per concept; the house form is `Crate/<Name>/Test/<Name>.rs` plus a `[[test]]`
+stanza naming it (Control's `Crate/ControlPane/Test/Harness.rs`). Each file moves to
+`Test/Parity.rs` in its crate, PascalCase like the eight `Test/` files already there, and each crate
+gains `[[test]]` / `name = "Parity"` / `path = "Test/Parity.rs"`, because `Test/` is not
+auto-discovered and the target would otherwise silently stop running - a rename that quietly deletes
+a test is worse than the duplication.
+
+`Parity` is not a new name: it is what the target is already called on the command line, and it
+matches `packages/*/Test/Parity.test.ts`, the other half of the same differential run.
+
+### F4 - two documentation roots
+
+`merge`.
+
+- `docs/` - ten markdown files (`Design`, `Observability`, `Open-Questions`, `Parity`, `Reflection`,
+  `Research`, `Review`, `Rust`, `Scope`, `Spacetime-Catalog`) plus the `diagram/` tree.
+- `Documentation/` - `Skill/` with five skill directories and `Index.md`.
+
+Both references carry exactly one documentation root, so a second is a deviation with no defence:
+the same design record lives in two places, and the newer one (`Documentation/`) is the one the
+skill corpus validator reads.
+
+Rule: one documentation root, PascalCase, as in `LFC/Documentation/` and `Control/Documentation/`.
+The ten files move to `Documentation/` keeping their names, and `docs/diagram/` becomes
+`Documentation/Diagram/` - `Diagram` is a documentation _section_, so it takes the same PascalCase
+form as the `Skill/` section beside it. Because the tree keeps its depth, every relative link inside
+the moved files (`ring.svg`, `../.hermes/research/…`, `../../Review.md`) resolves unchanged; only
+references that spell the path from the repository root are edited.
+
+### F5 - lowercase numbered folders inside the diagram tree
+
+`leave with a reason`.
+
+`Documentation/Diagram/{00-rings,10-runtime,20-browser,30-chat,40-database,50-feed}/` keep their
+names. The numbering is the sort key the index reads them in, every folder name is quoted as a link
+from `Documentation/Diagram/Index.md`, and neither reference has a diagram tree - so there is no
+rule to import, and inventing one would be exactly the "do not invent conventions the reference does
+not have" failure. The card's merge also asks for existing names to be kept.
+
+This is the one place the PascalCase rule does not reach, and it is recorded rather than argued
+away: if the rule is meant to cover data-shaped folders, the follow-up is `00-Rings` … `50-Feed`,
+six `git mv`s and six link edits, with no relative link breaking because the depth does not change.
+
+### F6 - lowercase `.mmd` / `.svg` leaf names
+
+`leave with a reason`.
+
+`disappearing-ring.mmd`, `lifecycle.svg`, and twenty-one more pairs. The render contract is
+`line9 render <file>.mmd --out <file>.svg`, and each page quotes both names as link text. Renaming
+forty-six files would change no reader's behaviour and would rewrite every page's link list; the
+names are the render's identity, not a directory convention.
+
+### F7 - the workspace is nested at `rust/`, not at the repository root
+
+`leave with a reason`.
+
+LFC puts `Cargo.toml` and `Crate/` at the root. This root carries two ecosystems - `packages/` for
+the TypeScript specification and `rust/` for the port - so hoisting the workspace would put a
+`Crate/` beside a `packages/`, a `Cargo.toml` beside a `package.json`, and rewrite every path in
+`README.md`, `CONTRIBUTING.md`, `Scripts/`, `scenarios/` and `packages/`. The reference is
+single-ecosystem and has nothing to say about a repository that is not. The nesting is also what
+keeps the rule "one `Target/` at the workspace root" literally true.
+
+### F8 - `rust/README.md`
+
+`leave with a reason`.
+
+Neither reference carries a README inside a workspace directory. This one is the port's map: the
+crate table, the two dependency rules, and the verification commands. It is additive, not a second
+home for anything - `README.md` at the root describes the whole workspace and points here. LFC's
+nearest equivalent is `Mandate.md`, which is repo governance rather than a layout slot.
+
+### F9 - `module.json` in all seven crates
+
+`leave with a reason`.
+
+A deliberate extension: `agentic verify --module <name>` reads it, and `Scripts/Boundaries.mjs`
+takes the import arrows from it. The reference has no analogue because it has no capability
+manifest; removing them would delete the thing that makes "no capability imports an adapter"
+checkable.
+
+### F10 - `scenarios/` is lowercase at the root
+
+`leave with a reason`.
+
+Both implementations read it and its path is part of a shared contract: it is spelled in the
+`$comment` of all three scenario files, in `scenarios/lib/{browse,chat,skill}.mjs`, in
+`packages/{browser-cdp,chat-driver,skill-contract}/Test/Parity.test.ts`, and in the three Rust
+parity suites. A lowercase name here is a decision about a data corpus that two languages share, not
+an oversight, and renaming it is a contract change that belongs to its own card. Its role in this
+tree is LFC's `Catalog/`: data the program reads, not prose.
+
+### F11 - `packages/` is lowercase
+
+`leave with a reason`.
+
+The card puts it out of scope, and the reference crates say nothing about a TypeScript package tree.
+Its own house style is `packages/<name>/src`, lowercase by ecosystem convention.
+
+### F12 - `[workspace.package]` has no `publish = false`
+
+`leave with a reason`, with a recommendation.
+
+LFC carries `publish = false` in `[workspace.package]`; `rust/Cargo.toml` does not. This is a
+missing manifest field the reference has, so it is recorded - but it is a publication policy, not a
+layout rule, and Phase 2 is enumerated to the moves above. See R1.
+
+### F13 - `Cargo.lock` is ignored here and tracked there
+
+`leave with a reason`.
+
+Covered under the reference disagreement above: `.gitignore` states the reason, and a clone
+resolving its own versions is the decision this tree already made in writing.
+
+### F14 - `.hermes/` has no analogue in either reference
+
+`leave with a reason`.
+
+It is this workspace's archive, not documentation: `research/` holds the captures the design record
+cites, `tools/` the feed scripts, `notes/` this kind of note. `.gitignore` tracks `research/`,
+`bundle/`, `tools/` and ignores `tmp/`. `bundle/` and `research-bundle/` are **generated** snapshots
+that name the pre-change paths; `Scripts/Feed.mjs` asserts `bundle.mjs`'s output byte for byte, so
+they are regenerated by the tool and never hand-edited. Recorded as a finding rather than edited:
+after Phase 2 those snapshots are stale, and refreshing them is one command, not a rename.
+
+### Compliant, checked rather than assumed
+
+- **One build directory.** `rust/.cargo/config.toml` sets `[build] target-dir = "Target"`, and
+  `find rust -maxdepth 1 -name target` prints nothing.
+- **PascalCase test files.**
+  `Test/{Browse,Chat,Composition,Fake,Runtime,SkillContract,Verification,Workflow}.rs`.
+  `Test/Fake.rs` is a helper module (`mod Fake;` in `Test/Chat.rs`), not a stray target.
+- **`Source/{Fn,Struct}` split**, one file per operation or type, all PascalCase, matching Run.
+- **One `[[test]]` stanza per testing crate**, in the form Control uses.
+- **`Scripts/`** is a role directory, singular and PascalCase.
+- **Root files.** `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE` all have an
+  analogue in a reference; `Mandate.md` is the one LFC file with no counterpart, and it is
+  governance rather than layout.
+
+---
+
+## Recommendations not taken
+
+**R1 - add `publish = false` to `[workspace.package]`.** It is the reference's guard against a
+`cargo publish` that would push seven internal crates to a registry under a licence they only carry.
+Not done here because it changes publication behaviour rather than layout, and this pass is scoped
+to renames and merges. One line, one follow-up card.
+
+**R2 - regenerate the feed bundles** once the moves land, so `.hermes/bundle/` and
+`.hermes/research-bundle/` name paths that exist. Not done here for the reason in F14: they are tool
+output, and `Scripts/Feed.mjs` is the gate that owns them.
+
+---
+
+## After
+
+**The moves.** One `git mv` per path, each followed by the manifest edit it forced. Nothing was
+renamed by script, and no file's contents changed as part of a move.
+
+- `rust/Crate/BrowserCDP/tests/parity.rs` → `rust/Crate/BrowserCDP/Test/Parity.rs`; `Cargo.toml`
+  gained `[[test]]` / `name = "Parity"` / `path = "Test/Parity.rs"`; the emptied `tests/` removed.
+- `rust/Crate/ChatDriver/tests/parity.rs` → `rust/Crate/ChatDriver/Test/Parity.rs`, same stanza.
+- `rust/Crate/SkillContract/tests/parity.rs` → `rust/Crate/SkillContract/Test/Parity.rs`, same
+  stanza.
+- The ten `docs/*.md` → `Documentation/*.md`, names unchanged.
+- `docs/diagram/` → `Documentation/Diagram/`: 53 files (23 `.mmd`, 23 `.svg`, six pages, one index),
+  every name unchanged, for the reasons in F5 and F6.
+- `docs/` no longer exists; `find rust/Crate -type d -name tests` prints nothing.
+
+**Every reference to an old path, updated.** The files are listed because a half-renamed tree is the
+failure this pass exists to prevent:
+
+- `README.md` - the shape paragraph, the `## Documentation/` heading, `Documentation/Parity.md`, the
+  `Diagram/` bullet, the `Legend.mjs` bullet.
+- `CONTRIBUTING.md` - three occurrences, including the rule that a rename follows every quoted path.
+- `.prettierignore` - the comment naming `Documentation/Research.md`.
+- `Scripts/Legend.mjs` - the doc comment, the `Root` URL (`../Documentation/Diagram`), and the
+  "holds no `.mmd` at all" message.
+- `Documentation/{Design,Open-Questions,Research,Review,Rust,Spacetime-Catalog}.md` and
+  `Documentation/Diagram/00-rings/README.md` - in-document cross references.
+- `Documentation/Parity.md` - the Rust-side glob (`rust/Crate/*/Test/Parity.rs`) and the
+  verification block.
+- `rust/Crate/Runtime/Test/Runtime.rs`, `rust/Crate/Runtime/Source/Struct/Authority.rs`,
+  `rust/Crate/SkillContract/Test/Parity.rs`, `rust/Crate/ChatDriver/Test/Parity.rs` - doc comments.
+- `scenarios/{browser-cdp,chat-driver,skill-contract}.json` - the `$comment` in each, and
+  `scenarios/lib/skill.mjs`.
+- `packages/{browser-cdp,chat-driver,skill-contract}/Test/Parity.test.ts` - the comment naming the
+  Rust half. The packages' own layout is out of scope; these are references to a path this pass
+  moved, and a comment pointing at a file that no longer exists is the drift being removed.
+
+Relative links inside the moved files needed no edit: the tree kept its depth, so `ring.svg`,
+`../.hermes/research/research-575cb198.md` and `../../Review.md` resolve exactly as before.
+
+**Deliberately not edited.** `.hermes/bundle/` and `.hermes/research-bundle/` are generated
+snapshots (F14, R2); `.hermes/tmp/` is gitignored scratch; `.hermes/research/` holds the captures,
+which are never edited. Each of them still names the old paths, and each is refreshed by a tool
+rather than by hand.
+
+**Counts, before and after.** Same command, same machine, `cargo test --workspace` in `rust/`:
+
+- before: **177** tests over ten targets, exit `0`.
+- after: **177** tests over ten targets, exit `0`.
+
+Per target, unchanged: `Composition` 12; `Browse` 27 and `Parity` 1; `Chat` 30 and `Parity` 1;
+`Verification` 28; `Runtime` 40; `SkillContract` 24 and `Parity` 2; `Workflow` 12; seven doc-test
+targets at 0.
+
+The three parity targets are the ones at risk, and they are the reason the stanza is not optional:
+`tests/parity.rs` was auto-discovered, `Test/Parity.rs` is not. A move without the stanza would have
+deleted three tests and still printed a green run of 172.
+
+**Gates.**
+
+```
+node Scripts/Boundaries.mjs              # RESULT: every import points inward
+node Scripts/Feed.mjs                    # RESULT: the bundler is deterministic and splits as asked
+node Scripts/Legend.mjs                  # RESULT: 23 diagram(s) and 7 page(s), every diagram typed and rendered
+cargo test --workspace                   # 177 passed, exit 0
+cargo clippy --workspace -- -D warnings  # green
+pnpm run check                           # the three Scripts gates above, in one command, exit 0
+pnpm run Test                            # 240 TypeScript tests, 240 passed, 0 failed
+```
+
+`cargo test --workspace` names `Test/Parity.rs` three times in its run - the three relocated targets
+are the ones being discovered, which is the whole point of the stanza. `pnpm run Test` covers the
+three `Test/Parity.test.ts` files whose comments name the Rust half.
+
+The changed markdown was then run through the repository's own formatter
+(`node_modules/.bin/prettier --write` over the changed files), because `proseWrap: "always"` reflows
+the lines the longer path widened; the move itself stayed a `git mv`.
+
+Two gates this tree does not pass, and did not pass before this card:
+
+- `cargo fmt --check` reports diffs in files this pass never touched -
+  `Agentic/Source/Fn/Composition.rs`, `Runtime/Source/Struct/Port.rs`,
+  `BrowserCDP/Source/Struct/Chrome.rs` among them - because the house style (tabs, `Name:Type` with
+  no space, PascalCase) is not rustfmt's output. `rust/README.md` lists it as a verification
+  command; it cannot be one.
+- `cargo clippy --all-targets` reports six collapsible-`if` and one complex-type lint inside
+  `ChatDriver/Test/Parity.rs`. The same code is at `HEAD:rust/Crate/ChatDriver/tests/parity.rs:454`,
+  so the move relocated the lint and did not introduce it. The documented
+  `cargo clippy --workspace -- -D warnings`, which does not lint test targets, is green.
+
+---
+
+## Also corrected
+
+`rust/README.md` claimed `161 tests` beside `cargo test --workspace`. The command answers 177,
+before and after this pass, so the number was stale rather than moved; it now says 177. One word,
+and the gate above is what backs it.
+
+--- FILE: .hermes/notes/restructure-inventory.md ---
+# Restructure inventory
+
+Every path that names `rust/`, `packages/` or `src/`, the manifest lines the moves force, and every
+JavaScript expression currently living inside a Rust string literal. Phase 1 of the restructure wrote
+this and changed nothing; the phases that follow record their own gates under [After](#after).
+
+The scan is of the tracked tree (`git ls-files`, `git grep`), read from the repository root and
+excluding `Target/`, `node_modules/` and the generated bundles' payloads, which no layout rule
+governs.
+
+---
+
+## Baseline, before any change
+
+```
+cd rust && cargo test --workspace     # 177 passed, exit 0
+node --test "packages/*/Test/*.test.ts"   # 240 tests, 240 pass, 0 fail
+node Scripts/Boundaries.mjs           # RESULT: every import points inward
+node Scripts/Feed.mjs                 # RESULT: the bundler is deterministic and splits as asked
+node Scripts/Legend.mjs               # RESULT: 23 diagram(s) and 7 page(s), every diagram typed and rendered
+```
+
+Per target, so a move that silently drops one is visible: `Composition` 12, `Browse` 27 and `Parity`
+1, `Chat` 30 and `Parity` 1, `Verification` 28, `Runtime` 40, `SkillContract` 24 and `Parity` 2,
+`Workflow` 12, seven doc-test targets at 0.
+
+The ten expressions the driver and the workflow build were also dumped byte for byte before anything
+moved, into `.hermes/tmp/expr-before/`, by a harness copied into `Crate/Agentic/tests/`, run, and
+removed again. That directory is the authority for Phase 4's "a move is not a rewrite" gate; a
+rebuild of it after the move diffs clean or the phase is wrong.
+
+---
+
+## A. Paths naming `rust/`
+
+Twenty-six tracked files name it. Three of those matches are not this repository's path at all -
+`r/rust/…` inside a captured Reddit URL - and are marked *external*.
+
+| File | Occurrences | What it is |
+| --- | --- | --- |
+| `.gitignore` | 2 | `rust/Target/` and the comment explaining it |
+| `.prettierignore` | 1 | `rust/Target/` |
+| `.vscode/settings.json` | 3 | `rust/Target/**` twice, `rust/Cargo.lock` once |
+| `README.md` | 3 | the shape paragraph, the `## rust/` section, `rust/README.md` twice |
+| `CONTRIBUTING.md` | 0 | names `packages/` and `src/` only |
+| `Documentation/Parity.md` | 1 | the Rust half's glob, `rust/Crate/*/Test/Parity.rs` |
+| `Documentation/Skill/Bounded-Sequences/SKILL.md` | 2 | `rust/Target/debug/agentic browse …` |
+| `Documentation/Skill/Browser-Connect/SKILL.md` | 1 | same command line |
+| `Documentation/Skill/Browser-Eval/SKILL.md` | 1 | same command line |
+| `Documentation/Skill/Chat-Research/SKILL.md` | 1 | `rust/Target/debug/agentic chat …` |
+| `Documentation/Skill/Index.md` | 2 | `rust/Target/debug/agentic skills …` |
+| `scenarios/run.mjs` | 1 | `cwd: join(Root, "rust")` - the Rust half's working directory |
+| `scenarios/mutate.mjs` | 6 | `cwd: at("rust")` and five `file: "rust/Crate/…"` mutation targets |
+| `scenarios/lib/skill.mjs` | 1 | a comment naming `rust/Crate/SkillContract/Test/Parity.rs` |
+| `scenarios/{browser-cdp,chat-driver,skill-contract}.json` | 1 each | the `$comment` naming the Rust half |
+| `packages/spacetime-catalog/Test/Destination.test.ts` | 1 | a comment naming `rust/Crate/Runtime/Test/Runtime.rs` |
+| `rust/README.md` | 0 | the port's own map; it moves |
+| `.hermes/notes/convention-inventory.md` | 16 | the previous pass's record - see [Deliberately not edited](#deliberately-not-edited) |
+| `.hermes/bundle/{manifest.json,tree.txt}` | 83 each | generated by `bundle.mjs` - see [Generated](#generated) |
+| `.hermes/bundle/batch-0{2,3,4,5}.txt` | 4, 30, 30, 22 | generated payloads |
+| `.hermes/bundle/batch-01.txt`, `.hermes/research-bundle/batch-01.txt`, `.hermes/research/4ffde6d5.md` | 0 | *external* - `r/rust/` in a Reddit URL |
+
+`scenarios/run.mjs` and `scenarios/mutate.mjs` are the two that a `grep rust/` misses: they spell the
+directory as a bare `"rust"` argument to `join` and `at`. They are the ones that would leave the
+differential runner executing `cargo` in a directory that no longer exists, so they are named here
+rather than left to the slash.
+
+---
+
+## B. Paths naming `packages/`
+
+Twenty-eight tracked files. The set that matters is small; the bundles are the bulk.
+
+| File | Occurrences | What it is |
+| --- | --- | --- |
+| `pnpm-workspace.yaml` | 1 | `- "packages/*"` |
+| `package.json` | 1 | `Test`: `node --test "packages/*/Test/*.test.ts"` |
+| `Scripts/Boundaries.mjs` | 1 | `readdirSync(join(Root, "packages"))` and the two `join(Root, "packages", …)` walks |
+| `scenarios/lib/{browse,chat,skill}.mjs` | 2 each | the three `../../packages/<name>/src/…` imports |
+| `scenarios/mutate.mjs` | 6 | `file: "packages/…"` mutation targets |
+| `scenarios/{browser-cdp,chat-driver,skill-contract}.json` | 1 each | the `$comment` naming the TypeScript half |
+| `CONTRIBUTING.md` | 3 | the layout table, the lowercase-package paragraph |
+| `README.md` | 4 | the shape paragraph, the `## packages/` section, the pnpm bullet |
+| `Documentation/{Parity,Spacetime-Catalog}.md` | 2 each | the differential run's two halves; the catalog's file list |
+| `Crate/{BrowserCDP,ChatDriver,SkillContract}/Test/Parity.rs`, `Crate/Runtime/{Test/Runtime.rs,Source/Struct/StandIn.rs}`, `Crate/README.md` | 1 each | doc comments naming the TypeScript half |
+| `.hermes/bundle/*`, `.hermes/research*`, `.hermes/notes/convention-inventory.md` | 1-55 | generated or historical |
+
+---
+
+## C. Paths naming `src/`
+
+`src/` is the TypeScript packages' source directory, and it appears in three kinds of place:
+
+- **inside a package, a relative import**: `packages/*/Test/*.ts` import `../src/index.ts`,
+  `../src/Port.ts`, `../src/Session.ts`, `../src/Transport.ts`, `../src/Expressions.ts`. Nine files.
+- **outside a package, a relative path across the tree**: `scenarios/lib/{browse,chat,skill}.mjs`
+  import `../../packages/<name>/src/<File>.ts`. Three files.
+- **in prose, as a bare `src/<File>.ts`**: `Documentation/Spacetime-Catalog.md` (6) and
+  `CONTRIBUTING.md` (1). No directory is spelled, so the rename to `Source/` has to reach these by
+  reading them, not by rewriting a prefix.
+
+`packages/design-verification/Test/Verification.test.ts:445` resolves `new URL("../src/", …)` to
+enumerate the package's own source files - a directory path, not an import, and the only one that
+would pass a type check while pointing at nothing.
+
+---
+
+## D. Manifest lines that must change
+
+**`rust/Cargo.toml`** moves to `Cargo.toml` unchanged. Both halves of it are already relative to the
+workspace root, which is the point of the move:
+
+```
+members = ["Crate/*"]                                    # stays
+agentic-runtime = { path = "Crate/Runtime" }             # stays, ×6
+```
+
+`rust/.cargo/config.toml` (`[build] target-dir = "Target"`) moves to `.cargo/config.toml`. Its
+`target-dir` is relative to the file's parent, so `Target/` stays one directory at the new root -
+and `rust/Target/`, which holds the build that produced the baseline above, stops being reachable.
+
+`pnpm-workspace.yaml` needs `packages/*` → `Package/*`. `package.json` needs the same in the `Test`
+glob. No package's own `package.json` changes: none of them names a path, and `main` is already
+`Target/index.js`.
+
+---
+
+## E. The embedded JavaScript
+
+Ten expressions, nine in `Crate/ChatDriver/Source/Fn/Expressions.rs` and one in
+`Crate/Workflow/Source/Fn/Measure.rs`. Each is a `format!` whose arguments are already JavaScript
+literals (`serde_json::to_string`), so the substitution is a text replacement of a *literal*, not a
+quoting decision made at call time.
+
+| Symbol | Signature | Parameters, in the order they appear | Bytes |
+| --- | --- | --- | --- |
+| `ReadMode` | `(&Selectors)` | `mode` | 338 |
+| `PressMode` | `(&Selectors)` | `mode` | 416 |
+| `ReadModel` | `(&Selectors)` | `model` | 261 |
+| `TypeQuestion` | `(&Selectors, &str)` | `composer`, `text` | 1103 |
+| `PressSubmit` | `(&Selectors, &str)` | `composer`, `expected`, `submit` | 600 |
+| `ReadAnswers` | `(&Selectors)` | `scroll`, `answer`, `busy`, `pattern`, `turn` ×2 | 1775 / 1839 |
+| `ReadCollapse` | `(&Selectors)` | `answer`, `collapse` | 433 |
+| `ReadTrace` | `(&Selectors)` | `answer`, `trace` | 511 |
+| `ReadSources` | `(&Selectors)` | `answer`, `sources` | 378 |
+| `MeasurementExpression` | `(&[String])` | `selectors` (one JSON array) | 539 |
+
+Every one of them is parameterised today; none is a constant. Three shapes the templating has to
+carry, and they are not the same shape:
+
+- **A selector or a text**: `Literal(&Selectors.Mode)`, `Literal(Text)` - a JSON string, already
+  escaped, inserted where a string literal belongs.
+- **A pattern that is sometimes not a pattern**: `ReadAnswers` builds `null` when
+  `Selectors.Done.trim()` is empty and `new RegExp(<literal>)` otherwise. The placeholder is a whole
+  expression, not a string, which is why it cannot be one of the quoted parameters.
+- **A JSON array**: `MeasurementExpression` serialises `&[String]` and splices it as a literal.
+
+Two facts about the current bytes that a rewrite would lose and a move must keep:
+
+- `ReadAnswers` emits `const Turn = "" === '' ? Answer : Answer.closest("");` when `Turn` is empty.
+  It reads like a bug and it is the page's own statement either way; the expression is moved, so the
+  line moves with it. Changing it is not this card.
+- `MeasurementSelectors` reads the selector list *back out of the built expression* by finding
+  `return ` and `.map(Read)`. Whatever the placeholder is called, the substituted text has to leave
+  those two markers where they are, or the reader stops working while every test that only checks
+  the expression still passes.
+
+The `Done` parameter means each expression has two byte-shapes, not one: with an empty `Done`
+(`null`) and with a real one (`new RegExp(...)`). Both are in the dump.
+
+---
+
+## F. What moves, and every removal by name
+
+The moves are `git mv`, one per path, and nothing else:
+
+- `rust/Crate` → `Crate`
+- `rust/.cargo` → `.cargo`
+- `rust/Cargo.toml` → `Cargo.toml`
+- `rust/README.md` → `Crate/README.md` - the port's map stays with the port, and the root already
+  has a `README.md` that describes the whole workspace and points at it.
+- `packages` → `Package`
+- `Package/<name>/src` → `Package/<name>/Source`, six packages, file names unchanged.
+
+Every removal, named because a glob delete is how a live file disappears:
+
+- `rust/` itself, once it is empty of tracked files.
+- `rust/Target/` - build output, untracked and gitignored, and unreachable from the new root.
+- `Crate/Agentic/tests/ExpressionDump.rs` and its now-empty `tests/` - the Phase 4 harness, copied
+  in, run, and removed again. Named here so the removal is a decision and not a leftover.
+
+---
+
+## Generated
+
+`.hermes/bundle/` is `bundle.mjs`'s output, and its own manifest records the flags it was built
+with: root the repository root, `--include ".rs,.md"`, `--max-files 30`, `--max-bytes 200000`, the
+default exclude list. It names `docs/…` today, which the previous pass already made stale, and it
+will name `rust/…` after this one. It is regenerated with those flags rather than edited, and the
+regeneration is compared against the old tree for anything other than a rename before it is kept.
+
+`.hermes/research-bundle/` has no generator in this tree - it is the older feed's output, tracked as
+the record - and its only `rust/` match is external. Left alone.
+
+---
+
+## Deliberately not edited
+
+- `.hermes/notes/convention-inventory.md` is the previous pass's record: it describes the tree as it
+  was when that pass ran, including the `rust/` nesting it deliberately left in place (its F7) and
+  the lowercase `packages/` it left in place (its F11). This card reverses both, and a record that
+  rewrote itself to agree with the later decision would stop being a record.
+- `.hermes/research/*.md` are captures: their bytes are what was recorded, including the
+  `r/rust/…` URLs that made them show up in the scan. Never edited.
+- `scenarios/generated/*.json` are `generate.mjs`'s output and name no path.
+- `Documentation/Research.md` and four other documents link `.hermes/research/rust-4ffde6d5.md`,
+  which does not exist - the file is `.hermes/research/4ffde6d5.md`. Observed here because the scan
+  found it; it is a broken link from an earlier pass, not a path this one moves, and fixing it is a
+  different edit.
+
+--- FILE: .hermes/notes/rust-cdp-research-samples.md ---
+# Rust CDP research samples
+
+Four questions asked through `agentic chat --bind <target-id>` against the reference product's own
+thread, on the day the `agentic-browser-cdp` substrate gained an existing-tab bind. Each answer is
+reproduced in full, with the wall time the call took. Mode and model are recorded because an answer
+from another mode is a different answer that looks exactly like a right one.
+
+| Sample                                                 | Characters | Wall time | Mode   | Model       |
+| ------------------------------------------------------ | ---------- | --------- | ------ | ----------- |
+| Differential parity beyond effect lists                | 8,960      | 35.07s    | search | GPT-6.1 Sol |
+| Where an adapter boundary actually is                  | 5,934      | 19.38s    | search | GPT-6.1 Sol |
+| Ranking completion signals for SPA chat UIs            | 9,354      | 39.80s    | search | GPT-6.1 Sol |
+| Testability with no browser: fake page, injected clock | 7,701      | 36.74s    | search | GPT-6.1 Sol |
+
+---
+
+## Differential parity beyond effect lists
+
+**Asked.** A Rust port and a TypeScript original share one differential scenario suite (ordered
+effect lists, error codes, payload shapes). Beyond re-running the suite, what assertions catch drift
+that effect lists cannot: payload shape, error-code mapping, timing invariants, idempotence of
+release? And how should a new configurable signal be tested so its DEFAULT still reproduces the
+reference behaviour exactly?
+
+**Answered.**
+
+Add assertions on the public contract, not just the sequence of effect names: exact serialized
+values, failure classification, when results become observable, and resource ownership after
+cleanup.
+
+For a new configurable signal, the essential compatibility assertion is:
+
+text TypeScript reference == Rust with option omitted == Rust with explicit DEFAULT
+
+Compare all observable behavior, including timing and cleanup—not just final text.
+
+1. Payload shape: assert the actual serialized output
+
+Use the reference’s JSON as the expected value:
+
+rust let actual = serde_json::to_value(rust_result)?; let expected: serde_json::Value =
+load_reference_payload(case);
+
+assert_eq!(actual, expected);
+
+Do not compare only effect discriminators or deserialize into a type that discards fields. Compare
+the serialized boundary exposed to consumers.
+
+Include distinct fixtures for:
+
+json {} {"partial": null} {"partial": ""} {"partial": "unfinished"}
+
+Add focused assertions where presence matters:
+
+rust assert!(actual.get("partial").is_none()); assert_eq!(actual["code"], expected["code"]);
+assert_eq!(actual["retryable"], expected["retryable"]); assert_eq!(actual["answer"],
+expected["answer"]); Test shape Failure mode caught Exact JSON equality Correct effect name with
+wrong payload Missing versus null versus empty Rust optional-field serialization differs from
+TypeScript Nested objects and arrays Dropped metadata, wrong nesting, changed array ordering
+Unicode, newlines, quotes, code blocks Escaping or text transformation changes content
+Unexpected-field assertion Rust leaks additional internal fields
+
+Ignore JSON object-key ordering unless serialized bytes are explicitly contractual. Preserve array
+ordering.
+
+2. Error mapping: test every injected failure and collision
+
+Use an explicit table with expected codes and payloads taken from the reference:
+
+rust for case in failure_cases { let actual = run_with_failure(case.injection).await;
+
+    assert_eq!(actual.public_result, case.reference_result);
+    assert_eq!(actual.terminal_results.len(), 1);
+    assert!(!actual.emitted_success());
+    assert_eq!(actual.release_calls, case.expected_release_calls);
+
+}
+
+Cover failures at acquisition, input, observation, generation, and cleanup, plus cancellation and
+deadline expiry.
+
+Also test overlapping conditions:
+
+Injection Required assertion Failure mode caught Operation fails; cleanup also fails Preserve the
+reference’s primary-error/cleanup-error policy Cleanup overwrites the meaningful failure
+Cancellation, then late success Exactly one cancellation result Late callback resurrects a cancelled
+turn Timeout, then late failure Exactly one timeout result Terminal result changes after return
+Success and deadline at the same logical time Reference-defined precedence Scheduler-dependent
+classification Unknown underlying error Exact reference fallback mapping Port invents a new generic
+code or leaks raw errors
+
+Compare the entire public error envelope, not only code. Message, cause, retryability, and
+partial-output placement may also be contractual.
+
+3. Timing invariants: assert “not yet,” not just “eventually”
+
+Use a controlled clock and explicitly drive the event queue. The harness should expose both returned
+results and terminal emissions.
+
+Threshold boundaries
+
+For an N-read stability rule:
+
+text N−1 qualifying equal reads -> no completion Nth qualifying equal read -> completion becomes
+eligible
+
+Specify whether the first observation counts as read 1.
+
+rust drive_reads(&mut driver, n - 1, "A"); assert!(driver.result().is_none());
+assert_eq!(driver.terminal_emissions(), 0);
+
+drive_reads(&mut driver, 1, "A"); assert_eq!(driver.result(), expected_reference_result);
+
+Failure mode caught: off-by-one settling.
+
+Counter reset text A, A, B, B, ... ^ restart the qualifying run
+
+Failure mode caught: accumulating equal reads across different answer values.
+
+Signal gating, only in the configuration that enables it text busy=true; unchanged text for >N reads
+-> no completion busy=false; remaining conditions absent -> no completion required terminal
+evidence; N stable reads -> completion busy reappears during settling -> reset/block completion
+
+Failure mode caught: settling during a streaming pause, or reusing stability accumulated before the
+signal permits completion.
+
+Do not impose this behavior on the default path unless the reference already has it.
+
+Deadline and post-terminal behavior text deadline−ε -> pending, absent earlier terminal evidence
+deadline -> reference-defined timeout/tie outcome deadline+ε -> late events cannot emit another
+result
+
+Assert that ordinary polls do not restart the overall deadline.
+
+Failure modes caught: sliding timeouts, early timeout, late success, duplicate terminal emissions.
+
+4. Release idempotence: inspect backend calls and ownership
+
+Test cleanup through every supported entry path. With a reusable release handle, the shape is:
+
+rust lease.release().await?; lease.release().await?; drop(lease);
+
+assert_eq!(backend.successful_releases(), 1); assert_eq!(backend.active_leases(), 0);
+
+If release consumes the handle, exercise duplicate cleanup through the actual supported paths
+instead—such as explicit cleanup plus cancellation or drop.
+
+Test Assertion Failure mode caught Repeated successful release One successful backend release Double
+release Explicit release followed by drop No additional release Destructor repeats cleanup Success,
+error, cancellation, timeout Correct final ownership state in every case Exceptional-path leak
+Acquisition fails No release of an unacquired resource Invalid cleanup Cleanup races with
+cancellation One cleanup owner; one terminal result Concurrent double cleanup Backend release fails
+Exact reference retry/state policy Marking an unreleased resource released, or unintended retries
+
+Distinguish release attempts from successful releases. “Idempotent release” does not automatically
+specify whether a failed attempt may be retried.
+
+Also assert that release is neither premature nor missing:
+
+text before ownership ends -> resource remains owned after terminal cleanup -> reference-defined
+released/error state 5. New configurable signal: prove default equivalence and opt-in divergence
+Three-way comparison for every shared scenario rust let reference = run_typescript(&scenario).await;
+
+let omitted = run_rust( &scenario, config_without_new_option(), ).await;
+
+let explicit_default = run_rust( &scenario, config_with_new_option(DEFAULT), ).await;
+
+assert_contract_eq(&omitted, &reference); assert_contract_eq(&explicit_default, &reference);
+assert_contract_eq(&omitted, &explicit_default);
+
+Have assert_contract_eq compare:
+
+text ordered effects, including full payloads public result/error terminal-result count logical
+completion time or specified timing boundaries release attempts and final ownership state
+
+Failure mode caught: a changed default that still produces the same coarse effect sequence.
+
+Test every default-construction path
+
+Run equivalent cases through:
+
+text configuration field omitted Config::default() builder without the setter explicit documented
+default explicit null, if the input format supports it
+
+If the reference rejects null, assert rejection rather than silently treating it as omission.
+
+Failure mode caught: deserialization, builder, and runtime defaults disagree.
+
+Include a scenario where the policies must differ
+
+Use a deliberately discriminating trace:
+
+text text remains unchanged for N reads new signal still says busy later, more text arrives
+eventually, the signal permits completion
+
+Expected results:
+
+text omitted/default: exactly the reference result and timing
+
+explicit signal-aware configuration: stays pending during the pause completes according to its
+configured signal rule
+
+Failure modes caught:
+
+The supposedly optional signal silently affects the default.
+
+The opt-in setting is ignored.
+
+The test suite exercises only cases where both policies happen to agree.
+
+Prove the default has no hidden signal dependency
+
+If default behavior is supposed to bypass the new signal, install a probe that fails if invoked:
+
+rust let probe = FailIfCalledSignalProbe::new();
+
+let actual = run_with_probe(default_config(), probe).await;
+
+assert_contract_eq(&actual, &reference);
+
+For the enabled path, separately test matched, unmatched, missing, ambiguous, and failed
+observations according to its documented policy.
+
+Failure mode caught: the default gains a new selector lookup, delay, error path, or refusal despite
+nominally preserving the old mode.
+
+Compatibility boundary
+
+Keep default-compatibility tests separate from opt-in safety tests. If the TypeScript reference
+completes on text stability alone, a Rust default that now waits for a busy/completion signal is not
+behaviorally identical—even if it is safer.
+
+Preserve the reference in DEFAULT; introduce stricter behavior explicitly, or make a deliberate
+versioned contract change.
+
+---
+
+## Where an adapter boundary actually is
+
+**Asked.** In a capability/adapter design where product markup may live only in configuration
+(selectors), and never in capability code: which concepts are safe to hard-code as generic, which
+are product-specific, whether 'the newest answer is the one whose count grew' is a generic identity
+rule, how to express 'this turn is finished' when a product only offers a text label, and where a
+selector-based adapter inevitably leaks.
+
+**Answered.**
+
+The boundary is semantics versus evidence: capability code may define turns, answers, activity, and
+terminal outcomes; adapter configuration must define how a particular product’s UI establishes them.
+Moving CSS strings into configuration is necessary, but does not by itself remove product
+assumptions.
+
+1. Generic concepts versus product-specific bindings Safe to define in capability code
+   Product-specific; belongs in the adapter definition A turn is a submitted interaction with
+   driver-side identity How rendered records correlate with that submission An answer is output
+   associated with a turn Which elements contain it and how blocks are assembled Busy means work
+   associated with the turn remains active Stop controls, status labels, attributes, scope,
+   visibility A terminal outcome is success, cancellation, or failure Which observations establish
+   each outcome Settling means output remains unchanged over a window Extraction and normalisation
+   rules Unobservable is distinct from false How to handle missing, duplicate, hidden, or replaced
+   nodes
+
+Generic types might be:
+
+rust enum Observation<T> { Known(T), Unobservable(ObservationError), }
+
+enum TerminalOutcome { Success, Cancelled, Failed, }
+
+Do not hard-code these interpretations:
+
+text last answer = current turn missing Stop = successful completion one submission = one new answer
+element tool finished = whole turn finished
+
+They remain product assumptions even when their selectors are configurable.
+
+2. “Its count grew” is a product assumption, not identity
+
+Count growth establishes a change in the rendered collection—not the identity or origin of the new
+logical answer.
+
+It assumes an append-only, fully rendered list, one matching element per answer, and no concurrent
+history loading or replacement. Virtualisation breaks this correspondence because only a window of
+records is mounted and DOM nodes can be recycled. web
+
+UI behavior What breaks A new answer mounts while an old one unmounts Count stays constant; the new
+answer is missed Scrolling mounts historical answers Count grows; history is mistaken for the
+current answer Regeneration replaces an existing answer New generation occurs without count growth A
+DOM node is recycled The same element now represents a different logical answer A placeholder
+becomes the answer Count changes before actual answer output appears
+
+The capability should request:
+
+rust observe_answer(turn_handle) -> Result<AnswerObservation, ObservationError>
+
+The adapter supplies correlation through configured IDs, attributes, relationships, or an explicitly
+weaker strategy.
+
+If count-based detection is all the product supports, declare it as a restricted adapter
+strategy—for example, single-flight submission into an append-only, nonvirtualised list. Do not
+promote it into a generic identity invariant.
+
+3. Text-only completion: configure a text predicate
+
+The clean solution is a declarative locator plus predicate—not a product-label comparison inside
+capability code.
+
+Illustrative configuration:
+
+text success: scope: current_turn selector: ".product-status" cardinality: exactly_one
+require_visible: true predicate: kind: text_equals value: "Finished" normalize_whitespace: true
+
+The shared evaluator implements generic primitives:
+
+rust enum Predicate { Exists, Visible, AttributeEquals { name: String, value: String }, TextEquals {
+value: String, normalize_whitespace: bool }, }
+
+The product-specific selector and "Finished" literal stay in configuration. Text matching is an
+established locator operation distinct from CSS selection; Playwright supports exact text matching
+and scoped text filters. playwright
+
+For native CDP evaluation, implement that predicate explicitly. Do not assume Playwright’s custom
+:has-text() syntax works in document.querySelector. playwright
+
+Two conditions are essential:
+
+Match the current turn, not an earlier turn’s completion label.
+
+Establish that the label means the whole turn successfully finished—not merely that a search or tool
+phase ended.
+
+If configuration permits only native CSS selector strings, it cannot generally express text-label
+matching. Extend the schema with typed predicates rather than violating the boundary with
+product-specific code.
+
+4. The unavoidable leak—and its containment
+
+Selectors locate elements. They do not establish identity, lifecycle, causality, or the meaning of
+absence.
+
+For example:
+
+text completion element missing
+
+could mean:
+
+text not finished temporarily unmounted wrong turn changed markup observation failed
+
+Likewise, “Finished” might describe one substep, while an absent Stop control might mean success,
+cancellation, failure, or rerendering.
+
+The least-bad containment is a versioned adapter definition containing:
+
+text locators and predicates current-turn scoping identity/correlation strategy cardinality
+requirements output extraction rules lifecycle interpretation explicit assumptions and unsupported
+cases
+
+Have the adapter return normalised observations, not guessed Booleans:
+
+rust struct TurnObservation { turn: TurnIdentity, busy: Observation<bool>, terminal:
+Observation<Option<TerminalOutcome>>, answer: Observation<Option<AnswerSnapshot>>, }
+
+Capability code then owns only the state machine:
+
+rust let observation = adapter.observe(&turn_handle).await?; state_machine.apply(observation)?;
+
+Contain the remaining assumptions with adapter contract tests: stale labels, duplicate matches,
+missing controls, replaced nodes, virtualised rows, and delayed output. An ambiguous observation
+must remain unresolved or become an error—not silently become idle or success.
+
+When the configuration cannot describe a product safely, add a genuinely reusable observation
+primitive or declare that case unsupported. The architectural promise is “product interpretation is
+isolated and testable,” not “selectors eliminate product interpretation.”
+
+---
+
+## Ranking completion signals for SPA chat UIs
+
+**Asked.** Enumerate the completion signals a CDP driver can observe - stop/cancel control,
+aria-busy, network idle, streamed response end, DOM mutation quiet, text stability - rank them by
+reliability with the specific false positive and false negative of each, give the fail-closed
+decision procedure, and say how to verify a completion detector offline.
+
+**Answered.**
+
+Rank signals by whether they establish termination, rather than merely a period of silence. For a
+driver that must not return partial answers, only validated, turn-correlated success evidence can
+authorise success; idle and quiet signals are supporting checks.
+
+1. Signals, reliability, and failure modes
+
+There is no universal ordering independent of the application’s contract. The following is a
+practical ranking for successful-answer detection.
+
+Rank Signal What it actually establishes Specific false positive: reports success too early Specific
+false negative: misses completed work 1 Application-level terminal-success event in a stream, or an
+equivalent validated UI state The application declares the current turn successfully complete Event
+describes a tool substep or another turn; DOM has not rendered the final payload yet Listener starts
+late; terminal event is dropped or parser no longer recognises it 2, conditional Turn-scoped
+Stop/Cancel control transitions active → inactive The UI no longer offers cancellation of that
+operation Cancellation, failure, temporary unmount, or a phase transition also removes the control
+Stale/duplicate control remains, or selector matches another operation 2, conditional Turn-scoped
+aria-busy="true" → "false" The application says that region is no longer being updated Attribute
+covers one phase only, or clears on error/cancellation Attribute remains true because of a bug or
+unrelated updates in the same region 3 Raw response/stream end A particular transport response ended
+Truncated output, an application error inside a successful HTTP response, or only one stage ending
+Persistent connection carries multiple turns and does not close after this answer 4 Relevant DOM
+mutation quiet No observed mutations occurred during the window Streaming pause, wrong subtree, or
+observer attached to a replaced node Citations, timestamps, or other rendering keep mutating after
+the answer is complete 4–5 Answer text unchanged for N reads Extracted text matched at sampled
+instants Long pause, initial empty output, stale node, or extractor omitting code blocks
+Formatting/citations keep changing extracted text; unstable extraction 6 Global network idle Tracked
+network activity satisfied an inactivity rule Computation or a delayed follow-up request continues
+after the quiet window Polling or unrelated long-lived requests prevent idle indefinitely
+
+The two busy indicators are comparable; their reliability depends on scope and implementation.
+Neither inherently distinguishes success from cancellation or failure.
+
+aria-busy describes element updates, not model-generation success; false is the default. An
+initially absent/false attribute therefore does not establish a completed turn. github
+
+Likewise, CDP defines Network.loadingFinished as a request finishing loading and loadingFailed as a
+load failure—not as application-level answer outcomes. chromium.googlesource
+
+Global network idle is particularly weak: Playwright maintainers explicitly discourage relying on it
+because background traffic can prevent it, while delayed activity can make it occur prematurely.
+github
+
+2. Fail-closed procedure when several signals exist
+
+Do not majority-vote signals. Network quiet plus DOM quiet plus stable text does not override a
+valid “still generating” observation.
+
+Configure the evidence contract
+
+For each adapter, specify:
+
+text current-turn correlation authoritative success evidence cancellation and error evidence
+required busy signals complete-answer extraction render-complete evidence, or a weaker
+rendering-settle policy overall deadline
+
+Represent missing or failed observations as Unknown, not false.
+
+Execute this state machine text Submitted → Generating → SuccessObserved → RenderingSettled →
+Complete
+
+Any nonterminal state → Cancelled | Failed | TimedOut
+
+Apply these rules:
+
+Register listeners before submission and capture the prior-turn baseline.
+
+Correlate every relevant observation to the submitted turn.
+
+Accept explicit cancellation or failure according to documented precedence.
+
+On validated terminal-success evidence, enter SuccessObserved; do not immediately return DOM text.
+
+Block completion while any required busy signal remains active or unobservable.
+
+Start the rendering-settle counter only after success evidence and required idle conditions.
+
+Reset it if output changes, busy reappears, or turn identity becomes uncertain.
+
+Revalidate the final snapshot and return exactly one terminal result.
+
+On deadline expiry, return timeout with optional diagnostic partial output—not success.
+
+A concrete acceptance predicate is:
+
+text Complete = current_turn_identified AND successful_terminal_evidence_for_that_turn AND
+all_required_busy_observations_are_known_idle AND final_output_available AND
+rendering_requirement_satisfied AND no_winning_cancellation_or_error AND deadline_not_expired
+
+For N-read settling:
+
+rust if !success_seen || !required_signals_known_idle { previous = None; equal_reads = 0; } else if
+previous.as_ref() == Some(&text) { equal_reads += 1; } else { previous = Some(text.clone());
+equal_reads = 1; }
+
+An explicit success event can establish that a fast turn occurred even if polling missed its
+transient busy control. Whether observing the busy transition is mandatory belongs in the adapter
+contract.
+
+Important limitation: generation versus rendering
+
+A generation-success event does not necessarily mean the DOM contains the full answer. Under a
+strict no-partial-output contract, prefer:
+
+The authoritative final response payload; or
+
+A validated application state that establishes final rendering.
+
+Post-terminal text stability is a practical rendering heuristic, not a proof against arbitrarily
+delayed DOM updates.
+
+If only busy indicators and quietness are available, without a validated success interpretation,
+successful completion remains unverified.
+
+3. When only text stability is available
+
+Do not return verified success.
+
+Either fail immediately:
+
+rust Err(CompletionUnverifiable { partial })
+
+or continue until the deadline:
+
+rust Err(TimedOut { partial })
+
+If useful, expose an explicitly weaker result through a separate contract:
+
+rust ObservedAnswer { text, completion: UnverifiedStable, }
+
+The reason is fundamental. These executions have the same observable prefix:
+
+text A: "Hello" → silence for 30 seconds → finished B: "Hello" → silence for 30 seconds → " world"
+
+Any finite silence-based detector that accepts A during that prefix also accepts B prematurely.
+Increasing N reduces some practical risks; it does not establish termination.
+
+4. Offline verification without a live model
+
+Use two complementary test layers.
+
+A. Deterministic event replay
+
+Implement the detector as a state machine driven by events and a controlled clock:
+
+rust fn step( state: &mut Detector, now: Timestamp, event: ObservationEvent, ) -> Vec<Effect>;
+
+Keep the expected lifecycle in the fixture, independent of what the detector observes.
+
+Example:
+
+text 0 submit T 10 busy(T)=true 20 text(T)="A" 10000 text(T)="A" // Longer than every quiet
+threshold. ASSERT: no success 10010 text(T)="AB" 10020 success(T) 10030 busy(T)=false 10040
+text(T)="ABC" // Delayed final rendering. ... rendering condition satisfied ASSERT: one success,
+payload="ABC"
+
+Essential adversarial cases:
+
+Fixture Required assertion Pause longer than the stability window No early success Repeated empty
+reads before output No empty “completed” answer Previous turn’s terminal marker Ignored for current
+turn Stop disappears due to cancellation Cancellation, not success Response ends with application
+error Failure, not success Raw EOF without successful terminal evidence No promotion to verified
+success Final DOM update follows terminal event Final content included Busy reappears during
+settling Settling resets or blocks Required selector becomes unavailable Unknown/error, not idle
+Success, cancellation, deadline tie Deterministic documented precedence Late events after terminal
+result No second result or payload mutation
+
+Assert both:
+
+text Safety: no success before the fixture’s completion oracle correct turn and complete payload at
+most one terminal result
+
+Liveness: valid completed traces eventually succeed unresolved traces reach their deadline
+irrelevant background activity does not prevent completion B. Local synthetic SPA over real CDP
+
+Serve a fixture page and deterministic local streaming endpoint. Exercise the production Rust
+adapter against it.
+
+Script:
+
+Stop-control insertion/removal and aria-busy changes.
+
+Chunked responses with long pauses.
+
+Explicit success, cancellation, error, and truncated transport.
+
+Delayed code blocks and citations.
+
+Replaced answer containers and recycled list nodes.
+
+Unrelated network traffic and DOM mutations.
+
+This catches failures the pure state-machine test cannot: selector scope, observer lifetime,
+extraction omissions, node replacement, and actual CDP event handling.
+
+Finally, mutation-test the detector: remove busy gating, accept raw EOF, count pre-terminal stable
+reads, or treat unknown as idle. Each mutation should break a targeted test. A detector that passes
+only happy paths has not demonstrated protection against partial answers.
+
+---
+
+## Testability with no browser: fake page, injected clock
+
+**Asked.** How should a browser-driving library be structured so its RULES are testable with no
+browser: a fake page and an injected clock. What must the fake express, what must the clock control,
+and what is the trap of a fake that recognises the expression string it is handed rather than the
+operation?
+
+**Answered.**
+
+Structure the library around a semantic port: the rules depend on typed page operations, an injected
+clock, and an independent cancellation source—not Chromium handles or JavaScript expression strings.
+The real CDP adapter and a deterministic fake implement the same port.
+
+1. Separate policy from browser mechanics
+
+A useful dependency structure is:
+
+text Capability rules ├── PagePort │ ├── CDP adapter + configured selectors/predicates │ └──
+Scripted fake page ├── Clock │ ├── Runtime clock │ └── Manual test clock └── Cancellation source
+
+A schematic Rust interface:
+
+rust trait PagePort { async fn observe(&self, turn: &TurnHandle) -> Result<TurnObservation,
+PageError>;
+
+    async fn replace_input(&self, text: &str)
+        -> Result<(), PageError>;
+
+    async fn submit(&self)
+        -> Result<TurnHandle, PageError>;
+
+    async fn release(&self)
+        -> Result<(), PageError>;
+
+}
+
+trait Clock { fn now(&self) -> Timestamp; async fn sleep_until(&self, deadline: Timestamp); }
+
+TurnObservation should expose evidence, not decide the policy under test:
+
+rust struct TurnObservation { answer: Option<AnswerSnapshot>, busy: Observation<bool>, terminal:
+Observation<Option<TerminalOutcome>>, }
+
+For example, the fake reports “busy, text=A”; the capability decides whether to keep waiting. Do not
+make the fake return “the detector should now finish.”
+
+This ports-and-adapters separation also permits shared contract tests for the fake and production
+adapter, rather than trusting that they mean the same thing. github
+
+2. What the fake must express
+
+The fake needs controllable asynchronous behavior, not merely a queue of successful values.
+
+Scenario Fake behavior Rule assertion Operation hangs Returned future stays pending until explicitly
+released or dropped Deadline/cancellation can interrupt a blocked operation Page dies mid-read Read
+starts, then completes with PageClosed when triggered No partial success; correct error and cleanup
+Partial answer Text appears, pauses, then grows while busy remains active Stable partial text cannot
+settle the answer Control never enables Input/submit readiness remains false Bounded waiting; no
+invalid submission Answer never settles Output keeps changing beyond the deadline Overall deadline
+is not restarted by progress Completion evidence unavailable Required signal becomes Unobservable
+Unknown is not interpreted as idle Late result Operation completes after cancellation or timeout No
+second terminal result Cleanup fails Release returns a configured error Reference error precedence
+and ownership policy Node/answer identity changes Observation reports a different identity
+Wrong-turn output is not accepted
+
+For hanging operations, use a gate or pending future—not a blocking loop. A fake that blocks the
+executor prevents the cancellation and timer mechanisms from running.
+
+Provide test-side synchronization:
+
+rust let read_started = fake.on_operation_started(Operation::Observe); let read_gate =
+fake.hold(Operation::Observe);
+
+let task = spawn(run_capability(...)); read_started.await;
+
+// The read is now genuinely in flight. fake.kill_page(); read_gate.fail(PageError::PageClosed);
+
+That handshake avoids guessing whether the driver reached the intended point.
+
+Keep scripts semantic:
+
+text Observe(T) -> busy=true, text="A" Observe(T) -> pending until gate opens Observe(T) ->
+PageClosed
+
+Use recorded operations for diagnostics and contractual ordering, but do not require every
+incidental poll to match a rigid script.
+
+3. What the clock must control
+
+All rule-level time must use the injected time source:
+
+Overall deadline.
+
+Poll/retry delays.
+
+Readiness timeout.
+
+Stability windows.
+
+Cleanup grace period, if defined.
+
+Prefer one absolute overall deadline:
+
+rust let deadline = clock.now() + config.timeout;
+
+Progress must not silently replace it with now + timeout.
+
+Cancellation remains an independent event. The clock allows the test to schedule when cancellation
+occurs; advancing time should not itself imply cancellation.
+
+Test these separately:
+
+text hung read + advance to deadline -> TimedOut
+
+hung read + cancel before deadline -> Cancelled
+
+cancel + deadline become eligible together -> documented tie-breaking outcome
+
+The rules must race deadline and cancellation against the operation itself—not check them only
+between completed reads. Otherwise one hung observe() defeats both guarantees.
+
+Also test:
+
+text deadline−ε -> still pending deadline reached -> terminal outcome late read completes -> no new
+outcome
+
+A clock jump is not a scheduler barrier. After advancing time, drive or await the relevant task
+progress before asserting. Tokio documents that advance() does not guarantee all timers have been
+processed before it returns. docs
+
+If using Tokio’s paused clock rather than a custom clock, remember that it can auto-advance when no
+other work is runnable; start_paused also requires the test-util feature. Use explicit
+operation-start handshakes instead of assuming a paused clock stays stationary. tokio +1
+
+4. The expression-string trap
+
+Avoid this fake:
+
+rust async fn evaluate(&self, expression: &str) -> Value { if expression.contains("innerText") {
+return json!("answer"); } if expression.contains("disabled") { return json!(false); } // ... }
+
+It recognises implementation spelling, not behavior.
+
+That creates two failures:
+
+False failures: renaming a variable, changing whitespace, using textContent, or combining two
+evaluations breaks tests despite unchanged behavior.
+
+False confidence: malformed or semantically wrong JavaScript still receives the canned result
+because it contains the expected substring.
+
+It can also silently answer the wrong operation: checking a composer’s text and extracting an answer
+may both contain innerText.
+
+Instead:
+
+rust fake.set_observation(turn, observation); fake.set_submit_readiness(false);
+fake.fail_next(Operation::Observe, PageError::PageClosed);
+
+The production adapter translates those semantic operations into CDP commands and configured DOM
+queries. Test that translation separately against a local fixture page.
+
+Do not attempt to build a miniature JavaScript interpreter into the fake.
+
+5. Keep the fake from ossifying the implementation
+
+Use these constraints:
+
+Assert outcomes and invariants, not the full internal call graph. Check “no submit before
+readiness,” rather than “exactly three readiness reads.”
+
+Make observations state-based where possible. Repeated reads return current state; test events
+change that state.
+
+Reserve exact call-count assertions for contracts that require them, such as at-most-once successful
+release.
+
+Keep scheduling explicit. Provide “operation started,” “deliver result,” and “run until blocked”
+hooks.
+
+Generate variations. Insert extra polls, split output into different chunks, lengthen pauses, and
+deliver irrelevant events. Equivalent semantic traces should produce equivalent outcomes.
+
+Share port-contract tests. Verify error categories, pending-operation behavior, identity, and
+release semantics against the fake and a local-browser adapter fixture. Shared contracts help keep
+fake and real implementations aligned. github +1
+
+Keep a thin browser test layer. Browser-free rule tests cannot prove selectors, focus, DOM
+extraction, or CDP event translation are correct.
+
+A useful final check is a harmless refactor: replace two JavaScript evaluations with one, or change
+the polling implementation without changing the timing contract. The rule tests should still pass.
+If they fail because the fake no longer recognises the implementation, the test boundary is too
+low-level.
+
+---
+
 --- FILE: .hermes/research/432b4991.md ---
 ---
 title: "A single state chart reconciled across five domains"
@@ -1318,932 +3191,3 @@ inside a step is one level in.
 | https://github.com/rust-lang/cargo/issues/5332                                                                                    | github                                                              |
 | https://www.reddit.com/r/rust/comments/aqgsxk/announcing_the_headless_chrome_crate_puppeteer/                                     | reddit                                                              |
 | https://docs.rs/fob-browser-test                                                                                                  | docs                                                                |
-
---- FILE: .hermes/research/575cb198.md ---
----
-title: "Design the smallest portable workflow for asking a web chat UI"
-thread: 575cb198-6013-4389-a900-7deeb1e53199
-project: Hermes Research
-kind: research
-date: 2026-11-03
-status: captured
-source: https://www.perplexity.ai/search/575cb198-6013-4389-a900-7deeb1e53199
-captured: 2026-11-03T20:05:18
-segments: 1
-steps: 3
-sources: 20
----
-
-# Design the smallest portable workflow for asking a web chat UI
-
-| Field         | Value                                                                 |
-| ------------- | --------------------------------------------------------------------- |
-| Thread        | `575cb198-6013-4389-a900-7deeb1e53199`                                |
-| Project       | Hermes Research                                                       |
-| Source        | https://www.perplexity.ai/search/575cb198-6013-4389-a900-7deeb1e53199 |
-| Captured      | 2026-11-03T20:05:18                                                   |
-| Segments      | 1                                                                     |
-| Trace steps   | 3                                                                     |
-| Cited sources | 20                                                                    |
-| Characters    | 39405                                                                 |
-
-## Transcript
-
-Hermes Research Share Finished 12s
-
-HIGH — Architectural boundary (reasoned recommendation, not
-repository-verified): keep the CDN shell public and independently useful; put
-authentication, private data, subscription state, and mutations inside one
-client island. The tension is not static versus realtime rendering, but
-build-time HTML versus user-specific truth that arrives later. Astro explicitly
-supports separately hydrated islands; a realtime island need not turn the rest
-of the site into an application. Check: block the realtime backend and load
-every public route—the public content must remain
-usable.[astro](https://docs.astro.build/en/concepts/islands/) HIGH — Hydration
-(factual basis plus inference): prerendered HTML cannot contain the visiting
-user’s request-time authenticated state. Nothing inherently breaks if both the
-HTML and the island’s initial render say “Checking session”; problems arise when
-the HTML implies current/private data, or the first client render assumes a
-session or subscription result it does not yet have. Depending on the framework,
-this can produce hydration disagreement, replacement, or misleading flashes.
-Prefer a deterministic initial placeholder; client-only rendering avoids
-reconciling prerendered component markup but still needs a useful static
-fallback. Check: load with JavaScript disabled, then with delayed authentication
-and socket establishment.astro+1 HIGH — First-paint socket failure (reasoned
-failure model): the shell can paint successfully while the authenticated surface
-never receives its first result. Treating “no result yet” as an empty collection
-falsely reports “you have no records”; waiting forever produces an apparently
-broken application. Distinguish checking session, signed out, connecting,
-live-with-result, stale-with-snapshot, and unavailable-without-snapshot; an
-authenticated empty result is a separate successful state. Check: block only the
-WebSocket endpoint while allowing HTML, JavaScript, and authentication to load.
-HIGH — Readiness (reasoned recommendation): an open socket is transport
-readiness, not proof that the user is authenticated or the required subscription
-has returned. Declare the surface ready only after authenticated data arrives;
-put a deadline on the initial waiting experience, not necessarily on background
-reconnection. Convex exposes connection-state observation and token handling,
-which are useful inputs but do not replace the application’s data-readiness
-condition. Check: separately delay token acquisition and the first query result,
-and confirm neither displays a false empty
-state.[convex](https://docs.convex.dev/api/classes/browser.ConvexClient) HIGH —
-Service-worker boundary (factual): a service worker can serve cached HTML and
-assets, but it is not a cache/proxy for WebSocket frames; the WebSocket
-handshake specifies service-workers mode “none.” Its lifecycle is also
-event-driven and browsers may terminate it, so it is not a dependable
-always-running connection owner. Keep the database client in the page/island by
-default; worker shutdown should not govern its socket. Check: stop the service
-worker in browser tooling while the page is connected, then separately
-disconnect the socket.w3+1 MEDIUM — Offline boot (reasoned consequence): caching
-the shell solves “can the application open?”, not “does it know the current
-database state?” A previously installed service worker can make an offline
-revisit fast, but cannot bootstrap a genuinely uncached first-ever visit. Ensure
-the island’s versioned JavaScript is cached too; cached HTML pointing to
-unavailable chunks yields a shell that never starts. Check: after a successful
-online visit, close the tab, disable networking, and reopen the authenticated
-route—not merely disconnect an already-running
-page.[developer.mozilla](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation)
-HIGH — Offline honesty (reasoned recommendation): without a persisted,
-authorized snapshot, show “Data unavailable offline,” not fabricated emptiness.
-With one, label it “Saved locally; freshness unverified” with its last
-successful sync time, partition it by account, and clear or quarantine it on
-logout/account changes. A cached private snapshot is a privacy decision, not an
-automatic benefit of a service worker. Convex explicitly distinguishes
-reconnecting through network blips from providing full offline sync; verify the
-chosen database client’s persistence guarantees rather than assuming
-equivalence. Check: reload offline, switch accounts, and confirm no previous
-account’s records appear.[convex](https://www.convex.dev/sync) HIGH — Mutations
-(reasoned trade-off): for this single surface, default to disabling
-authoritative writes until synchronization is available. Offline editing is
-possible, but adds a separate contract for durable pending operations,
-deduplication, conflict resolution, authorization after reconnect, and an honest
-“pending—not saved” display. A reconnecting socket alone does not settle any of
-those questions. Check: interrupt a write before acknowledgment, reload, and
-reconnect; the UI must not claim success without confirmation or silently
-execute the operation twice. MEDIUM — Cold-load placement (reasoned
-recommendation): load the realtime/auth bundle only on the authenticated
-surface; hydrate promptly there, but do not make public navigation or first
-paint await it. Use one client/provider for that surface rather than independent
-connections per widget. If authenticated content must be present in the initial
-HTML, change that route to request-time rendering or add an authenticated
-snapshot endpoint; that is a deliberate departure from the fully
-prerendered-only premise, not something hydration can manufacture. Check:
-inspect public-route network traces for unwanted auth/database bundles, and
-measure shell paint separately from first authenticated result.astro+1
-
-Today 5:03 PM
-
-I am designing a module taxonomy so that capabilities in a monorepo can become
-project-agnostic and reusable across workflows. My sketch is: ports at the
-centre, each with a contract test and data shapes but no provider or transport
-knowledge; adapters co-located with the provider they wrap; a composition root
-as the only place that names concrete adapters; and an import-graph check that
-fails when a capability imports an adapter or an adapter imports another
-adapter. Providers declare the ports they need rather than registering
-themselves into a service bus. Critique this against established practice -
-hexagonal architecture and the dependency rule, service locator versus
-constructor injection, contract testing, and monorepo versus polyrepo federation
-of many small packages. Tell me where the sketch is wrong, under-specified, or
-will fail at scale, and what you would add or remove. Reason from sources where
-the claim is factual and say where you are reasoning from principle. I care most
-about the failure modes: what does this design look like after two years and
-forty modules.
-
-Read less Finished 14s
-
-HIGH — Design review, not repository findings: the sketch has the right
-dependency direction, but “ports at the centre” risks making interfaces the
-product. Put domain policy and use cases at the centre; let those consumers own
-the ports they need. Cockburn’s goal is an application independently testable
-from external devices, not a universal catalogue of interchangeable providers.
-Verification: run capability tests without provider SDKs, network access, or
-application
-bootstrap.[alistair.cockburn](https://alistair.cockburn.us/hexagonal-architecture)
-HIGH — Port ownership is under-specified: a central ports package can become the
-forty-module dependency magnet, accumulating optional fields and provider-shaped
-methods. Recommendation from principle: keep ports local to the consuming
-capability; extract a shared contract only when consumers genuinely share
-semantics and evolution policy. Verification: change one capability’s
-requirement and inspect the affected build/test set; unrelated capabilities
-should not need coordinated edits. HIGH — “No provider or transport knowledge”
-is correct, but “data shapes” alone are insufficient: the dependency rule also
-excludes provider-generated types from inner layers. Specify domain errors,
-ordering, pagination, cancellation, idempotency, consistency, and resource
-ownership where relevant; otherwise two adapters type-check while behaving
-differently. Verification: inspect exported signatures for SDK types, then run
-the same behavioral cases against both
-implementations.[cleancoder](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-HIGH — Interchangeability must be bounded, not asserted: inferred two-year
-failure is a lowest-common-denominator port plus provider-specific escape
-hatches. A transactional store and an eventually consistent service cannot
-promise identical behavior merely because both implement save(). Declare minimum
-guarantees; split meaningfully different capabilities rather than passing
-arbitrary provider options. Verification: test failure/retry and
-read-after-write behavior against each advertised guarantee. HIGH — Dependency
-declaration is not necessarily injection: a constructor or factory taking narrow
-port values exposes requirements; accepting a registry and calling
-resolve("store") hides them again. Fowler explicitly distinguishes
-constructor-visible dependencies from locator lookups. Keep resolution in
-assembly code and inject the actual dependencies; reserve dynamic discovery for
-a genuine plugin requirement. Verification: search capability code for
-container/registry access and test construction using only explicit
-arguments.[martinfowler](https://martinfowler.com/articles/injection.html)
-MEDIUM — A service bus and a service locator are different concerns:
-recommendation from principle—remove self-registration side effects, not
-legitimate messaging. An event bus can itself be an injected port, but delivery,
-ordering, retry, and subscription lifetime need contracts. Inferred failure
-after forty modules: implicit event chains become invisible control flow even
-though the import graph is clean. Verification: trace one workflow end-to-end
-and test duplicate delivery and subscriber failure. HIGH — “Only the composition
-root names adapters” needs scope: production assembly should name concrete
-implementations, but adapter tests and adapter definitions necessarily do too.
-Recommendation from principle: permit one root per executable/deployment plus
-private assembly helpers; prohibit application logic from selecting concrete
-providers. Inferred failure otherwise: one enormous root with every workflow’s
-configuration and lifecycle. Verification: assemble each workflow independently
-and check that unused providers need not initialize. MEDIUM — The
-adapter-to-adapter ban is a useful default, not a hexagonal law: tracing,
-caching, and retry decorators legitimately wrap another implementation through a
-port; concrete adapter imports usually need not follow. Allow reusable
-outer-layer technical helpers, and let assembly inject decorated
-implementations. Verification: construct a caching wrapper around an in-memory
-port implementation without importing a concrete database adapter; this
-preserves inward dependency direction.aws.amazon+1 HIGH — Provider co-location
-needs an ownership boundary: recommendation from principle—keep integration
-translation beside the provider integration, but keep the provider SDK wrapper
-separate from each consumer-specific adapter when meanings differ. Otherwise
-“the provider package” gradually imports every domain and becomes a hub.
-Verification: inspect its transitive dependencies; a low-level provider client
-should not pull in workflow policy or unrelated capability packages. HIGH — One
-contract test is not a contract-testing strategy: use a reusable conformance
-suite for in-process port semantics, run against real adapters as well as fakes.
-For independently deployed HTTP/message boundaries, consumer-driven contracts
-verify the interactions consumers actually use; Pact describes that separate
-purpose. Neither substitutes for production-representative integration tests.
-Verification: deliberately break serialization, authorization, or error
-translation and establish which test detects each
-break.[pact](https://docs.pact.io/) HIGH — Add lifecycle and operational policy
-before scaling: recommendation from principle—declare who opens/closes clients,
-owns transactions, sets deadlines, retries, and carries tenant/request context.
-Inferred two-year failure: nested retries multiply attempts, singleton adapters
-leak tenant state, and tests pass with fakes that never disconnect.
-Verification: inject timeouts and partial failures, count attempts, run
-concurrent tenant requests, and assert shutdown releases resources. HIGH — The
-import checker is necessary but incomplete: recommendation from principle—check
-resolved package exports, re-exports, aliases, dynamic imports, cycles, and
-transitive boundary violations; distinguish production from test dependencies.
-Also test runtime composition, because two modules can form a call cycle
-entirely through ports. Verification: maintain intentionally forbidden
-dependency fixtures that must fail CI, plus a smoke test for every supported
-assembly. MEDIUM — Forty modules need not mean forty published packages:
-recommendation from principle—separate logical boundaries from release
-boundaries. Keep modules together when they change and ship together; publish
-packages when independent consumers, ownership, or compatibility commitments
-justify it. Otherwise every small refactor becomes release choreography.
-Verification: audit recent changes for packages that always move together and
-for “independent” packages that only work with workspace source aliases. MEDIUM
-— Monorepo versus polyrepo is a coordination trade-off, not an architectural
-purity test: Google documents a common source of truth supported by substantial
-tooling, alongside its trade-offs. Inference for your scale: a monorepo makes
-coordinated contract migrations easier but can conceal lockstep coupling;
-polyrepos expose version skew but add release and compatibility work.
-Verification: test built package artifacts against explicitly supported
-dependency versions, not only the current monorepo
-checkout.[research](https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/)
-HIGH — Add contract ownership and retirement rules: recommendation from
-principle—name an owner, supported consumers, compatibility policy, and
-migration path for each public port. Inferred year-two failure is not “too many
-adapters”; it is abandoned interfaces, divergent near-duplicates, and nobody
-authorized to remove old versions. Verification: generate an inventory of ports,
-implementations, consumers, owners, and supported versions; investigate every
-orphan or unexplained duplicate. MEDIUM — Smallest useful revision: keep inward
-dependencies, explicit injection, adapter-local translation, behavioral
-conformance tests, and automated boundaries; remove universal-port ambitions and
-mandatory package-per-module splitting. Add per-workflow assembly, lifecycle
-guarantees, compatibility ownership, and artifact-level consumer tests.
-Verification: add a second workflow and replace one provider without modifying
-the original capability’s policy; record every exception—that exercise tests
-actual reuse rather than architectural vocabulary.
-
-5:06 PM
-
-Your answer was cut off mid-sentence at 'unrelated capabilities should not need
-coordination'. Please carry on from exactly there and finish the review - I
-still want the failure modes at two years and forty modules, what you would
-remove from the sketch, and how composition roots and the import-graph check
-should be shaped so they do not rot. Take the space you need.
-
-Finished 3s
-
-HIGH — …unrelated capabilities should not need coordination. The failure to
-watch for is a shared ports package that becomes everybody’s dependency: adding
-one workflow requirement forces changes through otherwise unrelated modules.
-Recommendation from principle: let the consuming capability own its ports;
-promote a contract to shared ownership only when consumers share semantics, not
-merely similarly shaped methods. Verification: change one use case and inspect
-which packages must change, rebuild, or release. HIGH — Domain policy belongs at
-the centre, not an interface catalogue: hexagonal architecture separates an
-application from the technologies driving it and serving it; the dependency rule
-makes source dependencies point toward policy. Ports are boundaries around
-meaningful application behavior, not an end in themselves. Verification: run the
-capability’s policy tests without provider SDKs, network access, or the
-production composition root.alistair.cockburn+1 HIGH — The likely two-year
-failure is semantic leakage behind clean types: forty modules can agree on a
-Storage interface while disagreeing about ordering, atomicity, missing records,
-authorization, and whether retries duplicate writes. Recommendation from
-principle: document and test observable guarantees, not only data shapes.
-Verification: run identical failure, concurrency, and retry cases against every
-implementation advertised as interchangeable. HIGH — Remove the ambition to make
-every port universal: recommendation from principle—a port should express what a
-consumer needs, not everything a provider offers. If one workflow requires
-transactional writes and another only best-effort delivery, do not conceal that
-difference behind optional flags and provider-specific options. Verification:
-inspect contracts for arbitrary option bags, unsupported-operation exceptions,
-and branches on provider identity. HIGH — Keep constructor or factory injection,
-but distinguish it from dependency declarations: accepting a list of service
-names and resolving them later is still locator-style access. Fowler’s
-distinction is useful because explicit constructor dependencies reveal
-requirements without searching implementation code. Verification: construct a
-capability with ordinary test doubles; it must not need a registry, global
-container, or bootstrap side
-effect.[martinfowler](https://martinfowler.com/articles/injection.html) MEDIUM —
-Remove self-registration as the default, not messaging as a legitimate
-abstraction: recommendation from principle—a service bus routes messages; a
-service locator finds dependencies. Either can become hidden coupling, but they
-are not the same mechanism. An injected event publisher can be a sound port if
-delivery and failure semantics are explicit. Verification: trace a workflow’s
-subscribers, duplicate handling, and failure propagation without relying on
-import order. HIGH — Shape composition roots per executable or deployment, not
-per repository: recommendation from principle—each application, CLI, worker, or
-test harness owns the assembly it actually runs. A repository-wide root tends to
-accumulate unrelated configuration and initialize unused providers.
-Verification: start each entry point independently and confirm it neither
-requires credentials for nor opens connections to providers it does not use.
-HIGH — Allow private assembly helpers beneath each root: recommendation from
-principle—“only the root names concrete adapters” should describe the assembly
-boundary, not demand one enormous file. Helpers may construct a coherent
-subsystem, but should accept configuration and explicit dependencies rather than
-reach into a global container. Verification: import each helper in isolation and
-assert that importing it performs no network I/O or registration. HIGH — Keep
-workflow decisions out of roots: recommendation from principle—assembly decides
-which implementation satisfies a requirement; application policy decides what a
-workflow does. A root full of tenant rules, fallback decisions, or business
-branches is an application hiding in configuration. Verification: change a
-business rule and check whether the root must change; if so, identify whether
-policy has escaped its capability. HIGH — Give roots explicit lifecycle
-responsibility: recommendation from principle—assembly must establish who owns
-startup, readiness, disposal, and failure cleanup. Otherwise forty modules each
-create their own connection pools, retry loops, and shutdown handlers.
-Verification: fail startup halfway through, then assert previously acquired
-resources close; run shutdown twice and verify safe behavior. MEDIUM — Relax the
-absolute adapter-to-adapter prohibition into a precise dependency policy: a
-decorator may wrap another implementation through its port without importing
-that implementation. Hexagonal architecture requires separation and inward
-dependencies, not a blanket prohibition on all outer-layer cooperation.
-Recommendation: share technical helpers where appropriate, but keep concrete
-implementation selection in assembly. Verification: wrap an in-memory adapter
-with tracing or caching without importing the production database
-adapter.docs.aws.amazon+1 HIGH — Define module categories in machine-readable
-metadata: recommendation from principle—classify capabilities, contracts,
-provider clients, adapters, assembly, and tests, then maintain a small explicit
-allowed-dependency matrix. Directory naming alone becomes unreliable after
-moves, aliases, and re-exports. Verification: generate the resolved dependency
-graph and reject unclassified modules as well as forbidden edges. HIGH — Check
-the graph that the compiler and runtime actually resolve: recommendation from
-principle—include package exports, workspace aliases, re-exports, dynamic
-imports where statically resolvable, and transitive SDK leakage. A capability
-importing a “shared” barrel that re-exports adapters is still coupled to
-adapters. Verification: add deliberately forbidden fixtures for each supported
-import mechanism and require the architecture check to reject them. HIGH —
-Prevent the checker itself from becoming ceremonial: recommendation from
-principle—make exceptions narrow, owned, justified, and time-bounded; do not
-permit broad ignore directories. Review changes to the dependency policy
-separately from code that would violate it. Verification: report exception count
-and age in CI, and demonstrate that removing each exception exposes the specific
-intended violation. HIGH — Accept what an import graph cannot prove:
-recommendation from principle—ports can conceal runtime call cycles,
-incompatible lifetimes, hidden service discovery, and event feedback loops.
-Supplement static checks with assembly smoke tests and representative workflow
-traces, rather than claiming the graph proves architectural independence.
-Verification: boot every supported assembly and exercise a complete workflow
-with dependency failures injected. HIGH — Split testing into distinct
-obligations: reusable conformance tests establish port behavior; adapter
-integration tests establish translation against the actual provider; assembly
-tests establish wiring. Consumer-driven contract tests address interactions
-across independently deployed HTTP or message boundaries, which is Pact’s stated
-scope—not a substitute for all three. Verification: intentionally break one
-guarantee in each layer and identify the test that
-fails.[docs.pact](https://docs.pact.io/) HIGH — Do not let a fake certify
-itself: recommendation from principle—run the same conformance suite against
-production adapters, and include cases the convenient in-memory implementation
-tends to omit: cancellation, duplicates, partial failure, pagination, and
-concurrent callers. Verification: demonstrate at least one real-provider
-behavior that originally differed from the fake and retain it as a regression
-case. MEDIUM — Remove package-per-module as an implicit goal: recommendation
-from principle—logical boundaries, publication boundaries, and deployment
-boundaries solve different problems. Forty capabilities do not automatically
-justify forty independently versioned packages. Verification: inspect which
-packages always change together and which have actual external consumers; merge
-release boundaries that create coordination without providing independence.
-MEDIUM — Monorepo federation does not eliminate versioning; polyrepo federation
-does not create independence: Google’s monorepo account describes a common
-source of truth supported by substantial infrastructure, not a free scaling
-property. Inference for this design: a monorepo can hide lockstep assumptions,
-while polyrepos turn them into delayed compatibility failures. Verification:
-build package artifacts and test supported consumer/provider version
-combinations outside workspace source
-resolution.[research](https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/)
-HIGH — Assign ownership to public contracts before forty modules arrive:
-recommendation from principle—each contract needs an owner, known consumers,
-compatibility expectations, and a retirement process. Otherwise near-duplicate
-ports proliferate because nobody can safely change the original, while obsolete
-versions remain forever. Verification: generate an inventory linking every
-public port to its implementations, consumers, owner, and supported versions.
-HIGH — The two-year warning signs are operational, not aesthetic: inferred
-indicators include roots that require every provider’s credentials, contract
-changes touching unrelated workflows, adapter-specific flags in capabilities,
-growing checker exceptions, and tests that pass only inside the workspace. These
-are hypotheses, not findings about your repository. Verification: measure those
-indicators periodically and investigate changes rather than counting interfaces
-as evidence of reuse. MEDIUM — The revised minimum is smaller than a framework:
-consumer-owned ports with behavioral guarantees; explicit constructor/factory
-injection; adapters that translate rather than dictate policy; per-entry-point
-assembly with lifecycle ownership; and a resolved import-policy check backed by
-negative fixtures. Remove universal interfaces, automatic registration, a
-repository-wide super-root, and compulsory independent publishing. Verification:
-add a second workflow and substitute one provider without editing the original
-capability’s policy; every required edit reveals where the claimed boundary is
-incomplete.
-
-6:49 PM
-
-Three connected questions, and I want the mechanisms rather than the vocabulary.
-(1) SpacetimeDB's execution model: is it reactor-style - an event loop where
-transactions are scheduled and reducers are handlers - and what does the
-documentation actually say about concurrency, ordering, and where the word
-reactor appears in the architecture? (2) I want each worker or capability in an
-agent system to carry properties that are hidden at first and become known over
-time, revealed by traces or by other actors, with a probabilistic element - the
-model I have in mind is Android: Netrunner, where cards are face down, HQ and
-R&D hold hidden information, and the runner learns by acting. What is the right
-formal frame for that - POMDP belief states, epistemic logic with knowledge
-operators, hidden Markov models - and what does Netrunner specifically teach
-about disclosure rules that are fair, legible and not degenerate? (3) The hard
-part: if hidden properties live in a relational database whose subscriptions
-push rows to clients, how do you represent them without leaking through the
-subscription itself? Give the table design and the reducer-level rule, and say
-where the leak is unavoidable. Cite documentation where factual and mark
-inference.
-
-Read less Finished 24s
-
-HIGH — (1) Execution model: “reactor-style” is a reasonable analogy for
-requests/system events invoking handlers, but the documented architectural
-description is more precise: each database is a single-threaded actor, with
-transactions in that database executed serially; different databases can execute
-concurrently. The September 2026 architecture article explicitly contrasts this
-with earlier parallel MVCC execution. Established from the architecture article,
-not reproduced; check: distinguish per-database reducer execution from
-networking, procedures, replication, and execution in other
-databases.[spacetimedb](https://spacetimedb.com/blog/how-does-spacetime-scale)
-HIGH — Transaction guarantees are not scheduling guarantees: every reducer
-invocation is an atomic transaction; it cannot observe partially committed
-changes from another reducer. Neither those guarantees nor single-threaded
-execution establishes a global FIFO order matching requests from different
-clients, or a guaranteed dispatch order for overdue scheduled reducers. Do not
-derive either from the word “reactor.” Established from transaction
-documentation; the caution about inferring ordering is reasoning from principle.
-Check: make application ordering explicit with sequence/version preconditions
-where it
-matters.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
-MEDIUM — Where “reactor” appears: I found no architectural use of that word in
-the official transaction documentation or the architecture article inspected;
-the latter says “actor.” Search did find an official example described as a
-“reactor game,” referring to an energy-generating game object, not the server
-architecture. This is a bounded search finding, not proof that the word never
-appears anywhere in the repository. Check: search the pinned
-documentation/source revision before claiming a specifically named Reactor
-implementation.spacetimedb+1 HIGH — (2) Formal frame: use an action-conditioned
-partially observable model for discovery, and a separate disclosure policy for
-authorization. A belief state is a distribution over possible hidden states;
-actions produce observations that update that distribution. This matches “learn
-by probing” better than an ordinary HMM when the actor chooses informative
-actions. If properties remain fixed and actions only reveal them, an epistemic
-MDP is a particularly close special case. Established mathematical model; its
-application to your capabilities is
-inference.[lamsade.dauphine](https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf)
-MEDIUM — The mechanism is Bayesian filtering: $b_{t+1}(s')\propto O(o_{t+1}\mid
-s',a_t)\sum_s T(s'\mid s,a_t)b_t(s)$. Here $s$ includes latent capability
-properties, $a_t$ is a probe/invocation, and $o_{t+1}$ is the authorized
-observation. For fixed properties, the transition can be the identity. Unknown
-observation likelihoods require estimation or explicit uncertainty; merely
-storing a confidence number does not establish a calibrated probabilistic model.
-Equation established in the cited treatment; capability interpretation
-inferred.[lamsade.dauphine](https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf)
-MEDIUM — Epistemic logic answers a different question: use it to express what
-each actor knows and what they know about others’ knowledge; use probabilities
-for degrees of belief rather than equating “likely” with “known.” The two
-approaches can be combined. If other actors strategically choose what to
-disclose or how to behave, a single-agent POMDP with a fixed environment model
-may be insufficient; your model must represent those choices or declare its
-approximation. Established distinction with an inferred modeling
-recommendation.[hal](https://hal.science/hal-05109660/document) HIGH — Separate
-three things in your implementation: latent truth, authorized evidence, and
-actor belief. Reasoning from principle—a worker may actually be unreliable, a
-trace may provide one failure observation, and an actor may infer a 30% failure
-probability; these are different records with different authority. Another
-actor’s statement is testimony, not automatically a mutation of truth. Check:
-ensure a reported claim can be disputed without overwriting either the
-underlying property or the original evidence. MEDIUM — Netrunner’s concrete
-lesson is rule-governed access, not simply face-down storage: hidden information
-includes cards in HQ/R&D and face-down cards, and players cannot inspect it
-without an applicable rule, effect, or communication. HQ/R&D access is
-constrained by breach/access rules, rather than allowing arbitrary inspection of
-a chosen secret. Established from the current community-maintained
-continuation’s comprehensive rules; application to your design is analogy.
-Check: every reveal must name the rule authorizing its target, audience, and
-extent.[rules.nullsignal](https://rules.nullsignal.games/) HIGH — Fair
-disclosure, inferred from that structure: make existence, public metadata,
-inspection costs, legal targets, audiences, and reveal consequences legible
-before an actor commits. Bound repeated probing, or cheap repeatable
-observations can eliminate the hidden-information mechanic. Do not secretly
-reroll a persistent property whenever someone examines it; distinguish
-discovering a pre-existing trait from sampling a fresh stochastic outcome.
-Check: calculate what repeated probes reveal and whether one action strictly
-dominates all alternatives. HIGH — “Hidden again” cannot mean “unknown again”:
-Netrunner distinguishes current hidden status from information a player can
-derive after seeing a card, while identity tracking can be disrupted by movement
-into an unknown position. For software, assume recipients can retain every byte.
-Revoking access or removing a subscription row cannot erase prior knowledge;
-stable identifiers can make old evidence linkable indefinitely. Established game
-distinction plus security inference. Check: model shuffle/identity changes
-explicitly rather than clearing a UI field and calling it forgotten.nullsignal+1
-HIGH — (3) Never publish a secret-bearing row and rely on client-side
-concealment: SpacetimeDB subscriptions synchronize authorized rows into the
-client cache. Private tables are inaccessible to clients, while server-side
-views can filter by caller and project only permitted columns. A client’s chosen
-subscription predicate is not your security boundary. Established from
-documentation; check: connect as an adversarial client and request every public
-table/view, ignoring the intended UI.spacetimedb+1 HIGH — Proposed relational
-design, inferred: CapabilityPublic(capability_id, public_kind, public_status)
-contains only intentionally public facts; CapabilitySecret(capability_id,
-property_key, property_version, value) is private; Observation(observation_id,
-audience_identity, capability_id, property_key, property_version,
-disclosed_value_or_evidence, observed_at, rule_id) is private and indexed by
-audience_identity. Keep disclosure policy and any secret random state private
-too. If even capability existence is hidden, CapabilityPublic must also become
-an audience-filtered private source rather than a public table. Check: inspect
-each field for whether its existence, not only its value, is disclosable. HIGH —
-Subscription surface: expose my_observations through a caller-aware ViewContext,
-fetching Observation rows by ctx.sender and returning only an approved
-projection. Do not make Observation public merely because it has an audience
-column; that column does not itself enforce access. SpacetimeDB documents
-precisely this private-table plus caller-indexed-view pattern. Established
-mechanism; proposed schema inferred. Check: subscribe as identities A and B and
-verify neither receives the other’s
-observations.[spacetimedb](https://spacetimedb.com/docs/tables/access-permissions/)
-HIGH — Reducer-level rule, inferred: observe(target, action) authenticates
-ctx.sender, checks target visibility and the action’s prerequisites/budget,
-reads the private property, computes only the permitted disclosure, and inserts
-the audience-specific Observation in the same transaction as charging the
-cost/updating probe state. Never trust a caller-supplied recipient identity as
-authorization. Atomic reducer transactions make “pay and reveal” all-or-nothing.
-Check: race two probes against a one-use allowance and verify the configured
-allowance cannot be
-exceeded.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
-HIGH — Prefer recorded disclosure over a live join to secret truth: reasoning
-from principle—if a view joins an old grant to the current secret value, that
-grant may silently authorize future changes too. A recorded observation tied to
-property_version states exactly what was learned when; continued visibility of
-current truth should be a separate, explicit entitlement. Check: change the
-secret after a one-time reveal and verify the old observer receives no new
-value. HIGH — Traces are another subscription surface: reasoning from
-principle—do not emit private property values into globally readable step
-titles, source labels, error strings, result sizes, or audit events. Keep raw
-evidence private and produce audience-specific trace projections using the same
-disclosure rules. The earlier append-only trace design makes accidental
-publication especially consequential because hiding a later projection does not
-undo delivery. Check: plant a secret canary and inspect every client-visible
-row, trace, failure response, and exported artifact. HIGH — Nonleakage target,
-proposed formally: before an authorized reveal, two database states differing
-only in a protected property should induce the same observable subscription
-transcript for an unauthorized actor, or the same distribution when randomness
-is involved. “Same visible values” is insufficient if row existence, update
-timing, counts, IDs, or success/failure differ. This is an inferred security
-specification, not a documented SpacetimeDB guarantee. Check: run paired worlds
-with different secrets and compare complete client-observable transcripts. HIGH
-— Where leakage is unavoidable: authorized observations intentionally reveal
-information; observable behavior may also reveal traits by inference. Timing,
-traffic size, shared-resource contention, and a trusted server/operator’s access
-are outside a simple row-filtering guarantee. You must either accept those
-channels, constrain the threat model, or add batching/padding/isolation and
-verify their costs. Even perfect filtering cannot stop an authorized recipient
-sharing information with another actor. Check: document allowed leakage
-explicitly rather than claiming the relational schema provides total secrecy.
-MEDIUM — Bottom line, design judgment: use SpacetimeDB as the trusted
-transactional disclosure authority; use private truth plus audience-scoped
-immutable evidence as the data model; use beliefs as derived, actor-specific
-interpretations. Netrunner supplies useful disclosure discipline, not a database
-security mechanism, and POMDPs supply inference/planning semantics, not
-authorization. Check: demonstrate one end-to-end probe that changes the
-observer’s evidence and belief without changing what an uninvolved subscriber
-can observe.
-
-How does SpacetimeDB handle transaction rollbacks What is the exact concurrency
-model across modules How are scheduled reducers sequenced internally What are
-the formal guarantees of client subscriptions How does state replication affect
-determinism ⠸ Ask a follow-up Search Computer GPT-6.1 Sol
-
-## Step trace
-
-The work the answer did, in the order it did it. Depth is nesting, so a step
-inside a step is one level in.
-
-| Depth | Step     | Duration | Icon          | Expanded |
-| ----- | -------- | -------- | ------------- | -------- |
-| 0     | Finished | 12s      | chevron-right | false    |
-| 0     | Finished | 14s      | chevron-right | false    |
-| 0     | Finished | 24s      | chevron-right | false    |
-
-## Cited sources
-
-| Source                                                                                                    | Label             |
-| --------------------------------------------------------------------------------------------------------- | ----------------- |
-| https://docs.astro.build/en/concepts/islands/                                                             | astro             |
-| https://docs.convex.dev/api/classes/browser.ConvexClient                                                  | convex            |
-| https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation | developer.mozilla |
-| https://www.convex.dev/sync                                                                               | convex            |
-| https://alistair.cockburn.us/hexagonal-architecture                                                       | alistair.cockburn |
-| https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html                              | cleancoder        |
-| https://martinfowler.com/articles/injection.html                                                          | martinfowler      |
-| https://docs.pact.io/                                                                                     | pact              |
-| https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/          | research          |
-| https://martinfowler.com/articles/injection.html                                                          | martinfowler      |
-| https://docs.pact.io/                                                                                     | docs.pact         |
-| https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/          | research          |
-| https://spacetimedb.com/blog/how-does-spacetime-scale                                                     | spacetimedb       |
-| https://spacetimedb.com/docs/databases/transactions-atomicity/                                            | spacetimedb       |
-| https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf                                               | lamsade.dauphine  |
-| https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf                                               | lamsade.dauphine  |
-| https://hal.science/hal-05109660/document                                                                 | hal               |
-| https://rules.nullsignal.games/                                                                           | rules.nullsignal  |
-| https://spacetimedb.com/docs/tables/access-permissions/                                                   | spacetimedb       |
-| https://spacetimedb.com/docs/databases/transactions-atomicity/                                            | spacetimedb       |
-
---- FILE: .hermes/research/57ca3694.md ---
----
-title: "Composability layer for a real codebase: the inventory brief"
-thread: 57ca3694-a4fa-4e94-817f-f79f5e5e0854
-project: Hermes Research
-kind: research
-date: 2026-11-03
-status: captured
-source: https://www.perplexity.ai/search/57ca3694-a4fa-4e94-817f-f79f5e5e0854
-captured: 2026-11-03T21:57:29
-segments: 1
-collapsed: false
-steps: 1
-sources: 18
----
-
-# Composability layer for a real codebase: the inventory brief
-
-| Field         | Value                                                                 |
-| ------------- | --------------------------------------------------------------------- |
-| Thread        | `57ca3694-a4fa-4e94-817f-f79f5e5e0854`                                |
-| Project       | Hermes Research                                                       |
-| Source        | https://www.perplexity.ai/search/57ca3694-a4fa-4e94-817f-f79f5e5e0854 |
-| Captured      | 2026-11-03T21:57:29                                                   |
-| Segments      | 1                                                                     |
-| Trace steps   | 1                                                                     |
-| Cited sources | 18                                                                    |
-| Characters    | 16418                                                                 |
-
-## Transcript
-
-Hermes Research 5:42 PM
-
-I am designing a composability layer for a real codebase and I need your design
-judgement, not a summary. Here is the actual inventory, read from disk.
-
-REPOSITORY (a static Astro site plus a TypeScript tool layer, pnpm workspace,
-esbuild via @playform/build into Target/):
-
-- 13 documentation skills, each a folder with SKILL.md, Reference/Index.md and
-  scripts: Chat-Research (web chat UI over CDP), Design-Verification (prove a
-  built page matches a design), Figma-MCP (read a Figma file into code),
-  Parallel-Epic-Execution (defer builds to the end of an epic),
-  Progressive-Enhancement (paint before JS runs), RFC-Board (read/compare/sync
-  an RFC issue board), Skill-Authoring (a lesson becomes a skill),
-  SpacetimeDB-Local (run a SpacetimeDB module locally), Timeline-Bookmarks
-  (read/scrape/publish a saved-post archive), Timeline-Browser-Transport
-  (relaunch a CDP browser), Timeline-Hermes-Maintenance (gateway, kanban,
-  workers), Timeline-Site-Build (site build failures), Tool-Archive (keep a
-  working script).
-- 17 reference scripts in those skills: cdp-open/cdp-send/cdp-click/cdp-read.mjs
-  (chat UI drivers), verify-composition/verify-showcase/verify-spread.mjs
-  (geometry verifiers driving a browser), no-js-audit.mjs (launch its own
-  Chromium, audit 9 routes), workspace-store-audit.mjs, session-audit.mjs,
-  SkillContract.mjs (validates every skill), TokenContract.mjs (design tokens),
-  rfc_board.py + two test files (plan/render/verify/sync an issue board through
-  gh), mcp_call.py, archive_tool.py.
-- 125 TypeScript modules under Maintain/Source in 13 areas: Browser (16: CDP,
-  Selector, Session, Target), Command (35: Author, Config, Context, Event, Page,
-  Post, Store, Tab), Model (19: Author, Event, Generated, Inference, List, Post,
-  Schema, Scrape), Test (19), Store (9: Author, Database, Merge, Model, Path,
-  Public, Shadow, Vote), CLI (7: Parser, Registry, Schema), Configuration (6),
-  Transport (5: CDP, Select, Transport, View), Output (3: JSON, Table, Text),
-  Vote (2), Content (1), Ingest (1), Spacetime (1).
-- 6 CI workflows (Auto, codeql, Dependabot, GitHub, Node, NPM) and 26 package
-  scripts.
-
-AGENT PROFILE (a local skill library used by an assistant, 16 active categories,
-66 active skills, 154 archived): browser-cdp (6: connect, eval,
-batch-mutate-verify, scrape-paginated, ui-step-sequence, web-chat-research),
-software-development (21), hermes (5: compression, api-server,
-execution-resilience, kanban, plugin-lifecycle), curation (2), documentation
-(4), git (4), github (3), devops (3), maintenance (3), macos (2), productivity
-(2), creative (4), data-science (2), website-development (4), research (1), plus
-167 scripts across them.
-
-THE PROPOSAL I want you to attack: every capability becomes its own package with
-its own package.json, compiled by the same esbuild wrapper into its own Target/,
-described by a manifest, composed by a per-workflow root that names the concrete
-adapters, and pre-warmed by a harness that leases a prepared context. The end
-state would be a separate repository (Agentic) that the site consumes as a
-dependency.
-
-Questions, and please be blunt:
-
-1. Is the end state really "a templating engine plus a type system"? What does
-   that reduction lose, and what is the irreducible part that templating cannot
-   express?
-2. What is the minimal manifest field set that lets a preloader decide what to
-   warm and what to revalidate at admission? Which field do people forget?
-3. Given 66 active skills, 167 scripts and 125 modules, what must NOT become its
-   own package, and what is the deciding rule?
-4. What fails first, and what does this look like after two years?
-5. If you were to redesign the decomposition of this specific inventory, what
-   would the first five packages be, and why those? Reason from principle where
-   you have no source, cite where factual, and say which parts of this you
-   expect to be wrong.
-
-inventory:1 - HIGH, scope: this is design judgement from your supplied
-inventory, not a repository audit; no repository identity, source lines, import
-graph, or timings were supplied, so all proposed boundaries and failure
-predictions below are inferred, not reproduced. “:?” means an unlocated or
-proposed file; commands are read-only checks to run, not evidence I already
-collected - command: `git ls-files Maintain .github '*package.json' '*SKILL.md'`
-
-Maintain/Source:勘 - HIGH, Q1: no—the useful end state is a **runtime** with
-typed adapters and explicit composition roots; templates generate wiring, and
-types constrain wiring, but neither establishes whether a borrowed browser
-session is still authorized, uncontaminated, exclusive, and safe to return. Your
-proposal overemphasizes packaging and underdefines ownership - command:
-`rg -n 'lease|release|dispose|AbortSignal|disconnect|session' Maintain/Source`
-
-Maintain/Source/Browser:? - HIGH, inferred: the irreducible part is enforcing
-state transitions against the live world: prepare → validate → acquire → execute
-→ reset or destroy. Generated code can implement that machine, but then you have
-generated a runtime, not eliminated one; types alone cannot establish that an
-external browser still has the expected identity - command:
-`rg -n 'connect|disconnect|close|targetId|browserContextId|sessionId' Maintain/Source/Browser Maintain/Source/Transport`
-
-Maintain/Source/Command:? - HIGH, Q1: keep concrete adapter selection at
-executable entry points, not inside reusable capabilities; a per-workflow root
-is appropriate when that workflow is independently invoked, not when it is
-merely a reusable step. This matches the composition-root principle: compose
-near the application entry point, with libraries unaware of the container.
-[ploeh](https://blog.ploeh.dk/2011/07/28/CompositionRoot/) - command:
-`rg -n '^import|new |process\.argv' Maintain/Source/Command Maintain/Source/CLI`
-
-Agentic/manifest:勘 - HIGH, Q2, proposed minimum: manifest schema version;
-capability identity plus implementation digest; entry point and input/output
-contract identity; dependency requirements; declared preparation inputs;
-resource requirements and isolation scope; lifecycle hooks; validity policy; and
-effects/authority requirements. These are semantic groups, not necessarily ten
-top-level keys; omit descriptive metadata from admission decisions - command:
-`rg -n 'manifest|schemaVersion|capability|entrypoint|digest' Maintain .github`
-
-Agentic/manifest:勘 - HIGH, inferred: preparation inputs must identify
-everything that changes what “prepared” means: artifact digest, relevant
-configuration, runtime/tool versions, workspace snapshot where required, and
-credential identity/scope/version—not secret values. Cache keys that omit
-environmental inputs are unsound; Bazel’s action model illustrates why reusable
-results must depend on declared inputs.
-[bazel](https://bazel.build/versions/9.0.0/extending/rules) - command:
-`rg -n 'process\.env|process\.cwd|Date\.now|readFile|exec|spawn' Maintain/Source`
-
-Agentic/manifest:勘 - HIGH, Q2: the field people forget is
-validity—specifically, what invalidates preparation and what must be checked
-again at admission. Require an admission probe, invalidation dependencies, and
-an explicit freshness policy; “warm succeeded” is historical evidence, not
-present permission to execute. Startup and readiness are distinct checks in
-Kubernetes for the same underlying reason.
-[kubernetes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) -
-command:
-`rg -n 'ready|healthy|validate|expires|invalidate|timeout' Maintain/Source/Browser Maintain/Source/Transport Maintain/Source/Configuration`
-
-Agentic/manifest:勘 - HIGH, inferred: effects/authority is the other field you
-cannot omit: browser-read, browser-mutate, filesystem-write, remote-publish, and
-credential scope must remain distinguishable. A preloader must not discover an
-authenticated context by publishing a post, syncing a board, or navigating an
-exclusively leased tab; reject undeclared preparation effects - command:
-`rg -n 'publish|sync|writeFile|unlink|evaluate|navigate|credentials|token' Maintain/Source`
-
-Agentic/runtime:勘 - HIGH, inferred: keep per-instance facts out of the static
-manifest: resolved resource identity, tenant/profile, generation, owner,
-expiration, validation evidence, and dirty state belong in a lease record.
-Admission must reserve the resource and validate the reserved instance before
-handing it over; an expired owner must not reset or close a successor’s
-resource - command:
-`rg -n 'owner|generation|lease|expires|release|reset|dispose' Maintain/Source`
-
-Maintain/Source:勘 - HIGH, Q3: do not turn 125 modules, 167 scripts, 66 skills,
-13 subject areas, or every manifest entry into packages. A capability is an
-invocation/authority boundary; a package is a distribution/compatibility
-boundary; a skill is instructional policy. Treating those as interchangeable
-manufactures dependency edges without proving independent reuse - command:
-`git ls-files '*SKILL.md' '*.mjs' '*.py' 'Maintain/Source/*.ts' 'Maintain/Source/**/*.ts' '*package.json'`
-
-Maintain/Source:勘 - HIGH, inferred deciding rule: extract a package only when
-it has a coherent public contract, a credible independently changing consumer or
-runtime boundary, and tests that do not require private sibling internals. If
-ordinary changes repeatedly require coordinated releases across the boundary,
-merge it; a second consumer is useful evidence, not an absolute prerequisite -
-command: `git log --format='commit %h' --name-only -- Maintain/Source`
-
-Maintain/Source/Browser:? - HIGH, Q4, predicted first correctness failure: stale
-or shared authenticated browser state, especially mixing relaunch, scraping,
-chat UI operations, and geometry verification. A live CDP socket does not prove
-the expected account, tab, document, viewport, or exclusive ownership. This
-prediction is wrong if those workloads already use separate contexts and
-explicit ownership - command:
-`rg -n 'userDataDir|browserContext|targetId|viewport|connectOverCDP|9222|localhost' Maintain`
-
-Agentic/package.json:勘 - HIGH, Q4, predicted first development failure:
-export/version/build coordination arrives before composability benefits if each
-capability gets its own package and Target/. After two years, the bad outcome is
-a distributed monolith with lockstep releases, overlapping lifecycle hooks,
-abandoned adapters, and manifests that duplicate code; the better outcome is a
-small stable runtime with many ordinary modules - command:
-`git ls-files '*package.json' '*pnpm*' '*Build*' '*build*' '*Target*'`
-
-Agentic/package.json:勘 - MEDIUM, inferred: one esbuild wrapper is a build
-convention, not a compatibility or isolation guarantee. Keep a shared build
-pipeline, but choose packages by consumer contracts; separately decide which
-entry points are bundled, which dependencies remain external, and how Python
-executables are installed. Do not pretend rfc_board.py becomes TypeScript
-because it has package.json - command:
-`rg -n '@playform/build|esbuild|external|bundle|exports|Target|python' --glob '*package.json' --glob '*.ts' --glob '*.mjs' --glob '*.yml' .`
-
-Agentic/packages/browser:勘 - MEDIUM, Q5, first package: browser transport and
-ownership. Consolidate the shared CDP connection/target/session substrate from
-Browser and Transport plus the cdp-* drivers; expose connect, select, acquire,
-evaluate, and release primitives with cancellation and ownership rules. Leave
-chat workflows, scraping policy, and design assertions outside; whether Browser
-and Transport truly belong together requires reading their responsibilities -
-command:
-`rg -n '^import|^export|connect|Target|Session|Selector' Maintain/Source/Browser Maintain/Source/Transport; find . -type f -name 'cdp-*.mjs' -print`
-
-Agentic/packages/content-store:勘 - MEDIUM, Q5, second package: archive-domain
-contracts and persistence. Begin with the shared Post/Author/Event/schema
-contracts and the Store operations that enforce their invariants; keep CLI,
-browser scraping, output formatting, and site rendering out. Do not sweep all 19
-Model modules inside: Generated, Inference, and Scrape need dependency
-inspection first. Split persistence later if another backend or a browser-safe
-consumer justifies it - command:
-`rg -n '^import|^export|transaction|merge|schema' Maintain/Source/Model Maintain/Source/Store`
-
-Agentic/packages/site-verification:勘 - MEDIUM, Q5, third package: executable
-verification and evidence. Group verify-composition, verify-showcase,
-verify-spread, no-js-audit, and TokenContract behind explicit URL/build
-identity, viewport, route, and assertion inputs; return structured observations
-plus failures. Share browser mechanics with package one, but preserve no-JS and
-authenticated-session isolation. The site's actual design expectations should
-remain site-owned data - command:
-`find . -type f \\( -name 'verify-*.mjs' -o -name 'no-js-audit.mjs' -o -name 'TokenContract.mjs' \\) -print`
-
-Agentic/packages/rfc-board:勘 - MEDIUM, Q5, fourth package: the existing Python
-board application, not a forced TypeScript port. Its plan/render/verify/sync
-vocabulary and two test files make it a plausible existing boundary; separate
-pure planning from gh-backed execution and mark sync as effectful. This package
-is premature if it embeds one repository’s board policy with no intended reuse -
-command:
-`find . -type f -name '*rfc*' -print; rg -n 'subprocess|gh |sync|verify|render|plan' --glob '*.py' .`
-
-Agentic/packages/skill-contract:勘 - MEDIUM, Q5, fifth package: skill-library
-validation, starting with SkillContract.mjs. Export validation rules and
-machine-readable diagnostics; keep SKILL.md, Reference/Index.md, authoring
-lessons, and archive retention policy as content or applications. This gives the
-larger skill library a potentially reusable contract without creating 66
-executable packages - command:
-`find . -type f \\( -name 'SkillContract.mjs' -o -name 'SKILL.md' -o -name 'archive_tool.py' \\) -print`
-
-Maintain/Source/CLI:? - MEDIUM, inferred exclusions: keep Parser/Registry,
-JSON/Table/Text, small configuration utilities, individual selectors, tests,
-workflows, and the 26 package scripts as internal modules or entry points unless
-an actual independent consumer appears. Keep Figma acquisition, MCP calls,
-Spacetime local setup, maintenance operations, and chat research as
-workflow/adaptor candidates—not mandatory packages - command:
-`rg -n '^import|^export' Maintain/Source/CLI Maintain/Source/Output Maintain/Source/Configuration; git ls-files .github/workflows`
-
-Agentic/runtime:勘 - MEDIUM, inferred sequencing: implement the lease harness as
-a small internal module used by two real workflow roots before publishing a
-generic runtime package. Use authenticated chat and isolated no-JS verification
-as deliberately different consumers; if both require many escape hatches, the
-abstraction is wrong. Measure cold preparation, admission, execution, cleanup,
-invalidation, and resource occupancy before claiming prewarming helps - command:
-`rg -n 'performance\.|console\.time|duration|prepare|admission|cleanup' Maintain`
-
-Agentic:勘 - LOW, expected errors in this recommendation: content-store may
-split earlier because Astro needs portable read models; verification may remain
-site-specific; RFC-board may never deserve extraction; browser workloads may
-need separate transport packages if their runtime dependencies differ. Import
-edges, change coupling, consumer requirements, and measured startup cost would
-settle these—not the inventory counts - command:
-`rg -n '^import|^export' Maintain/Source; git log --format='commit %h' --name-only -- Maintain`
-
-Agentic:勘 - LOW, inferred migration gate: establish these boundaries inside the
-current workspace first; extract to Agentic only after the site consumes public
-exports without private paths and contract tests run against built artifacts.
-Otherwise the repository split will conceal coupling rather than remove it;
-defer a separate release process until there is something genuinely
-independently releasable - command:
-`rg -n 'Maintain/Source|/Target/|\\.\\./.*packages/' --glob '*.ts' --glob '*.astro' --glob '*.mjs' --glob '*package.json' .`
-
-Show me how to structure the state machine Define the composition root for the
-CLI entry point Write out the browser lease and reset lifecycle Compare this
-with a pure dependency injection setup Check the rest of the codebase inventory
-first Ask a follow-up
-
-## Step trace
-
-The work the answer did, in the order it did it. Depth is nesting, so a step
-inside a step is one level in.
-
-| Depth | Step     | Duration | Icon         | Expanded |
-| ----- | -------- | -------- | ------------ | -------- |
-| 0     | Finished | 8s       | chevron-down | true     |
-
-## Cited sources
-
-| Source                                                                                                                   | Label                                |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| https://blog.ploeh.dk/2011/07/28/CompositionRoot/                                                                        | ploeh                                |
-| https://bazel.build/versions/9.0.0/extending/rules                                                                       | bazel                                |
-| https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/                    | kubernetes                           |
-| https://blog.ploeh.dk/2011/07/28/CompositionRoot/                                                                        | ploeh                                |
-| https://bazel.build/versions/9.0.0/extending/rules                                                                       | bazel                                |
-| https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/                    | kubernetes                           |
-| https://docs.bazel.build/versions/0.29.1/skylark/lib/actions.html                                                        | bazel                                |
-| https://registry.bazel.build/modules/hermetic_launcher/0.0.17                                                            | registry.bazel                       |
-| https://registry.bazel.build/modules/hermetic_launcher/0.0.5/                                                            | registry.bazel                       |
-| https://dev.to/sertaoseracloud/engineering-multicloud-consensus-implementing-distributed-locking-with-fencing-tokens-31c | dev                                  |
-| https://stackoverflow.com/questions/59759128/dependency-injection-composition-root-and-entry-points                      | stackoverflow                        |
-| https://hackernoon.com/building-distributed-leases-with-consensus-heartbeats-and-fencing-tokens                          | hackernoon                           |
-| https://pub-979cff47d4d84105ade2d75c354ef020.r2.dev/Dependency%20Injection%20Principles.pdf                              | pub-979cff47d4d84105ade2d75c354ef020 |
-| https://www.infoq.com/articles/DI-Mark-Seemann/                                                                          | infoq                                |
-| https://brf.sh/en/blog/dagitik-kilit-cit-jetonu-kira-suresi-redis-postgresql-etcd                                        | brf                                  |
-| https://www.matthewswong.com/en/blog/leader-election-distributed-systems/                                                | matthewswong                         |
-| https://systemdesignacademy.com/blog/distributed-locks-leader-election                                                   | systemdesignacademy                  |
-| https://beza1e1.tuxen.de/hermetic_builds.html                                                                            | beza1e1.tuxen                        |

@@ -27,19 +27,19 @@ const Walk = (Directory) => {
 };
 
 const Kinds = new Map();
-for (const Entry of readdirSync(join(Root, "packages"))) {
+for (const Entry of readdirSync(join(Root, "Package"))) {
 	try {
 		const Manifest = JSON.parse(
-			readFileSync(join(Root, "packages", Entry, "module.json"), "utf8"),
+			readFileSync(join(Root, "Package", Entry, "module.json"), "utf8"),
 		);
 		Kinds.set(Manifest.name, Manifest.kind);
 	} catch {
-		Problems.push("packages/" + Entry + ": no readable module.json");
+		Problems.push("Package/" + Entry + ": no readable module.json");
 	}
 }
 
 for (const [Name, Kind] of Kinds) {
-	const Directory = join(Root, "packages", Name.replace("@agentic/", ""));
+	const Directory = join(Root, "Package", Name.replace("@agentic/", ""));
 	for (const File of Walk(Directory)) {
 		const Text = readFileSync(File, "utf8");
 		for (const Match of Text.matchAll(/from\s+["'](@agentic\/[a-z-]+)["']/g)) {

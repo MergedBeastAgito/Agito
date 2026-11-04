@@ -35,8 +35,8 @@ than returns early:
 A finding is a rule, a skill and a sentence. An empty finding list is a valid corpus.
 
 ```sh
-rust/Target/debug/agentic skills Documentation/Skill
-rust/Target/debug/agentic skills Documentation/Skill --json
+Target/debug/agentic skills Documentation/Skill
+Target/debug/agentic skills Documentation/Skill --json
 ```
 
 The digest the command prints is over each skill's name, description and reference file list - not

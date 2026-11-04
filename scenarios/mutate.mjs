@@ -60,12 +60,12 @@ const Mutations = [
 		crate: "agentic-browser-cdp",
 		edits: [
 			{
-				file: "packages/browser-cdp/src/Session.ts",
+				file: "Package/browser-cdp/Source/Session.ts",
 				find: '\t\tif (ownership === "launched") await transport.close();\n\t\telse await transport.detach();',
 				replace: "\t\tawait transport.close();",
 			},
 			{
-				file: "rust/Crate/BrowserCDP/Source/Struct/Session.rs",
+				file: "Crate/BrowserCDP/Source/Struct/Session.rs",
 				find: "\t\tlet Work = match Ownership {\n\t\t\tOwnership::Launched => Transport.Close(),\n\t\t\tOwnership::Attached => Transport.Detach(),\n\t\t};",
 				replace: "\t\tlet Work = Transport.Close();",
 			},
@@ -78,23 +78,23 @@ const Mutations = [
 		crate: "agentic-chat-driver",
 		edits: [
 			{
-				file: "packages/chat-driver/src/Driver.ts",
-				find: '\t\t\t// The model is a precondition, and it is compared before the send.\n\t\t\tconst label = await probe<unknown>(\n\t\t\t\t"model",\n\t\t\t\tReadModel(selectors),\n\t\t\t\ttarget,\n\t\t\t);\n\t\t\tif (normalise(label) !== normalise(question.model))\n\t\t\t\tthrow ChatError.wrongModel(\n\t\t\t\t\t"the page is set to a different model",\n\t\t\t\t\t`wanted ${JSON.stringify(question.model)}, the page reads ${describe(label)}`,\n\t\t\t\t);\n\n',
+				file: "Package/chat-driver/Source/Driver.ts",
+				find: '			// The model is a precondition, and it is compared before the send.\n			const label = await probe<unknown>("model", ReadModel(selectors), target);\n\t\t\tif (normalise(label) !== normalise(question.model))\n\t\t\t\tthrow ChatError.wrongModel(\n\t\t\t\t\t"the page is set to a different model",\n\t\t\t\t\t`wanted ${JSON.stringify(question.model)}, the page reads ${describe(label)}`,\n\t\t\t\t);\n\n',
 				replace: "",
 			},
 			{
-				file: "packages/chat-driver/src/Driver.ts",
+				file: "Package/chat-driver/Source/Driver.ts",
 				find: "\t\t\t// Completion is stable text: unchanged for three consecutive reads.",
 				replace:
-					'\t\t\tconst label = await probe<unknown>(\n\t\t\t\t"model",\n\t\t\t\tReadModel(selectors),\n\t\t\t\ttarget,\n\t\t\t);\n\t\t\tif (normalise(label) !== normalise(question.model))\n\t\t\t\tthrow ChatError.wrongModel(\n\t\t\t\t\t"the page is set to a different model",\n\t\t\t\t\t`wanted ${JSON.stringify(question.model)}, the page reads ${describe(label)}`,\n\t\t\t\t);\n\n\t\t\t// Completion is stable text: unchanged for three consecutive reads.',
+					'			const label = await probe<unknown>("model", ReadModel(selectors), target);\n\t\t\tif (normalise(label) !== normalise(question.model))\n\t\t\t\tthrow ChatError.wrongModel(\n\t\t\t\t\t"the page is set to a different model",\n\t\t\t\t\t`wanted ${JSON.stringify(question.model)}, the page reads ${describe(label)}`,\n\t\t\t\t);\n\n\t\t\t// Completion is stable text: unchanged for three consecutive reads.',
 			},
 			{
-				file: "rust/Crate/ChatDriver/Source/Struct/Driver.rs",
+				file: "Crate/ChatDriver/Source/Struct/Driver.rs",
 				find: '\t\t// The model is a precondition, and it is compared before the send.\n\t\tlet Label = self.Probe("model", ReadModel(Selectors), Target, Call, Budget).await?;\n\t\tlet Wanted = Value::String(Question.Model.clone());\n\t\tif Normalise(Some(&Label)) != Normalise(Some(&Wanted)) {\n\t\t\treturn Err(Error::WrongModel(\n\t\t\t\t"the page is set to a different model",\n\t\t\t\tformat!(\n\t\t\t\t\t"wanted {}, the page reads {}",\n\t\t\t\t\tserde_json::to_string(&Question.Model).unwrap_or_else(|_| format!("{:?}", Question.Model)),\n\t\t\t\t\tDescribe(Some(&Label))\n\t\t\t\t),\n\t\t\t));\n\t\t}\n\n',
 				replace: "",
 			},
 			{
-				file: "rust/Crate/ChatDriver/Source/Struct/Driver.rs",
+				file: "Crate/ChatDriver/Source/Struct/Driver.rs",
 				find: "\t\t// Completion is stable text: unchanged for three consecutive reads.",
 				replace:
 					'\t\tlet Label = self.Probe("model", ReadModel(Selectors), Target, Call, Budget).await?;\n\t\tlet Wanted = Value::String(Question.Model.clone());\n\t\tif Normalise(Some(&Label)) != Normalise(Some(&Wanted)) {\n\t\t\treturn Err(Error::WrongModel(\n\t\t\t\t"the page is set to a different model",\n\t\t\t\tformat!(\n\t\t\t\t\t"wanted {}, the page reads {}",\n\t\t\t\t\tserde_json::to_string(&Question.Model).unwrap_or_else(|_| format!("{:?}", Question.Model)),\n\t\t\t\t\tDescribe(Some(&Label))\n\t\t\t\t),\n\t\t\t));\n\t\t}\n\n\t\t// Completion is stable text: unchanged for three consecutive reads.',
@@ -108,13 +108,13 @@ const Mutations = [
 		crate: "agentic-chat-driver",
 		edits: [
 			{
-				file: "packages/chat-driver/src/Driver.ts",
+				file: "Package/chat-driver/Source/Driver.ts",
 				find: "\t\t\t\tif (remaining() <= 0)\n\t\t\t\t\tthrow ChatError.notReady(\n\t\t\t\t\t\t`the answer did not settle within the ${budget}ms deadline`,\n\t\t\t\t\t\t`the last read was ${describe(previous)}`,\n\t\t\t\t\t);",
 				replace:
 					'\t\t\t\tif (remaining() <= 0) {\n\t\t\t\t\ttext = previous ?? "";\n\t\t\t\t\tbreak;\n\t\t\t\t}',
 			},
 			{
-				file: "rust/Crate/ChatDriver/Source/Struct/Driver.rs",
+				file: "Crate/ChatDriver/Source/Struct/Driver.rs",
 				find: '\t\t\tif Call.Expired(self.Pace.as_ref()) {\n\t\t\t\treturn Err(Error::NotReady(\n\t\t\t\t\tformat!("the answer did not settle within the {}ms deadline", Budget.as_millis()),\n\t\t\t\t\tformat!("the last read was {}", DescribeText(Progress.Text())),\n\t\t\t\t));\n\t\t\t}',
 				replace:
 					"\t\t\tif Call.Expired(self.Pace.as_ref()) {\n\t\t\t\tbreak Progress.Text().unwrap_or_default().to_string();\n\t\t\t}",
@@ -128,13 +128,13 @@ const Mutations = [
 		crate: "agentic-browser-cdp",
 		edits: [
 			{
-				file: "packages/browser-cdp/src/Session.ts",
+				file: "Package/browser-cdp/Source/Session.ts",
 				find: '\t\t\t? BrowseError.unavailable(\n\t\t\t\t\t"the transport closed while the page was being asked",',
 				replace:
 					'\t\t\t? BrowseError.timeout(\n\t\t\t\t\t"the transport closed while the page was being asked",',
 			},
 			{
-				file: "rust/Crate/BrowserCDP/Source/Fn/Classify.rs",
+				file: "Crate/BrowserCDP/Source/Fn/Classify.rs",
 				find: '		_ if Closed => {\n			Error::Unavailable("the transport closed while the page was being asked", Why.Detail().to_string())\n		},',
 				replace:
 					'		_ if Closed => {\n			Error::Timeout("the transport closed while the page was being asked", Why.Detail().to_string())\n		},',
@@ -148,12 +148,12 @@ const Mutations = [
 		crate: "agentic-chat-driver",
 		edits: [
 			{
-				file: "packages/chat-driver/src/Driver.ts",
+				file: "Package/chat-driver/Source/Driver.ts",
 				find: "const StableReads = 3;",
 				replace: "const StableReads = 1;",
 			},
 			{
-				file: "rust/Crate/ChatDriver/Source/Struct/Settlement.rs",
+				file: "Crate/ChatDriver/Source/Struct/Settlement.rs",
 				find: "pub const StableReads:u8 = 3;",
 				replace: "pub const StableReads:u8 = 1;",
 			},
@@ -163,7 +163,7 @@ const Mutations = [
 
 /** The TypeScript suite of one package: every `Test/*.test.ts`, no shell glob. */
 const typescriptSuite = (name) => {
-	const directory = at(join("packages", name));
+	const directory = at(join("Package", name));
 	const files = readdirSync(join(directory, "Test"))
 		.filter((entry) => entry.endsWith(".test.ts"))
 		.map((entry) => join("Test", entry));
@@ -171,7 +171,7 @@ const typescriptSuite = (name) => {
 };
 
 /** The Rust suite of one crate: its own test target and its parity target. */
-const rustSuite = (crate) => ({ command: "cargo", args: ["test", "-p", crate], cwd: at("rust") });
+const rustSuite = (crate) => ({ command: "cargo", args: ["test", "-p", crate], cwd: Root });
 
 /** Run one suite, and answer whether it failed - and whether it failed to build. */
 const failed = (suite) => {

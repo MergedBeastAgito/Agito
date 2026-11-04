@@ -4,7 +4,7 @@
  * This capability reads a real filesystem, so a scenario does not describe a
  * fake: it describes a *corpus* - a tree of files - and the harness builds that
  * tree in a fresh temporary directory before the port ever runs. The Rust half
- * (`rust/Crate/SkillContract/tests/parity.rs`) builds the same tree, byte for
+ * (`Crate/SkillContract/Test/Parity.rs`) builds the same tree, byte for
  * byte, from the same description, so what the two ports are handed differs
  * only in the root path - and the root path is deliberately outside every
  * observation, because `directory` is excluded from the digest and no effect
@@ -52,7 +52,7 @@ import { mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
-import { Create } from "../../packages/skill-contract/src/index.ts";
+import { Create } from "../../Package/skill-contract/Source/index.ts";
 
 /** One `SKILL.md`, as the contract suite writes it. */
 const Body = (name, frontmatter) => `---\n${frontmatter}\n---\n\n# ${name}\n\nA body.\n`;

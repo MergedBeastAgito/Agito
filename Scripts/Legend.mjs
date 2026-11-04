@@ -2,10 +2,11 @@
 /**
  * Every diagram is a typed source file with a rendered sibling.
  *
- * The convention this enforces: a `.mmd` under `docs/diagram/` opens with frontmatter, names the
- * `line9:` theme, annotates at least one node with the shared vocabulary, and has an `.svg` sibling
- * that was actually rendered. A page may keep a fenced block only where line9 cannot export it, and
- * says so. A prose legend inside a drawing is the thing the annotations replaced, so it fails here.
+ * The convention this enforces: a `.mmd` under `Documentation/Diagram/` opens with frontmatter,
+ * names the `line9:` theme, annotates at least one node with the shared vocabulary, and has an
+ * `.svg` sibling that was actually rendered. A page may keep a fenced block only where line9
+ * cannot export it, and says so. A prose legend inside a drawing is the thing the annotations
+ * replaced, so it fails here.
  *
  *   node Scripts/Legend.mjs
  */
@@ -13,7 +14,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const Root = fileURLToPath(new URL("../docs/diagram", import.meta.url));
+const Root = fileURLToPath(new URL("../Documentation/Diagram", import.meta.url));
 const Classes = [":::host", ":::hook", ":::store", ":::fail"];
 const ProseLegend = "legend:";
 const Unexportable = "cannot be exported";
@@ -105,7 +106,7 @@ for (const Path of Files(Root)) {
 	}
 }
 
-if (Diagrams === 0) Problems.push("docs/diagram holds no .mmd at all");
+if (Diagrams === 0) Problems.push("Documentation/Diagram holds no .mmd at all");
 
 for (const Problem of Problems) console.log(`FAIL  ${Problem}`);
 console.log(

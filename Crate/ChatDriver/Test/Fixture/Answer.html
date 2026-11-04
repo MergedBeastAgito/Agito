@@ -1,0 +1,119 @@
+<!doctype html>
+<!--
+	A page shaped like a product's answer, for the Markdown reader.
+
+	It is a fixture, not a screenshot: every construct here is one that
+	`innerText` mangles and the serializer has to keep - a table with a head, a
+	cell containing a pipe, a cell containing a nested table, a fence with a
+	language, a fence whose body contains a fence, a formula whose glyphs must
+	never be read, a nested list, a link, and a citation marker.
+
+	`Test/Extract.rs` opens this file in a real browser and evaluates the
+	expression the driver sends, so what is asserted is what the page produces
+	rather than what a shim of the page would have produced.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Answer</title>
+	</head>
+	<body>
+		<main>
+			<article class="prose" data-renderer="lm">
+				<h2>What the page says</h2>
+				<p>
+					Energy and mass are the same fact, written
+					<span class="katex">
+						<span class="katex-mathml">
+							<math>
+								<semantics>
+									<mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow>
+									<annotation encoding="application/x-tex">E = mc^2</annotation>
+								</semantics>
+							</math>
+						</span>
+						<span class="katex-html" aria-hidden="true">
+							<span class="mord mathnormal">E</span><span class="mspace"></span><span class="mrel">=</span><span class="mspace"></span><span class="mord mathnormal">m</span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="mord">2</span></span></span>
+						</span>
+					</span>
+					twice over, and the second form is the one worth reading.
+				</p>
+				<div class="katex-display">
+					<span class="katex">
+						<span class="katex-mathml">
+							<math>
+								<semantics>
+									<mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup><mo>=</mo><msup><mi>c</mi><mn>2</mn></msup></mrow>
+									<annotation encoding="application/x-tex">a^2 + b^2 = c^2</annotation>
+								</semantics>
+							</math>
+						</span>
+						<span class="katex-html" aria-hidden="true">
+							<span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="mord">2</span></span></span>
+						</span>
+					</span>
+				</div>
+				<p>Three terms, one row per term:</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Entity</th>
+							<th>Definition</th>
+							<th>Example</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Task</td>
+							<td>Versioned intent, and the predicate that decides it</td>
+							<td>fresh-answer@3</td>
+						</tr>
+						<tr>
+							<td>Trial</td>
+							<td>One execution, retries included</td>
+							<td>a run that streamed and then settled</td>
+						</tr>
+						<tr>
+							<td>Run</td>
+							<td>a | b, read as one cell</td>
+							<td>
+								<table>
+									<tbody>
+										<tr>
+											<td>nested</td>
+											<td>table</td>
+										</tr>
+									</tbody>
+								</table>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<p>And the code that reads it:</p>
+				<pre><code class="language-rust">pub fn Read(Value:&amp;str) -&gt; &amp;str {
+	Value.trim()
+}</code></pre>
+				<p>A block that contains a fence of its own:</p>
+				<pre><code class="language-markdown">```rust
+let x = 1;
+```</code></pre>
+				<p>What has to hold:</p>
+				<ul>
+					<li>
+						The driver asks exactly once
+						<ul>
+							<li>one question, one send</li>
+							<li>and no retry after a mismatch</li>
+						</ul>
+					</li>
+					<li>It identifies the turn the question caused</li>
+				</ul>
+				<ol start="3">
+					<li>Read the <a href="https://example.test/source">the source</a> before the answer</li>
+					<li>Keep the citation<sup><a href="https://example.test/cited">1</a></sup> as it was shown</li>
+				</ol>
+				<button aria-label="Copy">Copy</button>
+			</article>
+		</main>
+	</body>
+</html>

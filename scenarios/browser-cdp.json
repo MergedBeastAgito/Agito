@@ -1,5 +1,5 @@
 {
-	"$comment": "The differential scenarios for `agentic.browse`. One file, read by both implementations: `scenarios/ts.mjs` drives `packages/browser-cdp`, `rust/Crate/BrowserCDP/tests/parity.rs` drives the Rust port, and both answer the same `expect` block. `effects` is the ordered list of what the fake launcher and transport observed - the protocol the implementation spoke - so an implementation that returns the right value by the wrong route fails. See `docs/Parity.md` for the case map.",
+	"$comment": "The differential scenarios for `agentic.browse`. One file, read by both implementations: `scenarios/ts.mjs` drives `Package/browser-cdp`, `Crate/BrowserCDP/Test/Parity.rs` drives the Rust port, and both answer the same `expect` block. `effects` is the ordered list of what the fake launcher and transport observed - the protocol the implementation spoke - so an implementation that returns the right value by the wrong route fails. See `Documentation/Parity.md` for the case map.",
 	"capability": "agentic.browse",
 	"version": 1,
 	"fixture": {

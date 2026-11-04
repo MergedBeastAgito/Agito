@@ -3,15 +3,20 @@
 # either turns a current artefact into a stale one, and `Scripts/Feed.mjs`
 # compares the bundler's output byte for byte.
 
-# Build output. Both entries are anchored on purpose - a pattern with a slash in
-# it is relative to this file, while a bare `Target/` matches that directory name
-# at any depth, which is how a real source directory gets hidden from the
-# formatter for as long as the rule stays loose.
+# Build output. The entry is anchored on purpose - a pattern with a slash in it
+# is relative to this file, while a bare `Target/` matches that directory name at
+# any depth, which is how a real source directory gets hidden from the formatter
+# for as long as the rule stays loose.
 /Target/
-rust/Target/
 
 # Unanchored on purpose: every package and the workspace root can hold one.
 node_modules/
+
+# The script templates are bytes, not source to be formatted. Each one is taken
+# whole by `include_str!` and sent to a page, so a formatter that re-wraps a line
+# changes the expression; and `{{name}}` is a placeholder, which no JavaScript
+# parser accepts, so every tool that reads these files would report them broken.
+Crate/*/Source/Script/
 
 # The feed tools' output. `bundle.mjs` writes `batch-NN.txt`, `tree.txt` and
 # `manifest.json`; the batches are the payload a chat composer receives, so
@@ -23,7 +28,7 @@ node_modules/
 # format pass over a fixture would rewrite the bytes a test asserts on.
 .hermes/tmp/
 
-# The research captures are evidence, not documentation. `docs/Research.md` says
+# The research captures are evidence, not documentation. `Documentation/Research.md` says
 # they are never edited, and a capture's bytes are what it recorded - rewrapping
 # a paragraph to fit a column would edit the record. `catalog.mjs` beside them is
 # source and stays formattable.

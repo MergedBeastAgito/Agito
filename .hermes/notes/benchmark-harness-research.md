@@ -1,7 +1,7 @@
 # Benchmark harness for UI research
 
 A research call through `agentic chat --bind <target-id>` on a freshly reset session, asking how to
-build a harness that grades a UI-driving driver — first on one product, then across any UI — using
+build a harness that grades a UI-driving driver - first on one product, then across any UI - using
 ordinary human use as the source of tasks and labels. Reproduced in full; the question is
 summarised, the answer is not.
 
@@ -12,11 +12,12 @@ summarised, the answer is not.
 | Model      | GPT-6.1 Sol                |
 | Answer URL | https://www.perplexity.ai/ |
 
-**Asked.** Design a benchmark harness for UI-driving agents ... (1) harness shape (task/trial/run,
-runner, grader, metrics, store); (2) Perplexity first (what to record from ordinary human use,
-recording to task, grading free text, non-determinism); (3) any UI (capability matrix, adapter
-contract, task DSL, honest cross-product reporting); (4) human training and tracking (task mining,
-consent, labelling, drift, overfitting, gaming); plus the five things to build first.
+> The three tables below were rebuilt from the same captured text: the extractor read `innerText`,
+> which keeps a table's cells as tab-separated lines and loses the pipes. The content was never
+> lost - only its structure. `t_8c607c7e` fixes the extractor.
+
+**Asked.** Design a benchmark harness for UI-driving agents: (1) harness shape; (2) Perplexity
+first; (3) any UI; (4) human training and tracking; plus the five things to build first.
 
 **Answered.**
 
@@ -26,23 +27,21 @@ exactly once, identify the corresponding response, distinguish completion from i
 return the right content with auditable evidence?
 
 Keep three scores separate: driver correctness, product availability, and answer quality. Otherwise
-a Rust port can look worse because the product rate-limited it—or look correct because it
+a Rust port can look worse because the product rate-limited it-or look correct because it
 confidently returned the previous answer.
 
 The design below treats your existing preconditions, turn correlation, completion rule, observation
-stream, and TypeScript differential suite as the starting point—not components to replace.
+stream, and TypeScript differential suite as the starting point-not components to replace.
 
 1. HARNESS SHAPE Task, trial, and run
 
 Use these definitions consistently:
 
-Entity Definition Example Task Versioned intent, starting-state requirements, allowed actions,
-budgets, and outcome predicates. Independent of a particular execution. “In a fresh conversation,
-submit this prompt and return its completed answer, not the welcome text or another turn.” Trial One
-execution of one task against one driver and one environment instance. Includes every retry and
-recovery action. Rust executes task fresh-answer@3 once and encounters a streaming interruption. Run
-An immutable manifest plus a collection of trials for a planned comparison. Rust commit A versus
-TypeScript commit B, on 30 tasks with five repetitions each.
+| Entity | Definition                                                                                                                              | Example                                                                                                              |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Task   | Versioned intent, starting-state requirements, allowed actions, budgets, and outcome predicates. Independent of a particular execution. | “In a fresh conversation, submit this prompt and return its completed answer, not the welcome text or another turn.” |
+| Trial  | One execution of one task against one driver and one environment instance. Includes every retry and recovery action.                    | Rust executes task fresh-answer@3 once and encounters a streaming interruption.                                      |
+| Run    | An immutable manifest plus a collection of trials for a planned comparison.                                                             | Rust commit A versus TypeScript commit B, on 30 tasks with five repetitions each.                                    |
 
 Retries do not become new independent trials. A deliberate repetition does. Otherwise an
 implementation can inflate its success rate by hiding failed attempts.
@@ -75,7 +74,7 @@ Browser target/frame/navigation identifiers.
 Normalized UI observations and their supporting DOM, accessibility, screenshot, or network
 references.
 
-Correlation candidates and confidence/evidence—not just the selected turn.
+Correlation candidates and confidence/evidence-not just the selected turn.
 
 Lifecycle transitions, retries, timeouts, and final extraction.
 
@@ -145,19 +144,19 @@ Metrics and result store
 
 Record more than pass/fail:
 
-Metric Definition or caution End-to-end success Successful tasks / all planned eligible trials;
-report setup failures and exclusions separately. Driver-contract success Correct submission,
-correlation, terminal classification, and extraction, independently of answer usefulness.
-First-attempt success No recovery or retry required. Turns Separate user submissions, assistant
-generations, and agent planning turns. Action count Semantic actions and low-level CDP commands
-separately. Latency Preflight, submit acknowledgment, first observed answer content, completion,
-extraction; report p50/p95. Retries and interventions By reason; include human rescue and browser
-restarts. Tokens Agent-model usage when metered; product usage only when actually exposed. Otherwise
-mark unknown, or label estimates explicitly. Flake Across repeated matched trials: proportion of
-tasks with mixed outcomes, plus per-task success probabilities and intervals. Cost per success Total
-attributed cost of all attempts, including failures, divided by successful tasks. State subscription
-allocation assumptions. Safety/correctness defects Duplicate submissions, wrong-turn returns, false
-completion, unapproved actions.
+| Metric                     | Definition or caution                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| End-to-end success         | Successful tasks / all planned eligible trials; report setup failures and exclusions separately.                                   |
+| Driver-contract success    | Correct submission, correlation, terminal classification, and extraction, independently of answer usefulness.                      |
+| First-attempt success      | No recovery or retry required.                                                                                                     |
+| Turns                      | Separate user submissions, assistant generations, and agent planning turns.                                                        |
+| Action count               | Semantic actions and low-level CDP commands separately.                                                                            |
+| Latency                    | Preflight, submit acknowledgment, first observed answer content, completion, extraction; report p50/p95.                           |
+| Retries and interventions  | By reason; include human rescue and browser restarts.                                                                              |
+| Tokens                     | Agent-model usage when metered; product usage only when actually exposed. Otherwise mark unknown, or label estimates explicitly.   |
+| Flake                      | Across repeated matched trials: proportion of tasks with mixed outcomes, plus per-task success probabilities and intervals.        |
+| Cost per success           | Total attributed cost of all attempts, including failures, divided by successful tasks. State subscription allocation assumptions. |
+| Safety/correctness defects | Duplicate submissions, wrong-turn returns, false completion, unapproved actions.                                                   |
 
 Store manifests and summaries in SQLite initially; put large artifacts in content-addressed storage.
 Every result references task, grader, adapter, driver, browser, configuration, and artifact hashes.
@@ -176,7 +175,7 @@ and interleave pairs closely in time.
 Replay controls the evidence but cannot establish that live UI interaction still works. Live
 evaluation measures deployment reality but cannot perfectly control a changing service.
 
-Compare semantic results—not byte-for-byte answers or identical click traces. Maintain explicit
+Compare semantic results-not byte-for-byte answers or identical click traces. Maintain explicit
 cases for stale answers, long streaming pauses, replacement of DOM nodes, missing terminal signals,
 interrupted streams, navigation, stop, regeneration, rate limits, and duplicate-submit hazards.
 
@@ -185,7 +184,7 @@ bug.
 
 2. PERPLEXITY FIRST The smallest honest single-product harness
 
-Start with roughly 10–15 task templates covering:
+Start with roughly 10-15 task templates covering:
 
 Fresh question.
 
@@ -244,7 +243,7 @@ hashes, and structure are sufficient.
 
 From a recording to a task
 
-A recording is evidence of one route through the UI—not a specification.
+A recording is evidence of one route through the UI-not a specification.
 
 Convert it through a short review:
 
@@ -322,18 +321,24 @@ A changed answer is not automatically a regression. A wrong-turn extraction is.
 3. ANY UI
 
 A shared environment abstraction is useful: BrowserGym, for example, supports multiple browser
-benchmarks through a unified framework. That is evidence for sharing execution infrastructure—not
+benchmarks through a unified framework. That is evidence for sharing execution infrastructure-not
 for treating every application as equivalent. arxiv
 
 Capability matrix
 
 Declare capabilities with support level and verification method:
 
-Capability Relevant distinction Authentication Anonymous, authenticated, role-specific Input Plain
-text, rich text, file upload Conversation Fresh thread, follow-up, branching Generation Streaming,
-atomic response Lifecycle Observable completion, stop, regenerate Retrieval Citations, linked
-sources, browsing Persistence History, saved artifacts Side effects Draft-only, reversible write,
-irreversible action Observation DOM, accessibility, screenshots, permitted network signals
+| Capability     | Relevant distinction                                       |
+| -------------- | ---------------------------------------------------------- |
+| Authentication | Anonymous, authenticated, role-specific                    |
+| Input          | Plain text, rich text, file upload                         |
+| Conversation   | Fresh thread, follow-up, branching                         |
+| Generation     | Streaming, atomic response                                 |
+| Lifecycle      | Observable completion, stop, regenerate                    |
+| Retrieval      | Citations, linked sources, browsing                        |
+| Persistence    | History, saved artifacts                                   |
+| Side effects   | Draft-only, reversible write, irreversible action          |
+| Observation    | DOM, accessibility, screenshots, permitted network signals |
 
 Unsupported is not failed. But an adapter must declare support before evaluation; it cannot relabel
 failed tasks as unsupported afterward.
@@ -461,7 +466,7 @@ Latency distributions and retries.
 
 Configuration and observed UI fingerprints.
 
-Human–grader disagreement.
+Human-grader disagreement.
 
 Task mix and operator mix.
 
@@ -474,7 +479,7 @@ only be a relaxed grader.
 Avoid operator overfitting, gaming, and leakage
 
 Sample across consenting operators, languages, prompt styles, input methods, viewport sizes, and
-usage intensity. Split related episodes by operator, template family, and time—not randomly by
+usage intensity. Split related episodes by operator, template family, and time-not randomly by
 individual recording.
 
 Maintain three pools:

@@ -3,7 +3,7 @@ packages:
   # and `Format:Check` are scripts here, not in a package.
   - "."
 
-  - "packages/*"
+  - "Package/*"
 
 # No `allowBuilds` block. Every package here is TypeScript with no native
 # dependency and no post-install step, so there is nothing for pnpm to approve -

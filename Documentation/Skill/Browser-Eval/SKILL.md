@@ -19,7 +19,7 @@ operation is `Browse::Evaluate`.
 ## The shape of a call
 
 ```sh
-rust/Target/debug/agentic browse \
+Target/debug/agentic browse \
   --url https://example.test/ \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
   [--bind <target-id>] \

@@ -22,7 +22,7 @@ driver's rules are about what a page is allowed to claim.
 ## The call
 
 ```sh
-rust/Target/debug/agentic chat \
+Target/debug/agentic chat \
   --url https://example.test/ \
   --model '<the label the page shows>' \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
