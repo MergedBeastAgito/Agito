@@ -23,6 +23,7 @@ agentic-design-verification = { workspace = true }
 agentic-browser-cdp = { workspace = true }
 agentic-workflow = { workspace = true }
 agentic-spacetime-catalog = { workspace = true }
+agentic-lane = { workspace = true }
 # The manifest table is the facade's, and this crate re-exports it. A root that
 # owned a copy would be a second answer to "what does the workspace ship".
 agentic-sdk = { workspace = true }

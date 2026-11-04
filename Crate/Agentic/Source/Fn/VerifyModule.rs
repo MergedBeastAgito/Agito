@@ -29,6 +29,7 @@ use std::{collections::BTreeSet, path::PathBuf};
 use AgenticBrowserCDP::Code as BrowserCode;
 use AgenticChatDriver::Code as ChatCode;
 use AgenticDesignVerification::Code as DesignCode;
+use AgenticLane::Code as LaneCode;
 use AgenticRuntime::Code as RuntimeCode;
 use AgenticSkillContract::Rule as SkillRule;
 use AgenticSpacetimeCatalog::Code as CatalogCode;
@@ -83,6 +84,7 @@ pub fn Declared(Name:&str) -> Option<Vec<&'static str>> {
 		"@agentic/chat-driver" => ChatCode::All().into_iter().map(ChatCode::Name).collect(),
 		"@agentic/browser-cdp" => BrowserCode::All().into_iter().map(BrowserCode::Name).collect(),
 		"@agentic/design-verification" => DesignCode::All().into_iter().map(DesignCode::Name).collect(),
+		"@agentic/lane" => LaneCode::All().into_iter().map(LaneCode::Name).collect(),
 		"@agentic/workflow" | "@agentic/composition" | "@agentic/adapter" => Vec::new(),
 		_ => return None,
 	})

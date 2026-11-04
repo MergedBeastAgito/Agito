@@ -1,4 +1,4 @@
-//! The nine manifests, embedded.
+//! The ten manifests, embedded.
 //!
 //! `include_str!` rather than a build script or a serde load at launch: the
 //! bytes the crate reports are the bytes that were checked in, and the harness
@@ -11,7 +11,7 @@
 //! its own path to the same values (`Agentic::All`) by re-exporting this module,
 //! so there is one definition and no second answer.
 //!
-//! The facade itself is not one of the nine. It provides no port, so it has
+//! The facade itself is not one of the ten. It provides no port, so it has
 //! nothing a harness would prepare for and nothing `agentic verify --module`
 //! could answer; its own `module.json` declares the `facade` kind and the ports
 //! it re-exports, which is a statement about this table rather than an entry in
@@ -35,7 +35,7 @@ pub struct Manifest {
 }
 
 /// Every module this workspace ships, in dependency order.
-pub const All:[Manifest; 9] = [
+pub const All:[Manifest; 10] = [
 	Manifest {
 		Name:"@agentic/runtime",
 		Kind:"runtime",
@@ -55,6 +55,16 @@ pub const All:[Manifest; 9] = [
 		Port:"agentic.adapter",
 		State:"stateless",
 		JSON:include_str!("../../../Adapter/module.json"),
+	},
+	// The template corpus as data. It depends on the runtime and nothing else:
+	// the round trip leaves through a `Poster` this crate declares and never
+	// implements, so its manifest says `network: false` and means it.
+	Manifest {
+		Name:"@agentic/lane",
+		Kind:"capability",
+		Port:"agentic.lane.decide",
+		State:"stateless",
+		JSON:include_str!("../../../Lane/module.json"),
 	},
 	Manifest {
 		Name:"@agentic/spacetime-catalog",

@@ -14,8 +14,8 @@ use Agentic::{All, Command, Declared, Drive, Find, Run, Verb, VerifyModule};
 use serde_json::{Value, json};
 
 #[test]
-fn the_workspace_ships_nine_manifests_each_with_a_name_a_port_and_a_state() {
-	assert_eq!(All.len(), 9);
+fn the_workspace_ships_ten_manifests_each_with_a_name_a_port_and_a_state() {
+	assert_eq!(All.len(), 10);
 	for Manifest in All {
 		assert!(!Manifest.Name.is_empty());
 		assert!(Manifest.Name.starts_with("@agentic/"));
@@ -105,13 +105,14 @@ fn the_readiness_report_is_the_json_a_harness_reads() {
 fn the_manifests_verb_lists_every_module() {
 	let Text = Drive(Run(Verb::Manifests { Adapter:Vec::new() })).expect("listed");
 	let Lines:Vec<&str> = Text.lines().collect();
-	assert_eq!(Lines.len(), 9);
+	assert_eq!(Lines.len(), 10);
 	assert!(Text.contains("@agentic/runtime"));
 	assert!(Text.contains("@agentic/adapter"));
+	assert!(Text.contains("@agentic/lane"));
 	assert!(Text.contains("agentic.browse"));
 	// Every row says where it came from, and the workspace's own rows are the
 	// ones this binary carries.
-	assert_eq!(Lines.iter().filter(|Line| Line.ends_with("workspace")).count(), 9);
+	assert_eq!(Lines.iter().filter(|Line| Line.ends_with("workspace")).count(), 10);
 }
 
 #[test]
@@ -279,7 +280,7 @@ fn an_adapter_under_a_root_is_listed_with_its_port() {
 	);
 	let Text = Drive(Run(Verb::Manifests { Adapter:roots(&Root) })).expect("listed");
 	let Lines:Vec<&str> = Text.lines().collect();
-	assert_eq!(Lines.len(), 10, "nine shipped and one read:\n{Text}");
+	assert_eq!(Lines.len(), 11, "ten shipped and one read:\n{Text}");
 	let Row = Lines
 		.iter()
 		.find(|Line| Line.contains("@agentic/nfsu-driver"))
@@ -376,7 +377,7 @@ fn an_adapter_root_that_does_not_exist_is_skipped_without_breaking_the_listing()
 	let Missing = Path::new(env!("CARGO_TARGET_TMPDIR")).join("adapter-absent");
 	let _ = fs::remove_dir_all(&Missing);
 	let Text = Drive(Run(Verb::Manifests { Adapter:roots(&Missing) })).expect("listed");
-	assert_eq!(Text.lines().count(), 9);
+	assert_eq!(Text.lines().count(), 10);
 }
 
 #[test]
@@ -388,7 +389,7 @@ fn an_adapter_root_that_is_a_file_is_skipped_rather_than_failing_every_verb() {
 	let File = Root.join("module.json");
 	fs::write(&File, "{}").expect("the file is writable");
 	let Text = Drive(Run(Verb::Manifests { Adapter:roots(&File) })).expect("listed");
-	assert_eq!(Text.lines().count(), 9);
+	assert_eq!(Text.lines().count(), 10);
 }
 
 #[test]

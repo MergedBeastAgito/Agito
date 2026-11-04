@@ -33,6 +33,11 @@ agentic-spacetime-catalog = { version = "0.1.3", path = "Crate/SpacetimeCatalog"
 # a third party's adapter: that is what makes `kind: "adapter"` a claim about
 # somebody else's crate rather than about one of ours.
 agentic-adapter = { version = "0.1.3", path = "Crate/Adapter" }
+# The template corpus as data: a lane names the fields a question actually
+# reads, a template names the questions, and the round trip leaves through a
+# `Poster` this crate declares and never implements. No HTTP client, no
+# executor, no browser - which is what lets the suite answer from a fixture.
+agentic-lane = { version = "0.1.3", path = "Crate/Lane" }
 # The facade. It depends on the five crates a consumer would otherwise name, and
 # the composition root depends on it for the manifest table - so the arrow runs
 # from the root down through the facade to the ports, never the other way.
