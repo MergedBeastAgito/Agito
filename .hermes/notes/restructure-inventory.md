@@ -361,6 +361,10 @@ report the numbers they reported before the move (12, 27+1, 30+1, 28, 40, 24+2, 
 ones land in the `unittests Source/Library.rs` targets that already existed with zero tests, so no
 target appeared either.
 
+The number moves while this card is open, because the workspace is shared: the concurrent card below
+added three cases to `Test/Chat.rs` for its format, and `cargo test --workspace` answers **182** as
+this note is written. 179 is the count this card is accountable for - 177 moved, 2 added.
+
 ---
 
 ## Found while running the gates
@@ -401,3 +405,10 @@ changes compose: the serialiser is spliced through two more placeholders (`{{ser
 above still passes with `Format::Text`. It is recorded here because a reader comparing this note
 with the tree will find a tenth script and a `format` parameter that this card did not put there,
 and because two cards editing one file is the thing to know before a third one starts.
+
+**And the tree committed itself.** This card staged its work and ran no `git commit` - the card's
+rule is "leave the tree staged" - but the repository's external auto-committer swept the index into
+`e56816f` ("refactor(workspace): reorganize project layout and migrate documentation", 265 files)
+while the last gate was running. Every move, every script file and this note are in that commit.
+Nothing was lost and nothing was rewritten, but the review is a commit rather than a staged diff,
+and that is the auto-committer's decision rather than this card's.
