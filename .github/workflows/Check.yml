@@ -93,13 +93,15 @@ jobs:
       # Nightly here and nowhere else, because `rustfmt.toml` at the repository
       # root is the house style and most of it is nightly-only: `hard_tabs`,
       # `space_after_colon`, `imports_granularity`, `group_imports`,
-      # `format_strings` and twenty-odd more. Stable rustfmt does not fail on
-      # them - it warns `unstable features are only available in nightly` and
-      # formats with the defaults instead, which on this tree means 798 diffs
-      # and a red gate on every push. Pinned to a date rather than `nightly`
-      # for the other half of the problem: rustfmt's output moves between
-      # nightlies, so a floating pin goes red on an unrelated push the day the
-      # formatter changes its mind.
+      # `format_strings` and thirty-five more - 40 options in all, which is
+      # `cargo +stable fmt --all -- --check 2>&1 | grep "can't set"` counted by
+      # option name. Stable rustfmt does not fail on them - it warns
+      # `unstable features are only available in nightly` and formats with the
+      # defaults instead, which on this tree means 798 diffs (counted from
+      # `grep -c '^Diff in'`) and a red gate on every push. Pinned to a date
+      # rather than `nightly` for the other half of the problem: rustfmt's
+      # output moves between nightlies, so a floating pin goes red on an
+      # unrelated push the day the formatter changes its mind.
       - name: Setup Rust (nightly, pinned to the formatter)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
