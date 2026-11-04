@@ -8,7 +8,7 @@ product consumes this workspace and supplies its own composition root.
 
 ## The shape of it
 
-One tree and one specification. `Crate/` is a Cargo workspace of eight crates: the specification and
+One tree and one specification. `Crate/` is a Cargo workspace of nine crates: the specification and
 the implementation are the same artifact, and the scenarios under `scenarios/` are the evidence that
 each crate answers the contract its file states. `Documentation/` records the decisions the tree
 makes and why.
@@ -28,10 +28,13 @@ compiler instead of hidden inside a `format!` string.
 
 The arrows point inward and nothing imports a root. A capability may import its own port and data
 shapes; an adapter implements one port against one mechanism; a workflow composes capabilities; the
-composition root binds ports to adapters. A capability that imports an adapter is a defect rather
-than a shortcut: it makes the capability untestable without the provider, which is the one property
-this workspace exists to keep. `Crate/Agentic/Test/Boundaries.rs` holds that rule against every
-crate's manifest and dependency list, so it fails as a test rather than being a convention.
+composition root binds ports to adapters. A facade re-exports ports and may import any of them, and
+only the composition root imports the facade: a facade exists for the consumer outside this
+workspace, and a crate inside it that reached for one would be importing its own re-export. A
+capability that imports an adapter is a defect rather than a shortcut: it makes the capability
+untestable without the provider, which is the one property this workspace exists to keep.
+`Crate/Agentic/Test/Boundaries.rs` holds that rule against every crate's manifest and dependency
+list, so it fails as a test rather than being a convention.
 
 Every crate carries `module.json`. The field that does the most work is `state`, because it decides
 what a harness may warm and what it must revalidate at admission:
@@ -51,7 +54,7 @@ warm pool starts returning wrong answers quickly.
 
 ## Crate/
 
-A Cargo workspace of eight crates, in the house layout: one directory per crate under `Crate/`,
+A Cargo workspace of nine crates, in the house layout: one directory per crate under `Crate/`,
 `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and contracts,
 `Source/Script/` for the TypeScript compiled into the JavaScript sent to a page, PascalCase module
 names, and one `Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency
@@ -68,6 +71,9 @@ transpiled.
 - **`agentic-design-verification`** - measurement and evidence, holding no design of its own.
 - **`agentic-workflow`** - the bridge from the substrate to the consumer-owned ports, and one
   composition that uses four capabilities.
+- **`agentic-sdk`** - the facade: the five crates a consumer would otherwise name, re-exported
+  behind one dependency, with no behaviour of its own. `Crate/Sdk/Source/Library.rs` states what may
+  appear there and why the substrate, the adapter seam and the policy engine do not.
 - **`agentic`** - wiring, the manifest table and the executable.
 
 **A capability's required surface stays runtime-neutral.** The four capability crates do not name
@@ -106,6 +112,26 @@ it - the Rust tests, which are now the only statement of the contract.
 
 ---
 
+## Fixture/
+
+One crate outside the workspace, and its own workspace root: `Fixture/Sdk/` depends on `agentic-sdk`
+and on nothing else this tree ships. It builds a session, opens `Page/Probe.html` and evaluates an
+expression - the whole flow the facade exists to make possible from one dependency. `tokio` is the
+only other dependency, because the browser adapter spawns its handler on it, and nothing else is
+named: the evaluated value is read with `as_str` and `Display` rather than through a serialiser the
+consumer would have to depend on.
+
+```
+cargo build --manifest-path Fixture/Sdk/Cargo.toml   # the facade alone
+cargo run --manifest-path Fixture/Sdk/Cargo.toml     # needs a browser; AGENTIC_BROWSER names one
+cargo tree --manifest-path Fixture/Sdk/Cargo.toml --depth 1
+```
+
+It is not a workspace member, and deliberately: a member would resolve its siblings through this
+workspace's own graph, which is exactly the thing a consumer cannot do.
+
+---
+
 ## The gates
 
 Two checks that used to be Node scripts are Rust tests, because a gate that lives in the toolchain
@@ -113,8 +139,9 @@ being deleted is a gate that leaves with it:
 
 - **`Crate/Agentic/Test/Boundaries.rs`** - reads every crate's `module.json` for its kind and its
   `Cargo.toml` for its edges, and fails when a capability names an adapter, an adapter names another
-  adapter, or anything names the composition root. It also refuses a kind it does not know, so a new
-  crate kind fails loudly rather than passing as "anything goes".
+  adapter, anything names the composition root, or anything but the composition root names the
+  facade. It also refuses a kind it does not know, so a new crate kind fails loudly rather than
+  passing as "anything goes".
 - **`Crate/Agentic/Test/Legend.rs`** - fails when a page under `Documentation/Diagram/` carries a
   Mermaid block without the shared legend, when a diagram has no frontmatter, theme or class
   annotation, when a `.svg` has no `.mmd` beside it, or when a render is a placeholder. A page added

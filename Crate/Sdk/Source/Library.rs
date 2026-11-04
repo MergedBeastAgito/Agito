@@ -38,7 +38,7 @@
 //!   panic inside a launch that had already succeeded, so the executor stays the
 //!   consumer's to choose and the adapter's to require.
 //!
-//! # Five ports, five `Error` types, one at the root
+//! # Five ports, four `Error` types, one at the root
 //!
 //! Four of the five crates below ship an enum called `Error`, and four ship a
 //! constructor called `Create`. Only one of each can sit at the root, so the one
@@ -58,7 +58,11 @@
 //! use agentic_sdk::{Browse, Call, Chrome, ChromeOptions, Create, Never, OpenOptions, Options, Tokio};
 //!
 //! let Bounded = Call::Within(Duration::from_secs(30), &Tokio, Arc::new(Never));
-//! let Session = Create(Chrome::New(ChromeOptions { Headless: true, ..Default::default() }), Arc::new(Tokio), Options::default());
+//! let Session = Create(
+//!     Chrome::New(ChromeOptions { Headless: true, ..Default::default() }),
+//!     Arc::new(Tokio),
+//!     Options::default(),
+//! );
 //! let Target = Session.Open(Url, OpenOptions::Launch(Bounded.clone())).await?;
 //! let Value = Session.Evaluate(&Target, "document.title", Bounded).await?;
 //! Session.Dispose(Target).await;
@@ -77,79 +81,76 @@
 pub mod Port;
 pub mod Struct;
 
-// The manifest table. It describes the surface this crate re-exports, which is
-// why it lives here rather than in the binary that prints it: a consumer asking
-// what the workspace ships is asking about the same items it is importing.
-pub use crate::Struct::Manifest::All;
-pub use crate::Struct::Manifest::Find;
-pub use crate::Struct::Manifest::Manifest;
-
-// `agentic.runtime` - what one operation is bounded by.
-//
-// The deadline and the caller's cancellation, as one value every port method
-// takes. Supplied rather than read from a global, so two operations in one
-// process can be bounded differently.
+/// `agentic.runtime` - the deadline and the caller's cancellation, as one value
+/// every port method takes. Supplied rather than read from a global, so two
+/// operations in one process can be bounded differently.
 pub use AgenticRuntime::Call;
-// `agentic.runtime` - the return type of every port method.
-//
-// One boxed future. It is what keeps `Arc<dyn Port>` possible: a port with an
-// `async fn` in it is not object-safe, and a port that is not object-safe cannot
-// be substituted by a fake.
+/// `agentic.runtime` - the return type of every port method: one boxed future.
+/// It is what keeps `Arc<dyn Port>` possible, because a port with an `async fn`
+/// in it is not object-safe and a port that is not object-safe cannot be
+/// substituted by a fake.
 pub use AgenticRuntime::FutureBox;
-// `agentic.runtime` - the caller's signal, read as a flag and awaited as a
-// future.
+/// `agentic.runtime` - the caller's signal, read as a flag and awaited as a
+/// future.
 pub use AgenticRuntime::Cancellation;
-// `agentic.runtime` - the only clock a deadline is compared against.
+/// `agentic.runtime` - the only clock a deadline is compared against.
 pub use AgenticRuntime::Clock;
-// `agentic.runtime` - the clock, plus the ability to wait.
+/// `agentic.runtime` - the clock, plus the ability to wait.
 pub use AgenticRuntime::Pace;
-// `agentic.runtime` - a cancellation that never fires.
+/// `agentic.runtime` - a cancellation that never fires.
 pub use AgenticRuntime::Never;
-// `agentic.runtime` - a cancellation the caller fires when it gives up.
+/// `agentic.runtime` - a cancellation the caller fires when it gives up.
 pub use AgenticRuntime::Signal;
-// `agentic.runtime` - the wall clock, for a caller with nothing better.
+/// `agentic.runtime` - the wall clock, for a caller with nothing better.
 pub use AgenticRuntime::Wall;
-// `agentic.runtime` - why a bounded operation stopped: the deadline passed, or
-// the caller cancelled.
+/// `agentic.runtime` - why a bounded operation stopped: the deadline passed, or
+/// the caller cancelled.
 pub use AgenticRuntime::Expired;
-// `agentic.runtime` - one operation plus one deadline, as an answer or an
-// expiry.
+/// `agentic.runtime` - one operation plus one deadline, as an answer or an
+/// expiry.
 pub use AgenticRuntime::Bound;
-// `agentic.runtime` - two operations, whichever answers first.
+/// `agentic.runtime` - two operations, whichever answers first.
 pub use AgenticRuntime::Race;
-// `agentic.runtime` - which of the two `Race` returned.
+/// `agentic.runtime` - which of the two `Race` returned.
 pub use AgenticRuntime::Either;
-
-// `agentic.browse` - the port itself: open, evaluate, dispose.
+/// `agentic.browse` - the port itself: open, evaluate, dispose.
 pub use AgenticBrowserCDP::Browse;
-// `agentic.browse` - what an operation is bounded by, plus whether to attach to
-// a browser somebody else owns.
+/// `agentic.browse` - what an operation is bounded by, plus whether to attach to
+/// a browser somebody else owns.
 pub use AgenticBrowserCDP::OpenOptions;
-// `agentic.browse` - the handle a session is bound to.
+/// `agentic.browse` - the handle a session is bound to.
 pub use AgenticBrowserCDP::Target;
-// `agentic.browse` - who owns the page behind a target, and therefore who may
-// close it.
+/// `agentic.browse` - who owns the page behind a target, and therefore who may
+/// close it.
 pub use AgenticBrowserCDP::Ownership;
-// `agentic.browse` - the port bound to one launcher and one pace.
+/// `agentic.browse` - the port bound to one launcher and one pace.
 pub use AgenticBrowserCDP::Session;
-// `agentic.browse` - build that session.
+/// `agentic.browse` - build that session.
 pub use AgenticBrowserCDP::Create;
-// `agentic.browse` - how a session is configured: where a dispose failure goes,
-// and how long a release may take.
+/// `agentic.browse` - how a session is configured: where a dispose failure goes,
+/// and how long a release may take.
 pub use AgenticBrowserCDP::Options;
-// `agentic.browse` - where a dispose failure goes, because it may not be
-// returned.
+/// `agentic.browse` - where a dispose failure goes, because it may not be
+/// returned.
 pub use AgenticBrowserCDP::Report;
-// `agentic.browse` - the launcher the workspace ships. The only name here whose
-// implementation is a substrate, and it names none of the substrate's types.
+/// `agentic.browse` - the launcher the workspace ships. The only name here whose
+/// implementation is a substrate, and it names none of the substrate's types.
 pub use AgenticBrowserCDP::Chrome;
-// `agentic.browse` - how to start or reach a browser.
+/// `agentic.browse` - how to start or reach a browser.
 pub use AgenticBrowserCDP::ChromeOptions;
-// `agentic.browse` - the pace that launcher requires, because it spawns a
-// handler on tokio.
+/// `agentic.browse` - the pace that launcher requires, because it spawns a
+/// handler on tokio.
 pub use AgenticBrowserCDP::Tokio;
-// `agentic.browse` - the one error type a session operation fails with.
+/// `agentic.browse` - the one error type a session operation fails with.
 pub use AgenticBrowserCDP::Error;
-// `agentic.browse` - its three codes: browser-unavailable, navigation-failed,
-// timeout.
+/// `agentic.browse` - its three codes: `browser-unavailable`,
+/// `navigation-failed`, `timeout`.
 pub use AgenticBrowserCDP::Code;
+
+/// The workspace's manifest table: every module it ships, with the port each
+/// provides and the bytes of its `module.json`.
+pub use crate::Struct::Manifest::All;
+/// One module, as the workspace ships it.
+pub use crate::Struct::Manifest::Manifest;
+/// The module with a given name, if the workspace ships it.
+pub use crate::Struct::Manifest::Find;

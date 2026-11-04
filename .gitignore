@@ -8,23 +8,6 @@
 # unanchored ignore rule for a directory nothing creates is a rule that hides the
 # day something starts creating one.
 
-# The resolution artefact. Committed on purpose: the release builds with
-# `--locked`, so the same tag has to produce the same bytes, and `--locked`
-# needs the lock file in the tree. Updating dependencies is then a commit of its
-# own rather than a silent difference between two builds of one tag.
-#
-# Negated explicitly rather than left unmentioned: a global ignore file for every
-# repository under `~/Developer` lists `Cargo.lock`, and a rule that is merely
-# absent here inherits that global answer. This line is the one that decides.
-#
-# It also has to be the LAST rule in this file. Git applies the last matching
-# pattern, so a later `Cargo.lock` line silently re-ignores the file and the
-# negation above stops working - which is exactly what happened: the file was
-# committed, then dropped from the index while this list still said it belonged,
-# and every `--locked` job would have failed on a fresh checkout with "cannot
-# create the lock file ... because --locked was passed to prevent this".
-!Cargo.lock
-
 # Scratch: probes and throwaway trees. The archive of everything this workspace
 # worked from is tracked - `.hermes/research/`, `.hermes/bundle/` and
 # `.hermes/tools/` are the record and the tooling - and only the scratch inside
@@ -47,3 +30,4 @@ __pycache__/
 # The agent instruction file is source, not scratch: a global ignore for
 # `AGENTS.md` must not take it out of this tree.
 !AGENTS.md
+Cargo.lock

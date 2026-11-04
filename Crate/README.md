@@ -1,6 +1,6 @@
 # Rust workspace
 
-Eight crates: the port shapes and the failure classification this workspace settled on, and now the
+Nine crates: the port shapes and the failure classification this workspace settled on, and now the
 only statement of them. The TypeScript packages they were ported from were deleted once the page
 expressions were compiled at build time and every scenario was answered here -
 `Documentation/Parity.md` records what the comparison established while it existed, and what
@@ -58,12 +58,18 @@ ports, and one composition that uses four capabilities. Dependencies: `agentic-r
 `agentic-chat-driver`, `agentic-design-verification`, `agentic-skill-contract`,
 `agentic-browser-cdp`, `serde_json`.
 
+**`agentic-sdk`** - `Crate/Sdk/`. The facade: the stable surface of the five crates a consumer would
+otherwise name, re-exported behind one dependency. It adds no behaviour - every item is a path over
+somebody else's - and its dependency list is the enforcement: five ports, no substrate, no executor.
+Dependencies: `agentic-runtime`, `agentic-browser-cdp`, `agentic-chat-driver`,
+`agentic-design-verification`, `agentic-skill-contract`.
+
 **`agentic`** - `Crate/Agentic/`. Wiring, the manifest table and the executable. Dependencies: all
-six above, `clap`, `tokio`, `serde_json`.
+seven above, `clap`, `tokio`, `serde_json`.
 
 ---
 
-## The two rules the dependency graph enforces
+## The three rules the dependency graph enforces
 
 **A capability's required surface is runtime-neutral.** `agentic-chat-driver`,
 `agentic-skill-contract`, `agentic-design-verification` and `agentic-spacetime-catalog` do not name
@@ -75,7 +81,14 @@ deadline and a cancellation) and a `Pace` (a clock and a wait) supplied by the c
 them over `agentic-browser-cdp`'s `Browse`. There is no shared ports crate, and the translations are
 deliberately not factored into a "universal browser request" type.
 
-Both are checkable, and the checks are the first two commands below.
+**A facade names ports and nothing else.** `agentic-sdk`'s dependency list is five crates and no
+substrate, no executor and no serialiser, and the direction is one-way: the facade may import any
+port, and only the composition root may import the facade. A crate inside the workspace that reached
+for it would be importing its own re-export.
+
+All three are checkable: the first two with `cargo tree`, the third by `Crate/Sdk/Test/Facade.rs`
+reading the facade's own dependency list, and the direction by `Test/Boundaries.rs` with every other
+arrow.
 
 ---
 

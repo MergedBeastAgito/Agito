@@ -6,7 +6,8 @@
 //! `Cargo.toml`; and the rule is the one the README states - a capability may
 //! import a capability or the runtime, an adapter may import a capability or
 //! the runtime, the workflow, the composition root and the runtime may import
-//! anything, and nothing may import the composition root.
+//! anything, a facade may import any port, only the composition root may import
+//! a facade, and nothing may import the composition root.
 //!
 //! Reading the two files rather than `cargo tree` is deliberate: `cargo tree`
 //! resolves features, needs a lock and a registry, and answers a question about
@@ -23,12 +24,12 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-/// The five kinds a manifest may declare, and the only inputs the rule accepts.
+/// The kinds a manifest may declare, and the only inputs the rule accepts.
 ///
 /// A kind outside this list is not a crate with an unusual role: it is a
 /// manifest this file cannot reason about, and it is refused rather than read
 /// as "anything goes".
-const Kinds:[&str; 5] = ["runtime", "capability", "adapter", "workflow", "composition"];
+const Kinds:[&str; 6] = ["runtime", "capability", "adapter", "workflow", "composition", "facade"];
 
 /// One crate, as the two files that describe it.
 struct Module {
@@ -145,11 +146,21 @@ fn allowed(Importer:&str, Imported:&str) -> bool {
 	if !Kinds.contains(&Importer) || !Kinds.contains(&Imported) {
 		return false;
 	}
+	// A facade is the outward edge of the tree: it names the ports a consumer
+	// would otherwise name, so it may import any of them, and it is the one
+	// thing a capability must not reach for - a crate that imported the facade
+	// would be importing its own re-export, and the surface would grow a second
+	// arrow pointing outward. Only the composition root, which publishes that
+	// surface, may name it.
+	if Imported == "facade" {
+		return Importer == "composition";
+	}
 	match Importer {
 		// The runtime holds no workspace and the composition root binds ports to
 		// adapters, so both may name anything; a workflow composes capabilities
-		// and owns the bindings, so it may too.
-		"runtime" | "workflow" | "composition" => true,
+		// and owns the bindings, so it may too, and a facade re-exports ports it
+		// does not implement.
+		"runtime" | "workflow" | "composition" | "facade" => true,
 		// A capability declares the traits it needs and nothing else: an adapter
 		// in its dependency list would make it untestable without the provider.
 		"capability" => matches!(Imported, "capability" | "runtime"),
@@ -295,6 +306,17 @@ mod rule {
 	fn an_unknown_kind_is_refused_rather_than_assumed() {
 		assert!(!allowed("plugin", "runtime"));
 		assert!(!allowed("runtime", "plugin"));
+	}
+
+	#[test]
+	fn a_facade_names_any_port_and_only_the_root_names_the_facade() {
+		for Imported in ["runtime", "capability", "adapter", "workflow"] {
+			assert!(allowed("facade", Imported), "facade -> {Imported}");
+		}
+		assert!(allowed("composition", "facade"));
+		for Importer in ["runtime", "capability", "adapter", "workflow", "facade"] {
+			assert!(!allowed(Importer, "facade"), "{Importer} -> facade");
+		}
 	}
 
 	#[test]
