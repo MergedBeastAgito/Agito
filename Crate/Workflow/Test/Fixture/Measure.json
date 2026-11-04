@@ -1,0 +1,4 @@
+{
+	"selectors": ["#main", "body > p"],
+	"expression": "(() => {\n\tconst Read = (Selector) => {\n\t\tconst Element = document.querySelector(Selector);\n\t\tif (Element === null) return { selector: Selector, present: false, value: null };\n\t\tconst Raw = Element.getAttribute(\"data-value\");\n\t\tif (Raw !== null) {\n\t\t\tconst Parsed = Number(Raw);\n\t\t\treturn { selector: Selector, present: true, value: Number.isNaN(Parsed) ? Raw : Parsed };\n\t\t}\n\t\treturn { selector: Selector, present: true, value: (Element.innerText || \"\").trim() };\n\t};\n\treturn [\"#main\",\"body > p\"].map(Read);\n})()"
+}

@@ -11,9 +11,9 @@
 //!
 //! The JavaScript is `Source/Script/Measure.ts`, compiled by this crate's
 //! `build.rs` and baked in by [`script!`]. The one value this function supplies
-//! - the selector list, already a JSON array - is the parameter the script
-//! declares as `declare const __PARAM_Selectors__: string[];`, so the file is
-//! the expression and this function is only its parameter.
+//! is the selector list, already a JSON array, and it is the parameter the
+//! script declares as `declare const __PARAM_Selectors__: string[];`. So the
+//! file is the expression and this function is only its parameter.
 
 use AgenticRuntime::script;
 use serde_json::Value;
@@ -57,5 +57,29 @@ mod Tests {
 			"the script carries no marker, so nothing proves the fill ran"
 		);
 		assert_eq!(MeasurementSelectors(&Built), Some(serde_json::json!(["#main", "body > p"])));
+	}
+
+	/// The compiled expression is the expression the page was already being
+	/// sent, byte for byte.
+	///
+	/// The fixture is the *before* side of the compilation card: the script at
+	/// the commit before it, with the one substitution the old
+	/// `MeasurementExpression` performed. It is a baseline, not a snapshot to
+	/// refresh - a reformatting compiler fails here.
+	#[test]
+	fn the_measure_expression_is_byte_for_byte_the_one_the_page_received() {
+		const Held:&str = include_str!("../../Test/Fixture/Measure.json");
+		let Fixture:serde_json::Value =
+			serde_json::from_str(Held).expect("the fixture is a JSON object");
+		let Selectors:Vec<String> = Fixture["selectors"]
+			.as_array()
+			.expect("the fixture names the selectors")
+			.iter()
+			.map(|Value| Value.as_str().expect("a selector is a string").to_string())
+			.collect();
+		assert_eq!(
+			MeasurementExpression(&Selectors),
+			Fixture["expression"].as_str().expect("the fixture holds the expression")
+		);
 	}
 }
