@@ -95,8 +95,9 @@ arrow.
 ## Verification
 
 ```
-cargo test --workspace                                   # 240 tests, no browser, no network
+cargo test --workspace                                   # every suite, no browser, no network
 cargo run -p agentic -- --help                           # the composition root's commands
+cargo build --manifest-path Fixture/Sdk/Cargo.toml       # a consumer of the facade alone
 cargo tree -p agentic-chat-driver | grep -c tokio         # 0
 cargo tree -p agentic-chat-driver | grep -c browser       # 0
 cargo clippy --workspace -- -D warnings
@@ -105,7 +106,10 @@ cargo fmt --check
 
 The tests are fake-based: a page is a scripted responder, a browser is a scripted launcher, and a
 deadline passes because the test advanced a clock it owns. `cargo test` never starts Chromium and
-never opens a socket.
+never opens a socket. The one thing that does open a real browser is `Fixture/Sdk/`, and it is run by
+hand rather than by the suite: it exists to prove that a consumer naming one dependency can perform
+the whole flow, and a machine without Brave should fail that by name rather than turn every other
+test red.
 
 Two of those tests are the gates that used to be Node scripts: `Test/Boundaries.rs` reads every
 crate's manifest and dependency list and fails on an edge the design does not allow, and

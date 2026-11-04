@@ -6,6 +6,7 @@ version = 4
 name = "agentic"
 version = "0.1.3"
 dependencies = [
+ "agentic-adapter",
  "agentic-browser-cdp",
  "agentic-chat-driver",
  "agentic-design-verification",

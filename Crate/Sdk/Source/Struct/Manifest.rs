@@ -1,4 +1,4 @@
-//! The eight manifests, embedded.
+//! The nine manifests, embedded.
 //!
 //! `include_str!` rather than a build script or a serde load at launch: the
 //! bytes the crate reports are the bytes that were checked in, and the harness
@@ -11,7 +11,7 @@
 //! its own path to the same values (`Agentic::All`) by re-exporting this module,
 //! so there is one definition and no second answer.
 //!
-//! The facade itself is not one of the eight. It provides no port, so it has
+//! The facade itself is not one of the nine. It provides no port, so it has
 //! nothing a harness would prepare for and nothing `agentic verify --module`
 //! could answer; its own `module.json` declares the `facade` kind and the ports
 //! it re-exports, which is a statement about this table rather than an entry in
@@ -35,13 +35,26 @@ pub struct Manifest {
 }
 
 /// Every module this workspace ships, in dependency order.
-pub const All:[Manifest; 8] = [
+pub const All:[Manifest; 9] = [
 	Manifest {
 		Name:"@agentic/runtime",
 		Kind:"runtime",
 		Port:"agentic.runtime",
 		State:"holds-workspace",
 		JSON:include_str!("../../../Runtime/module.json"),
+	},
+	// The port shape a third-party substrate implements. Kind `capability` and
+	// not `adapter`: the boundary rule lets an adapter name a capability's port
+	// shapes, which is the edge a third-party adapter draws when it depends on
+	// this crate, while an adapter naming another adapter is the edge the rule
+	// forbids. Its manifest names no errors, because a code belongs to the
+	// adapter that reports it rather than to the shape it implements.
+	Manifest {
+		Name:"@agentic/adapter",
+		Kind:"capability",
+		Port:"agentic.adapter",
+		State:"stateless",
+		JSON:include_str!("../../../Adapter/module.json"),
 	},
 	Manifest {
 		Name:"@agentic/spacetime-catalog",

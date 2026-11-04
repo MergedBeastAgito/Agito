@@ -13,7 +13,7 @@
 //! verifier cannot reason about is worse than a listing that says why it would
 //! not.
 
-use std::{path::{Path, PathBuf}};
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
@@ -43,10 +43,10 @@ impl External {
 	/// Read one `module.json`, refusing a file this workspace cannot reason
 	/// about.
 	pub fn Read(Path:&Path) -> Result<Self, String> {
-		let JSON = std::fs::read_to_string(Path)
-			.map_err(|Why| format!("{} could not be read: {Why}", Path.display()))?;
-		let Parsed:Value = serde_json::from_str(&JSON)
-			.map_err(|Why| format!("{} is not JSON: {Why}", Path.display()))?;
+		let JSON =
+			std::fs::read_to_string(Path).map_err(|Why| format!("{} could not be read: {Why}", Path.display()))?;
+		let Parsed:Value =
+			serde_json::from_str(&JSON).map_err(|Why| format!("{} is not JSON: {Why}", Path.display()))?;
 		let Text = |Key:&str| Parsed.get(Key).and_then(Value::as_str).unwrap_or_default().to_string();
 		let Name = Text("name");
 		if Name.is_empty() {
@@ -54,10 +54,7 @@ impl External {
 		}
 		let Kind = Text("kind");
 		if !Known(&Kind) {
-			return Err(format!(
-				"{Name} declares the kind {Kind:?}, which is not one of {}",
-				Names()
-			));
+			return Err(format!("{Name} declares the kind {Kind:?}, which is not one of {}", Names()));
 		}
 		let Port = Parsed
 			.get("provides")

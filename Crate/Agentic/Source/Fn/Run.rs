@@ -17,6 +17,7 @@ use serde_json::json;
 use crate::{
 	Fn::{
 		Composition::{Browser, Chat as ChatOver, ChatSpec, Design, Headless},
+		Discover,
 		VerifyModule::{ReadinessJSON, VerifyModule},
 	},
 	Struct::{Binary::Command::Verb, Manifest::All},
@@ -25,20 +26,27 @@ use crate::{
 /// Run one verb, answering the text to print or the reason it could not be run.
 pub async fn Run(Command:Verb) -> Result<String, String> {
 	match Command {
-		Verb::Manifests => {
-			Ok(All
+		Verb::Manifests { Adapter } => {
+			// The workspace's own table first, then whatever the adapter roots
+			// declare. The origin column is what keeps the two apart: a row
+			// that says `workspace` is compiled into this binary, and a row that
+			// names a directory is a file that was there when the question was
+			// asked.
+			let Roots = Discover::Roots(&Adapter);
+			let Foreign = Discover::Discover(&Roots)?;
+			let mut Lines:Vec<String> = All
 				.iter()
-				.map(|Manifest| {
-					format!(
-						"{:<32} {:<12} {:<24} {}",
-						Manifest.Name, Manifest.Kind, Manifest.Port, Manifest.State
-					)
-				})
-				.collect::<Vec<String>>()
-				.join("\n"))
+				.map(|Manifest| Row(Manifest.Name, Manifest.Kind, Manifest.Port, Manifest.State, "workspace"))
+				.collect();
+			Lines.extend(Foreign.iter().map(|One| {
+				let Origin = One.Path.display().to_string();
+				Row(&One.Name, &One.Kind, &One.Port, &One.State, &Origin)
+			}));
+			Ok(Lines.join("\n"))
 		},
-		Verb::Verify { Module } => {
-			let Readiness = VerifyModule(&Module)?;
+		Verb::Verify { Module, Adapter } => {
+			let Roots = Discover::Roots(&Adapter);
+			let Readiness = VerifyModule(&Module, &Roots)?;
 			let Text = serde_json::to_string_pretty(&ReadinessJSON(&Readiness)).unwrap_or_else(|_| "{}".to_string());
 			if Readiness.Ready { Ok(Text) } else { Err(Text) }
 		},
@@ -207,6 +215,16 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			.unwrap_or_else(|_| "{}".to_string()))
 		},
 	}
+}
+
+/// One row of the manifest listing: name, kind, port, state and where it came
+/// from.
+///
+/// The origin is the fifth column because the difference between "this binary
+/// carries it" and "this file said so" is the difference between a claim that
+/// was compiled and a claim that was read.
+fn Row(Name:&str, Kind:&str, Port:&str, State:&str, Origin:&str) -> String {
+	format!("{Name:<32} {Kind:<12} {Port:<24} {State:<16} {Origin}")
 }
 
 /// One call's budget, on the wall clock.

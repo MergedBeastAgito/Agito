@@ -30,6 +30,13 @@ clap = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 
+# A third-party adapter implements this crate's trait, and the composition test
+# holds one as `Arc<dyn Adapter>` through the same path a consumer would take.
+# The binary itself never constructs an adapter: `agentic verify` decides whether
+# a manifest is well formed without running the code behind it.
+[dev-dependencies]
+agentic-adapter = { workspace = true }
+
 [lints.rust]
 non_snake_case = "allow"
 non_upper_case_globals = "allow"

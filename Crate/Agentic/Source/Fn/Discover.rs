@@ -20,7 +20,8 @@
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
-	env, fs,
+	env,
+	fs,
 	path::{Path, PathBuf},
 };
 
@@ -59,10 +60,7 @@ pub fn Discover(Roots:&[PathBuf]) -> Result<Vec<External>, String> {
 	let mut Paths:BTreeSet<PathBuf> = BTreeSet::new();
 	for Root in Roots {
 		if !Root.exists() {
-			eprintln!(
-				"agentic: the adapter root {} does not exist; skipping it",
-				Root.display()
-			);
+			eprintln!("agentic: the adapter root {} does not exist; skipping it", Root.display());
 			continue;
 		}
 		let Own = Root.join("module.json");
@@ -72,8 +70,7 @@ pub fn Discover(Roots:&[PathBuf]) -> Result<Vec<External>, String> {
 		let Entries = fs::read_dir(Root)
 			.map_err(|Why| format!("the adapter root {} could not be read: {Why}", Root.display()))?;
 		for Entry in Entries {
-			let Entry = Entry
-				.map_err(|Why| format!("the adapter root {} could not be read: {Why}", Root.display()))?;
+			let Entry = Entry.map_err(|Why| format!("the adapter root {} could not be read: {Why}", Root.display()))?;
 			let Candidate = Entry.path().join("module.json");
 			if Candidate.is_file() {
 				Paths.insert(Canonical(&Candidate));

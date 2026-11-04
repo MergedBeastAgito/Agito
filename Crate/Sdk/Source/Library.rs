@@ -30,9 +30,14 @@
 //! - **The policy engine.** Leases, fences, per-run budgets and the local
 //!   stand-in are the composition root's business. A consumer that held a lease
 //!   would be a second authority over the same resource.
-//! - **The script helpers.** `Escape`, `FillDeclared` and the compiled
-//!   expressions are build-time machinery for the crates that send JavaScript. A
-//!   consumer sends an expression string.
+//! - **The script helpers.** `Escape`, `FillDeclared` and `AssertParameters` are
+//!   build-time machinery for the crates that send JavaScript, and a consumer
+//!   sends an expression string. The `script!` macro is the one exception, and it
+//!   is re-exported: it is how a consumer that keeps its own
+//!   `Source/Script/**/*.ts` turns those files into the string `Evaluate` takes,
+//!   so without it such a consumer would have to name `agentic-runtime` for a
+//!   single macro and the facade would not have removed the dependency it exists
+//!   to remove.
 //! - **`BlockOn`.** It drives a future on the current thread, and the browser
 //!   adapter spawns its handler on tokio. A consumer that reached for it would
 //!   panic inside a launch that had already succeeded, so the executor stays the
@@ -113,6 +118,14 @@ pub use AgenticRuntime::Bound;
 pub use AgenticRuntime::Race;
 /// `agentic.runtime` - which of the two `Race` returned.
 pub use AgenticRuntime::Either;
+/// `agentic.runtime` - the macro that turns a consumer's own
+/// `Source/Script/**/*.ts` (compiled to `OUT_DIR/Script` by its `build.rs`) into
+/// the expression string a port method takes, with the parameters it declares
+/// filled in. Re-exported because it is the consumer's entry point to the script
+/// convention and not one of the helpers the convention is built from; the macro
+/// expands to `$crate::FillDeclared`, so `$crate` still resolves to
+/// `agentic-runtime` and nothing below this crate becomes reachable through it.
+pub use AgenticRuntime::script;
 /// `agentic.browse` - the port itself: open, evaluate, dispose.
 pub use AgenticBrowserCDP::Browse;
 /// `agentic.browse` - what an operation is bounded by, plus whether to attach to

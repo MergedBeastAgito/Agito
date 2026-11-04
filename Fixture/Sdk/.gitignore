@@ -1,0 +1,6 @@
+# This crate is its own workspace, so its build output and its lock live here
+# rather than in the workspace's `Target/`. Scoped to this directory on purpose:
+# the root's rules describe the workspace, and a fixture outside it states its
+# own.
+/Cargo.lock
+/Target/

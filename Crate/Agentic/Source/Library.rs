@@ -3,9 +3,14 @@
 //! Everything below this crate is a port that somebody else implements. This
 //! crate is where a browser is chosen, where a pace is chosen, and where the
 //! two bindings that translate a consumer's port onto the substrate are
-//! installed. It is also where the eight manifests live, embedded at compile
-//! time, so the binary can report what the workspace ships without reading a
-//! file.
+//! installed.
+//!
+//! It is also the executable, and the manifest table it prints is re-exported
+//! from the facade rather than restated here: the answer to "what does this
+//! workspace ship" is stated once. The only rows this binary adds to that answer
+//! are the ones it read from an adapter root - a third-party module cannot be
+//! compiled in, which is what `kind: "adapter"` means, so it is discovered at run
+//! time and reported with the directory it was found in.
 //!
 //! The one thing it must not do is leak an adapter downwards: no crate below
 //! this one depends on another's concrete type, and the only crate that names
@@ -21,11 +26,14 @@ pub mod Struct;
 pub use crate::{
 	Fn::{
 		Composition::{Browser, Chat, Design},
+		Discover::Discover,
 		Run::{Drive, Run},
 		VerifyModule::{Declared, Readiness, VerifyModule},
 	},
 	Struct::{
 		Binary::Command::{Command, Verb},
+		External::External,
+		Kind::{Kinds, Known, Names},
 		Manifest::{All, Find, Manifest},
 	},
 };

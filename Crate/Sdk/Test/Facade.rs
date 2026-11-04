@@ -138,6 +138,26 @@ fn every_module_the_table_lists_is_reachable_by_name() {
 }
 
 #[test]
+fn every_port_is_reachable_at_its_own_path() {
+	// The three ports the crate root does not carry, and the runtime's own
+	// failure vocabulary, each named through the path a consumer would use. A
+	// re-export that pointed at a crate nobody can see would still compile here
+	// and fail there; these resolve it.
+	assert!(std::any::type_name::<AgenticSdk::Port::Browse::Session>().starts_with("AgenticBrowserCDP"));
+	assert!(std::any::type_name::<AgenticSdk::Port::Chat::Driver>().starts_with("AgenticChatDriver"));
+	assert!(std::any::type_name::<AgenticSdk::Port::Design::Verifier>().starts_with("AgenticDesignVerification"));
+	assert!(std::any::type_name::<AgenticSdk::Port::Skill::Contract>().starts_with("AgenticSkillContract"));
+	assert!(std::any::type_name::<AgenticSdk::Port::Runtime::Error>().starts_with("AgenticRuntime"));
+	// And the choice the crate documents: the root's `Error` is the browse
+	// port's, because open, evaluate and dispose are the calls a consumer makes
+	// first.
+	assert_eq!(
+		std::any::type_name::<AgenticSdk::Error>(),
+		std::any::type_name::<AgenticSdk::Port::Browse::Error>()
+	);
+}
+
+#[test]
 fn the_facade_declares_its_own_kind_and_is_not_an_entry_in_the_table() {
 	let Module = module();
 	assert_eq!(Module["kind"], "facade");

@@ -18,14 +18,26 @@ pub struct Command {
 /// One verb.
 #[derive(Clone, Debug, Subcommand)]
 pub enum Verb {
-	/// List the modules this workspace ships, with the port each provides.
-	Manifests,
+	/// List the modules this workspace ships, with the port each provides, and
+	/// every third-party module the adapter roots declare.
+	Manifests {
+		/// A directory holding a third-party `module.json`, or a directory of
+		/// crate directories. Repeatable; when absent, `AGENTIC_ADAPTER_PATH`
+		/// is read instead.
+		#[arg(long = "adapter")]
+		Adapter:Vec<String>,
+	},
 	/// Report one module's readiness, and whether its manifest still matches
 	/// its code.
 	Verify {
 		/// The module to report, by its manifest name.
 		#[arg(long)]
 		Module:String,
+		/// A directory holding a third-party `module.json`, or a directory of
+		/// crate directories. Repeatable; when absent, `AGENTIC_ADAPTER_PATH`
+		/// is read instead.
+		#[arg(long = "adapter")]
+		Adapter:Vec<String>,
 	},
 	/// Discover, validate and digest a skill corpus. Needs no browser.
 	Skills {
