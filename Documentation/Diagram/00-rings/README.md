@@ -23,8 +23,8 @@ the only one that holds the rules the database enforces.
 [`who-may-know.mmd`](who-may-know.mmd) · [`who-may-know.svg`](who-may-know.svg)
 
 A crate that knows more than its ring is a defect even when it compiles, which is why
-`Crate/Agentic/Test/Boundaries.rs` exists and why `cargo tree -p agentic-chat-driver | grep -c browser`
-must answer `0`.
+`Crate/Agentic/Test/Boundaries.rs` exists and why
+`cargo tree -p agentic-chat-driver | grep -c browser` must answer `0`.
 
 ---
 

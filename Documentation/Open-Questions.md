@@ -242,11 +242,11 @@ the last two questions it was asked were never reached.
 
 **Closed by the layer's removal.** The suite it names - attach/launch, navigation races, evaluation
 timeout, disconnect, disposal, shared-browser ownership - was answered by the Rust adapter through
-`Crate/BrowserCDP/Test/Browse.rs` and the browse scenarios, and then the TypeScript half was deleted.
-There is nothing left to compare against, so the question as written can no longer be run. What it
-was protecting is now a different question, and a live one: whether those cases are right, given
-that only one implementation asserts them (`Documentation/Parity.md` §What the differential run
-established, while it existed).
+`Crate/BrowserCDP/Test/Browse.rs` and the browse scenarios, and then the TypeScript half was
+deleted. There is nothing left to compare against, so the question as written can no longer be run.
+What it was protecting is now a different question, and a live one: whether those cases are right,
+given that only one implementation asserts them (`Documentation/Parity.md` §What the differential
+run established, while it existed).
 
 **Blocks:** nothing now. The backend decision it conditioned is made - `chromiumoxide` behind the
 session API - and `agentic-browser-cdp` is the crate that carries it.
@@ -267,13 +267,13 @@ property it exists for.
 
 **Asked:** the thread's question 5 (`:47`), asserted at `:58` but never specified.
 
-**Answered:** `Crate/Agentic/Test/Boundaries.rs`, which reads every crate's `module.json` for its kind
-and its `Cargo.toml` for its edges, and fails on an edge the design does not allow - a capability
-naming an adapter, an adapter naming another adapter, anything naming the composition root. It runs
-in `cargo test --workspace`, so the gate is the test job rather than a step somebody remembers. The
-`cargo metadata` walk this entry used to propose stays the stronger check if features ever make the
-declared edges and the resolved ones disagree; the declared edges are what a reviewer reads, and
-they are what the test holds.
+**Answered:** `Crate/Agentic/Test/Boundaries.rs`, which reads every crate's `module.json` for its
+kind and its `Cargo.toml` for its edges, and fails on an edge the design does not allow - a
+capability naming an adapter, an adapter naming another adapter, anything naming the composition
+root. It runs in `cargo test --workspace`, so the gate is the test job rather than a step somebody
+remembers. The `cargo metadata` walk this entry used to propose stays the stronger check if features
+ever make the declared edges and the resolved ones disagree; the declared edges are what a reviewer
+reads, and they are what the test holds.
 
 ```sh
 cargo test -p agentic --test Boundaries
@@ -388,6 +388,10 @@ that disappears quietly is a property nobody notices losing.
   formatting gate for the code.
 
 - **The catalogue's tests.** `Package/spacetime-catalog` held the database rules as data and 25
-  assertions over them, and no crate replaced it. **Owed:** `agentic-spacetime-catalog`, with the
-  rules as tables and the same cases. `Documentation/Spacetime-Catalog.md` is the statement of the
-  rules in the meantime, and it is prose, so nothing compiles it.
+  assertions over them, and no crate replaced it. **Held by:** `Crate/SpacetimeCatalog/`, which
+  carries the six tables as records, the seven rules as functions over them, and every case the
+  TypeScript statement had. `cargo test -p agentic-spacetime-catalog` runs 34 cases, 30 of them
+  carried from `Tables.test.ts`, `Reducers.test.ts` and `Destination.test.ts` - which hold 7, 18 and
+  5 tests, not the 25 this entry used to claim. `Documentation/Spacetime-Catalog.md` §What proves it
+  names them, and §What the port changed in this document records where the prose and the source
+  disagreed.

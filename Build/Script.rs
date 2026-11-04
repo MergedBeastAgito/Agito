@@ -41,8 +41,8 @@
 // Not checked: types. A transpiler parses, it does not infer, so
 // `declare const __PARAM_Scroll__: string;` is a declaration a type checker
 // would hold the caller to, and nothing here does. `tsc --noEmit` over these
-// sources is a manual check, recorded in `Documentation/Reference/Script/Compilation.md`;
-// the build never needs one.
+// sources is a manual check, recorded in
+// `Documentation/Reference/Script/Compilation.md`; the build never needs one.
 //
 // # Determinism
 //
@@ -51,12 +51,13 @@
 // unchanged is not rewritten, so a rebuild after a no-op edit leaves the
 // artefact's mtime alone and nothing downstream rebuilds.
 
+use std::path::{Path, PathBuf};
+
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
 use oxc_span::{GetSpan, SourceType, Span};
-use std::path::{Path, PathBuf};
 
 /// The marker a placeholder is written as in a script.
 ///
@@ -173,17 +174,19 @@ impl<'a> Visit<'a> for Erase<'_> {
 								"a declaration this build does not read: bind by name".to_string(),
 							));
 							continue;
-						}
+						},
 					};
 					let Name = match Ident.strip_prefix(Marker).and_then(|Rest| Rest.strip_suffix("__")) {
 						Some(Name) if !Name.is_empty() => Name.to_string(),
 						_ => {
 							self.Rejected.push((
 								It.span().start,
-								format!("`declare const {Ident}` is not a script parameter: the form is `__PARAM_Name__`"),
+								format!(
+									"`declare const {Ident}` is not a script parameter: the form is `__PARAM_Name__`"
+								),
 							));
 							continue;
-						}
+						},
 					};
 					let Kind = match Declarator.type_annotation.as_ref().map(|A| &A.type_annotation) {
 						Some(TSType::TSStringKeyword(_)) => Kind::Text,
@@ -194,13 +197,13 @@ impl<'a> Visit<'a> for Erase<'_> {
 								format!("`{Ident}` declares no type, so it is neither data nor code"),
 							));
 							continue;
-						}
+						},
 					};
 					self.Declared.push(Parameter { Name, Kind });
 				}
 				self.Line(It.span());
 				return;
-			}
+			},
 			// TypeScript-only statements. Erasing them by span is only safe for
 			// the ones the scripts actually use, so the rest are refused rather
 			// than guessed at.
@@ -213,30 +216,32 @@ impl<'a> Visit<'a> for Erase<'_> {
 			| Statement::TSImportEqualsDeclaration(_) => {
 				self.Rejected.push((
 					It.span().start,
-					"a TypeScript-only statement this build cannot erase: put the type in a parameter declaration".to_string(),
+					"a TypeScript-only statement this build cannot erase: put the type in a parameter declaration"
+						.to_string(),
 				));
 				return;
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 		walk::walk_statement(self, It);
 	}
 
 	/// `x: T` - the annotation, colon included, is not JavaScript.
-	fn visit_ts_type_annotation(&mut self, It:&TSTypeAnnotation<'a>) {
-		self.Cuts.push(It.span);
-	}
+	fn visit_ts_type_annotation(&mut self, It:&TSTypeAnnotation<'a>) { self.Cuts.push(It.span); }
 
 	/// `x as T` - the assertion, keyword included, is not JavaScript.
 	fn visit_ts_as_expression(&mut self, It:&TSAsExpression<'a>) {
-		self.Cuts.push(Span::new(It.expression.span().end, It.type_annotation.span().end));
+		self.Cuts
+			.push(Span::new(It.expression.span().end, It.type_annotation.span().end));
 		walk::walk_ts_as_expression(self, It);
 	}
 
 	/// Everything else TypeScript-only, refused by name.
 	fn visit_ts_satisfies_expression(&mut self, It:&TSSatisfiesExpression<'a>) {
-		self.Rejected
-			.push((It.span.start, "`satisfies` is not erased by this build: use `as` or a declaration".to_string()));
+		self.Rejected.push((
+			It.span.start,
+			"`satisfies` is not erased by this build: use `as` or a declaration".to_string(),
+		));
 	}
 
 	fn visit_ts_non_null_expression(&mut self, It:&TSNonNullExpression<'a>) {
@@ -259,10 +264,8 @@ impl<'a> Visit<'a> for Erase<'_> {
 	}
 
 	fn visit_ts_instantiation_expression(&mut self, It:&TSInstantiationExpression<'a>) {
-		self.Rejected.push((
-			It.span.start,
-			"a type instantiation is not erased by this build".to_string(),
-		));
+		self.Rejected
+			.push((It.span.start, "a type instantiation is not erased by this build".to_string()));
 	}
 }
 
@@ -320,10 +323,7 @@ pub fn Compile(File:&Path, Text:&str) -> Result<Compiled, Failure> {
 		let Offset = Diagnostic.labels.first().map(|Label| Label.span().start).unwrap_or(0);
 		return Err(Fail(
 			Offset,
-			format!(
-				"the erased script is not JavaScript: {}",
-				Diagnostic.message
-			),
+			format!("the erased script is not JavaScript: {}", Diagnostic.message),
 		));
 	}
 
@@ -340,7 +340,7 @@ pub fn Compile(File:&Path, Text:&str) -> Result<Compiled, Failure> {
 			None => {
 				let Offset = (JavaScript.len() - Rest.len() + At) as u32;
 				return Err(Fail(Offset, "an unterminated `__PARAM_` marker".to_string()));
-			}
+			},
 		};
 		let Name = After[..End].to_string();
 		if !Seen.contains(&Name) {
@@ -360,10 +360,7 @@ pub fn Compile(File:&Path, Text:&str) -> Result<Compiled, Failure> {
 	for Parameter in &Pass.Declared {
 		if !Seen.contains(&Parameter.Name) {
 			let At = Text.find(&format!("{Marker}{}__", Parameter.Name)).unwrap_or(0) as u32;
-			return Err(Fail(
-				At,
-				format!("`{Marker}{}__` is declared but never used", Parameter.Name),
-			));
+			return Err(Fail(At, format!("`{Marker}{}__` is declared but never used", Parameter.Name)));
 		}
 	}
 	let mut Declared = Vec::new();
@@ -425,16 +422,12 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 
 	let Mut = Sources(&Source);
 	if Mut.is_empty() {
-		println!(
-			"cargo:warning=no scripts under {}: nothing to compile",
-			Source.display()
-		);
+		println!("cargo:warning=no scripts under {}: nothing to compile", Source.display());
 	}
 
 	for File in Mut {
-		let Text = std::fs::read_to_string(&File).unwrap_or_else(|Error| {
-			Stop(&format!("{}: cannot be read: {Error}", Shown(&File, &Root)))
-		});
+		let Text = std::fs::read_to_string(&File)
+			.unwrap_or_else(|Error| Stop(&format!("{}: cannot be read: {Error}", Shown(&File, &Root))));
 		let Compiled = Compile(&File, &Text).unwrap_or_else(|Failure| {
 			// The path as a reader of this crate knows it: `Source/Script/...`,
 			// not the absolute path a build runs in.
@@ -448,38 +441,31 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 		});
 
 		// The output keeps the source's relative path, minus the extension, so
-		// `Source/Script/Expressions/ReadAnswers.ts` is `script!("Expressions/ReadAnswers")`.
-		let Relative = File
-			.strip_prefix(&Source)
-			.unwrap_or(&File)
-			.with_extension("");
+		// `Source/Script/Expressions/ReadAnswers.ts` is
+		// `script!("Expressions/ReadAnswers")`.
+		let Relative = File.strip_prefix(&Source).unwrap_or(&File).with_extension("");
 		let JavaScript = Out.join(&Relative).with_extension("js");
 		let Parameters = Out.join(&Relative).with_extension("params");
 		if let Some(Parent) = JavaScript.parent() {
-			std::fs::create_dir_all(Parent).unwrap_or_else(|Error| {
-				Stop(&format!("{}: cannot be created: {Error}", Parent.display()))
-			});
+			std::fs::create_dir_all(Parent)
+				.unwrap_or_else(|Error| Stop(&format!("{}: cannot be created: {Error}", Parent.display())));
 		}
 
-		Write(&JavaScript, &Compiled.JavaScript).unwrap_or_else(|Error| {
-			Stop(&format!("{}: cannot be written: {Error}", JavaScript.display()))
-		});
+		Write(&JavaScript, &Compiled.JavaScript)
+			.unwrap_or_else(|Error| Stop(&format!("{}: cannot be written: {Error}", JavaScript.display())));
 
 		let Declared = Compiled
 			.Parameters
 			.iter()
 			.map(|Parameter| format!("{}:{}\n", Parameter.Name, Parameter.Kind.Name()))
 			.collect::<String>();
-		Write(&Parameters, &Declared).unwrap_or_else(|Error| {
-			Stop(&format!("{}: cannot be written: {Error}", Parameters.display()))
-		});
+		Write(&Parameters, &Declared)
+			.unwrap_or_else(|Error| Stop(&format!("{}: cannot be written: {Error}", Parameters.display())));
 	}
 }
 
 /// `Path` as a reader of this crate knows it, when it is inside the crate.
-fn Shown(Path:&Path, Root:&Path) -> String {
-	Path.strip_prefix(Root).unwrap_or(Path).display().to_string()
-}
+fn Shown(Path:&Path, Root:&Path) -> String { Path.strip_prefix(Root).unwrap_or(Path).display().to_string() }
 
 /// Stop the build with one line a reader can act on.
 ///

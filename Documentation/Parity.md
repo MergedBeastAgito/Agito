@@ -67,8 +67,8 @@ The run drove the TypeScript packages in process, asked cargo for the Rust half 
 
 - **82 scenarios across three capabilities: 79 agreed, 3 were unported, 0 differed.** The Rust
   halves were 23 browse scenarios, 29 chat scenarios and 26 skill scenarios; the difference between
-  those numbers and 82 is the browse case whose release cannot fail in Rust, and the three chat cases
-  neither side could express.
+  those numbers and 82 is the browse case whose release cannot fail in Rust, and the three chat
+  cases neither side could express.
 - **Agreement meant the same result and the same ordered effects** when both were driven by the same
   input - not that either implementation was right. A green run established that the port had not
   drifted from the tree it was ported from.
@@ -95,8 +95,8 @@ Each is written into its file with the reason, and each parity suite skips it by
 accident.
 
 - **`dispose-failing-release`** (browse). `Transport::Close` returns `()`, so a release cannot fail
-  and there is no cause to report. A release that *hangs* is reportable and is covered by
-  `generated/dispose-hang`; a release that *rejects* is not expressible in the port at all.
+  and there is no cause to report. A release that _hangs_ is reportable and is covered by
+  `generated/dispose-hang`; a release that _rejects_ is not expressible in the port at all.
 
 - **`port-declares-its-errors`** (chat). The scenario vocabulary has no step for reading a module's
   own `module.json`. The rule - the codes the driver declares are the codes its manifest names - is
@@ -113,7 +113,8 @@ Two further cases execute but name no unit test, and say so in `scenario-only`:
 
 - **`answer-hangs`** and **`open-hangs`** (chat). `Test/Chat.rs` has no page that hangs or never
   opens; the parity fake does, and the scenario is the only place those rules are exercised. That is
-  a gap in `Test/Chat.rs`, not in the port, and a unit case there would let these two drop the field.
+  a gap in `Test/Chat.rs`, not in the port, and a unit case there would let these two drop the
+  field.
 
 ---
 
@@ -128,8 +129,8 @@ one is a statement about what the contract is rather than a tolerance that happe
   it.
 
 - **An observation may sit in `message` or `detail`.** Which field carries the reason is the port's
-  choice; the promise is that the reason is not lost. `open-unavailable` asserts that
-  `ECONNREFUSED` survives somewhere in the failure.
+  choice; the promise is that the reason is not lost. `open-unavailable` asserts that `ECONNREFUSED`
+  survives somewhere in the failure.
 
 - **A finding's `detail` is not compared at all.** An `unparsable` detail embeds the absolute skill
   directory, which differs between two temporary corpora by construction, so the scenario compares
@@ -139,17 +140,17 @@ Two real defects were recorded here and are still in the tree, because the card 
 owned the scenarios rather than the port:
 
 - **Rust's open timeout loses the word "deadline".** `open-hangs` asserts the code and the
-  observation because the message says `the chat page could not be opened` and puts `the page never
-  answered` in `detail`. A wording defect, not a behavioural one.
+  observation because the message says `the chat page could not be opened` and puts
+  `the page never answered` in `detail`. A wording defect, not a behavioural one.
 
-- **`Names` treats a non-ASCII boundary as part of a name.** The port uses
-  `char::is_alphanumeric`, which is Unicode, so with `Reference/Notes.md` on disk and
-  `Reference/Index.md` naming `caféNotes.md` the port answers no findings. The TypeScript `Names`
-  disagreed - its boundary was ASCII - and that disagreement is why no scenario covers it. Every
-  ASCII case agrees, so the fixture set never exercises the rule. Now that only one implementation
-  remains, this is an uncovered behaviour rather than a divergence: **a case is owed**, and the
-  answer it should record is the one the port gives today or the one the contract should state,
-  decided rather than inherited.
+- **`Names` treats a non-ASCII boundary as part of a name.** The port uses `char::is_alphanumeric`,
+  which is Unicode, so with `Reference/Notes.md` on disk and `Reference/Index.md` naming
+  `caféNotes.md` the port answers no findings. The TypeScript `Names` disagreed - its boundary was
+  ASCII - and that disagreement is why no scenario covers it. Every ASCII case agrees, so the
+  fixture set never exercises the rule. Now that only one implementation remains, this is an
+  uncovered behaviour rather than a divergence: **a case is owed**, and the answer it should record
+  is the one the port gives today or the one the contract should state, decided rather than
+  inherited.
 
 ---
 
@@ -164,15 +165,15 @@ to run one by hand.
 The exact find/replace pairs are in the history: `git log --all --oneline -- scenarios/mutate.mjs`
 names the commit that carried the harness, and `git show <commit>:scenarios/mutate.mjs` prints them.
 
-| Mutation | What it breaks | File | The test that must fail |
-| --- | --- | --- | --- |
-| `attached-page-closed` | dispose closes an attached page instead of detaching it | `Crate/BrowserCDP/Source/Struct/Session.rs` | `detaches_an_attached_target_without_closing_it` |
-| `model-after-send` | the model check moves after the send | `Crate/ChatDriver/Source/Struct/Driver.rs` | `refuses_with_wrong_model_and_sends_nothing` |
-| `partial-text-on-deadline` | a partial answer is returned when the budget expires | `Crate/ChatDriver/Source/Struct/Driver.rs` | `refuses_with_not_ready_when_the_answer_never_stops_changing` |
-| `eof-as-timeout` | a transport EOF is classified as a timeout | `Crate/BrowserCDP/Source/Fn/Classify.rs` | `fails_with_browser_unavailable_when_the_transport_closed_during_the_call` |
-| `threshold-one-read` | the stability threshold drops from three reads to one | `Crate/ChatDriver/Source/Struct/Settlement.rs` | `the_settlement_state_settles_on_the_third_agreement_and_not_before` |
+| Mutation                   | What it breaks                                          | File                                           | The test that must fail                                                    |
+| -------------------------- | ------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------- |
+| `attached-page-closed`     | dispose closes an attached page instead of detaching it | `Crate/BrowserCDP/Source/Struct/Session.rs`    | `detaches_an_attached_target_without_closing_it`                           |
+| `model-after-send`         | the model check moves after the send                    | `Crate/ChatDriver/Source/Struct/Driver.rs`     | `refuses_with_wrong_model_and_sends_nothing`                               |
+| `partial-text-on-deadline` | a partial answer is returned when the budget expires    | `Crate/ChatDriver/Source/Struct/Driver.rs`     | `refuses_with_not_ready_when_the_answer_never_stops_changing`              |
+| `eof-as-timeout`           | a transport EOF is classified as a timeout              | `Crate/BrowserCDP/Source/Fn/Classify.rs`       | `fails_with_browser_unavailable_when_the_transport_closed_during_the_call` |
+| `threshold-one-read`       | the stability threshold drops from three reads to one   | `Crate/ChatDriver/Source/Struct/Settlement.rs` | `the_settlement_state_settles_on_the_third_agreement_and_not_before`       |
 
-Run one like this. The snapshot is taken *before* the edit and restored from, which is the harness's
+Run one like this. The snapshot is taken _before_ the edit and restored from, which is the harness's
 own design: a snapshot taken after the edit restores the mutation and then verifies the mutation
 against itself.
 
@@ -207,10 +208,10 @@ raced the same wait against the caller's signal and resolved the moment the sign
 The two agreed in practice, because the loop re-reads on the next iteration and the next read starts
 with `Call.Cancelled()` - which is why `generated/chat-answer-cancel` passes. The difference is
 _when_ the caller hears about it. With the default `pollMs` of 250ms, a cancelled call waits out the
-remainder of the current poll interval: up to a quarter of a second of extra latency, landing exactly
-when the caller is trying to shed work. Worse, the guarantee is not local - it holds only because the
-_pace_ eventually resolves, so a `Pace` whose `Sleep` never resolves turns a cancelled `ask` into a
-call that never returns.
+remainder of the current poll interval: up to a quarter of a second of extra latency, landing
+exactly when the caller is trying to shed work. Worse, the guarantee is not local - it holds only
+because the _pace_ eventually resolves, so a `Pace` whose `Sleep` never resolves turns a cancelled
+`ask` into a call that never returns.
 
 The fix is one combinator: `Race(self.Pace.Sleep(Wait), Call.Cancellation.Cancelled())`, the shape
 `Bound` already uses for the read itself. It is not applied here because it changes the port, and

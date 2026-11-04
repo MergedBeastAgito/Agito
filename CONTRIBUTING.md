@@ -48,12 +48,12 @@ browser belongs in an ad-hoc run under `.hermes/tools/`, not in the gate.
 
 One convention, everywhere in the tree: folders, files, identifiers and prose.
 
-| Kind       | Rule                                                                   | Example                                                 |
-| ---------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
-| Folder     | PascalCase when it names a role; lowercase where a tool fixes it       | `Crate/BrowserCDP/Source`, `scenarios/`                  |
-| File       | PascalCase, one concept per file                                       | `Port.rs`, `Library.rs`, `Scope.md`                     |
-| Acronym    | fully uppercase, in names and prose                                    | `CLI`, `URL`, `API`, `JSON`, `CDP`                      |
-| Identifier | PascalCase for types and values; camelCase for locals                  | `CDPClient`, `cdpValue`                                 |
+| Kind       | Rule                                                             | Example                                 |
+| ---------- | ---------------------------------------------------------------- | --------------------------------------- |
+| Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/BrowserCDP/Source`, `scenarios/` |
+| File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`     |
+| Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`      |
+| Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                 |
 
 A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a file or crate named after one
 keeps it - `BrowserCDP`, `CDPSession`.

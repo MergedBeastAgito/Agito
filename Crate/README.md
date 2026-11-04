@@ -1,9 +1,10 @@
 # Rust workspace
 
-Seven crates: the port shapes and the failure classification this workspace settled on, and now the
+Eight crates: the port shapes and the failure classification this workspace settled on, and now the
 only statement of them. The TypeScript packages they were ported from were deleted once the page
-expressions were compiled at build time and every scenario was answered here - `Documentation/Parity.md`
-records what the comparison established while it existed, and what replaced it.
+expressions were compiled at build time and every scenario was answered here -
+`Documentation/Parity.md` records what the comparison established while it existed, and what
+replaced it.
 
 The layout follows the house style of `github.com/PlayForm/Run`: one directory per crate under
 `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and
@@ -32,6 +33,12 @@ offline once the crates are fetched.
 engine (admission, leases with a fence, per-run budgets, release that never fails). Dependencies:
 none. An optional `tokio` feature adds a `Pace` implementation and is off by default.
 
+**`agentic-spacetime-catalog`** - `Crate/SpacetimeCatalog/`, library `AgenticSpacetimeCatalog`. The
+database model as data and rules: six tables described as records, seven reducers over a five-member
+`Context`, and the three refusal codes a module's manifest declares. Dependencies: none - not the
+server SDK, not a serialiser, not the runtime, because a rule is what a module has to satisfy rather
+than a client for one.
+
 **`agentic-skill-contract`** - `Crate/SkillContract/`. Corpus discovery, validation and a stable
 digest. Dependencies: `agentic-runtime`, `serde`, `serde_json`, `sha2`.
 
@@ -59,9 +66,9 @@ six above, `clap`, `tokio`, `serde_json`.
 ## The two rules the dependency graph enforces
 
 **A capability's required surface is runtime-neutral.** `agentic-chat-driver`,
-`agentic-skill-contract` and `agentic-design-verification` do not name `tokio` in their dependency
-lists, and nothing they pull in resolves it. Time arrives as a `Call` (a deadline and a
-cancellation) and a `Pace` (a clock and a wait) supplied by the composition root.
+`agentic-skill-contract`, `agentic-design-verification` and `agentic-spacetime-catalog` do not name
+`tokio` in their dependency lists, and nothing they pull in resolves it. Time arrives as a `Call` (a
+deadline and a cancellation) and a `Pace` (a clock and a wait) supplied by the composition root.
 
 **No capability imports an adapter.** `agentic-chat-driver` declares its own `Page` trait and
 `agentic-design-verification` its own `Browse`; `agentic-workflow` owns the bindings that implement
@@ -75,7 +82,7 @@ Both are checkable, and the checks are the first two commands below.
 ## Verification
 
 ```
-cargo test --workspace                                   # 206 tests, no browser, no network
+cargo test --workspace                                   # 240 tests, no browser, no network
 cargo run -p agentic -- --help                           # the composition root's commands
 cargo tree -p agentic-chat-driver | grep -c tokio         # 0
 cargo tree -p agentic-chat-driver | grep -c browser       # 0

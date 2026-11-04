@@ -1,0 +1,43 @@
+# What Prettier does not format, and why each entry is here rather than being a
+# gap someone fills later.
+#
+# The rule this file implements: one formatter per file type. A file that two
+# formatters claim is a file that is unformatted by both, because each undoes the
+# other on the next save.
+
+# Rust is rustfmt's, configured by rustfmt.toml at the root.
+*.rs
+
+# The compiled-script sources are inputs pinned to what a page received.
+# `Crate/ChatDriver/Test/Fixture/Expression.json` records the exact bytes, and a
+# test compares the compiled output against it - so reformatting these files
+# changes the thing under test. The test's own doc calls itself "the assertion
+# that rules out a formatter"; leaving prettier in scope would make that
+# assertion fire on every run, and re-recording the fixture instead would make it
+# tautological.
+Crate/*/Source/Script/
+
+# TOML has its own layout rules and rustfmt/prettier disagree about arrays.
+*.toml
+
+# Lockfiles are generated; reformatting them is a diff with no meaning.
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+Cargo.lock
+
+# Build output and installed dependencies.
+Target/
+**/Target/
+node_modules/
+**/node_modules/
+
+# The record: research captures, review bundles and the tooling that made them.
+# Formatting a capture changes what the page said.
+.hermes/
+
+# Generated or vendored trees, if either appears later.
+**/Generated/
+**/.generated/
+**/gen/
+vendor/

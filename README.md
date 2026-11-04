@@ -8,15 +8,15 @@ product consumes this workspace and supplies its own composition root.
 
 ## The shape of it
 
-One tree and one specification. `Crate/` is a Cargo workspace of seven crates: the specification and
+One tree and one specification. `Crate/` is a Cargo workspace of eight crates: the specification and
 the implementation are the same artifact, and the scenarios under `scenarios/` are the evidence that
 each crate answers the contract its file states. `Documentation/` records the decisions the tree
 makes and why.
 
-There used to be two trees. `Package/` held the same capabilities as TypeScript, `scenarios/` was one
-input both implementations answered to, and `Scripts/` was a Node gate over the pair. That layer was
-deleted once the browser expressions were compiled at build time and every scenario was answered by
-a crate. It was not a predecessor kept for reference: it was a second implementation of the same
+There used to be two trees. `Package/` held the same capabilities as TypeScript, `scenarios/` was
+one input both implementations answered to, and `Scripts/` was a Node gate over the pair. That layer
+was deleted once the browser expressions were compiled at build time and every scenario was answered
+by a crate. It was not a predecessor kept for reference: it was a second implementation of the same
 rules, a second toolchain and a second set of gates, and keeping it meant every behaviour had to be
 written twice before either side could be believed. What it established is recorded in
 `Documentation/Parity.md`; what it enforced is now a test in `Crate/Agentic/Test/`.
@@ -51,7 +51,7 @@ warm pool starts returning wrong answers quickly.
 
 ## Crate/
 
-A Cargo workspace of seven crates, in the house layout: one directory per crate under `Crate/`,
+A Cargo workspace of eight crates, in the house layout: one directory per crate under `Crate/`,
 `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and contracts,
 `Source/Script/` for the TypeScript compiled into the JavaScript sent to a page, PascalCase module
 names, and one `Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency
@@ -60,6 +60,8 @@ transpiled.
 
 - **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
   `Bound`/`Race` combinators, and the policy engine. No dependencies.
+- **`agentic-spacetime-catalog`** - the database model as data: six tables, seven rules, and no
+  dependency at all, not even the server SDK. No dependencies.
 - **`agentic-skill-contract`** - corpus discovery, validation and a stable digest.
 - **`agentic-chat-driver`** - `agentic.chat.ask` over a page it declares itself. No browser.
 - **`agentic-browser-cdp`** - the concrete substrate; the only crate that names `chromiumoxide`.
@@ -68,32 +70,33 @@ transpiled.
   composition that uses four capabilities.
 - **`agentic`** - wiring, the manifest table and the executable.
 
-**A capability's required surface stays runtime-neutral.** The three capability crates do not name
+**A capability's required surface stays runtime-neutral.** The four capability crates do not name
 `tokio` and nothing they pull in resolves it: time arrives as a `Call` (a deadline and a
 cancellation) and a `Pace` (a clock and a wait), both supplied by the composition root. **No
 capability imports an adapter**: each declares the trait it needs, and the workflow owns the
 bindings that implement them. Both rules are checkable with `cargo tree`, and both are checked by
 `Crate/Agentic/Test/Boundaries.rs`.
 
-The database catalogue has no crate yet. Its rules were the one capability whose TypeScript
-statement was the only statement of them, so deleting the layer retired it rather than ported it:
-`Documentation/Spacetime-Catalog.md` is what is left, it is prose, and
-`Documentation/Open-Questions.md` records the crate as owed.
+The database catalogue is a crate, `agentic-spacetime-catalog`: the six tables as data, the seven
+rules as functions over them, and the cases the TypeScript statement carried. It has no dependency
+at all - no server SDK, no serialiser, no runtime - because the rules are what a module has to
+satisfy rather than a client for one. `Documentation/Spacetime-Catalog.md` is the prose that says
+what the crate states, and it records where the two disagreed when the port was made.
 
 ---
 
 ## scenarios/
 
 One scenario file per capability, plus the timing files, read by the Rust parity suites. Each case
-states a fixture, a sequence of steps and the expected result, the ordered effect list and the number
-of reports. `Crate/BrowserCDP/Test/Parity.rs`, `Crate/ChatDriver/Test/Parity.rs` and
+states a fixture, a sequence of steps and the expected result, the ordered effect list and the
+number of reports. `Crate/BrowserCDP/Test/Parity.rs`, `Crate/ChatDriver/Test/Parity.rs` and
 `Crate/SkillContract/Test/Parity.rs` read them and answer them through scripted fakes, so
 `cargo test --workspace` is the whole of the scenario gate.
 
-`effects` is the protocol the implementation spoke, not its answer: every launch, attach, evaluation,
-write, send, release and report the fake observed, in order. A port that answers correctly by the
-wrong route fails. A case names the unit case that proves it in its `rust` field, and each parity
-suite refuses a case that names a test which does not exist.
+`effects` is the protocol the implementation spoke, not its answer: every launch, attach,
+evaluation, write, send, release and report the fake observed, in order. A port that answers
+correctly by the wrong route fails. A case names the unit case that proves it in its `rust` field,
+and each parity suite refuses a case that names a test which does not exist.
 
 These files used to be the input to a differential run: a Node referee drove the TypeScript packages
 in process, asked cargo for the Rust half, and compared the two observation files. That referee is

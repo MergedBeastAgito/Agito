@@ -1,37 +1,63 @@
 name: Publish
 
-concurrency:
-  # Under `workflow_run` github.ref is the default branch, not the tag - key the
-  # group on the triggering Build run's tag so a faster release can never cancel
-  # an in-flight publish of an older one.
-  group: Publish-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-
-# Publish runs only after Build.yml's run for the same tag completed successfully
-# (workflow_run chaining), and every checkout is pinned to that tag, so whatever
-# this workflow reads is exactly the code Build tested.
+# Publish proves a tagged release is still sound, and then stops.
 #
-# The crates.io namespace is NOT ours yet, so the publish job below is present
-# and refusing. Two guards hold it shut, and they are deliberately of different
-# kinds: `publish = false` in `[workspace.package]` travels with the tree and
-# makes cargo reject the command from any crate, while the input that would arm
-# the step defaults to false. A job that is absent gets re-added by the next
-# person; a job that is present and skipping says why.
+# It is chained off `Build` rather than off the tag itself. A second workflow on
+# `push: tags: [Agentic/v*]` would be a second release ceremony racing the first
+# over the same release and the same `SHA256SUMS.txt` - the exact collision
+# Build.yml's header rules out. `workflow_run` has no such problem: it fires
+# after the release pipeline has finished, and this workflow only reads.
+#
+# What runs here is the suite, against the commit Build built. What does NOT run
+# here is `cargo publish`: the crates.io namespace is not ours yet. The publish
+# job is present, named, and skipped - a job that is absent gets re-added by the
+# next person, while a job that is present and refusing says why in the one
+# place the next person will look.
+#
+# Three independent guards hold it shut, and none of them is "the workflow
+# remembers":
+#
+#   1. `publish = false` in `[workspace.package]`, inherited by every member via
+#      `publish.workspace = true`, so cargo itself refuses the command from any
+#      crate. Verified: `cargo publish --dry-run -p agentic` answers
+#      "`agentic` cannot be published."
+#   2. The `publish_for_real` input defaults to false, and the job's `if:` also
+#      requires `workflow_dispatch`, so no tag-driven run can reach it.
+#   3. This repository has no `CARGO_REGISTRY_TOKEN` secret, so the step has
+#      nothing to authenticate with even with the two above opened.
+#
+# Only guard 1 survives somebody rewriting this file, which is why it lives in
+# the manifest rather than here.
 on:
   workflow_dispatch:
     inputs:
-      publish_crates:
-        description: "Publish to crates.io. Refused while the namespace is not ours."
+      publish_for_real:
+        description: "Arm `cargo publish`. Refused: the crates.io namespace is not ours."
         type: boolean
         default: false
   workflow_run:
-    # This matches Build.yml's `name:` metadata, not its file name - a file name
-    # here silently never fires the event.
+    # Build.yml's `name:` metadata, not its file name - a file name here
+    # silently never fires the event. The event also only fires for runs of the
+    # default branch's copy of that workflow, so this file has to be merged
+    # before the first chained run can happen.
     workflows: ["Build"]
     types: [completed]
+
+concurrency:
+  # Under `workflow_run` github.ref is the default branch, not the tag, so the
+  # group is keyed on the triggering Build run's tag; a dispatch has no such tag
+  # and falls back to its own ref. Different tags therefore never displace each
+  # other - only a re-run of the same tag cancels the older attempt, which is
+  # what a re-run means.
+  group: Publish-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  # A declared ceiling, not a need: every job below narrows it to
+  # `contents: read`, so the effective grant on every path that can actually run
+  # is read-only. Declaring it here keeps an armed publish path from inheriting
+  # the repository default, whatever that happens to be.
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,27 +66,42 @@ env:
 jobs:
   Test:
     name: Test the tagged tree
-    # Only a SUCCESSFUL Build run that was triggered by an Agentic release tag may
-    # start this chain.
-    if:
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'Agentic/v')
+    # Two ways in, one bar: a Build run that concluded `success` on an
+    # `Agentic/v*` tag, or a manual dispatch. The dispatch arm is not a
+    # convenience - without it this job would be skipped on every dispatch (a
+    # dispatch has no `workflow_run` payload to read `conclusion` from) and the
+    # only thing a person could exercise by hand is the part that never runs.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'Agentic/v'))
     runs-on: ubuntu-latest
-    # Read-only: this job runs the suite against the tag and stops there.
     permissions:
+      # Scoped down from the workflow ceiling: this job reads the tree, runs the
+      # suite, and writes nothing anywhere.
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Pin to the exact tag Build ran - the suite must test the same code,
-          # not whatever the default branch happens to be at.
-          ref: ${{ github.event.workflow_run.head_branch }}
+          # The commit Build built, not "whatever the tag points at now": a moved
+          # tag would otherwise let this workflow certify code the release never
+          # contained. A dispatch has no run to read and falls back to the ref
+          # chosen in the UI.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
+      # `nightly` on purpose, and the same `nightly` Build.yml's matrix uses.
+      # There is no `rust-toolchain.toml` in this tree, so the pin that exists
+      # is the action SHA; testing the release with a different toolchain than
+      # the one that built it would be testing something else. If the toolchain
+      # ever needs to be reproducible rather than current, the fix is a
+      # `rust-toolchain.toml` in the tree, not a literal here.
       - name: Setup Rust (nightly, latest)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: nightly
 
+      # `.cargo/config.toml` puts the build directory at `Target` (capital), not
+      # the default `target`, so that is the path worth caching.
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -71,34 +112,63 @@ jobs:
           key: cargo-publish-test-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: cargo-publish-test-${{ runner.os }}-
 
+      # No browser is launched: every port in these suites is a fake, which is
+      # what makes the differential run reproducible on a bare runner.
       - name: cargo test
         run: cargo test --workspace --locked
+
+      # `agentic skills` reports findings and exits 0 - the corpus is data, not
+      # an assertion - so the gate reads the sentence rather than the status
+      # code, exactly as Check.yml does. A release whose shipped corpus the tool
+      # cannot parse has to fail here, where nothing has gone out yet.
+      - name: Skill corpus gate
+        run: |
+          set -euo pipefail
+          Output="$(cargo run --locked -p agentic --release -- skills Documentation/Skill)"
+          printf '%s\n' "${Output}"
+          if ! printf '%s\n' "${Output}" | grep -qF ', 0 finding(s),'; then
+            echo "::error::the skill corpus under Documentation/Skill has findings"
+            exit 1
+          fi
 
   Publish:
     name: Publish to crates.io
     needs: [Test]
-    # Present, named, and skipped. `!cancelled()` rather than the implicit
-    # "needs succeeded" so that the skipped Test job under a dispatch does not
-    # itself become the thing holding this job shut - the input and the manifest
-    # are, and both of them are readable.
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.publish_crates }}
+    # Skipped on every default path: a tag-driven run fails the `workflow_dispatch`
+    # test, and a dispatch leaves the input at its default of false.
+    #
+    # `needs.Test.result == 'success'` is spelled out rather than leaned on. An
+    # `if:` containing no status check function inherits an implicit `success()`,
+    # but the explicit form keeps the ordering requirement readable beside the
+    # input that is the actual gate - and it is what stops an armed dispatch from
+    # publishing over a failing suite.
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      inputs.publish_for_real &&
+      needs.Test.result == 'success'
     runs-on: ubuntu-latest
     permissions:
+      # Nothing here writes to the repository either; the crates.io token would
+      # be the only credential involved, and it does not exist.
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Rust (nightly, latest)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: nightly
 
-      # `cargo publish` is here on purpose and cannot run: `publish = false` in
-      # `[workspace.package]` is inherited by every member, so cargo answers
-      # "`agentic` cannot be published" even with the input above set to true.
-      # That is the guard that survives somebody editing this file.
+      # The step is here on purpose, and it cannot run today. `cargo publish`
+      # answers "`agentic` cannot be published" because `publish = false` in
+      # `[workspace.package]` is inherited by every member - even with the input
+      # above armed - and no `CARGO_REGISTRY_TOKEN` secret exists to authenticate
+      # with. When the crates.io namespace becomes ours, the manifest key is the
+      # thing to change and this comment is the thing to delete. Do not delete
+      # the step: a publish job with no publish step is a job that reads as
+      # finished work.
       - name: Publish to crates.io (refused while the namespace is not ours)
         run: cargo publish -p agentic --locked
         env:

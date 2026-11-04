@@ -43,7 +43,8 @@ env:
   # fails the release by name instead of quietly shrinking what "complete" means.
   # Do not generate this from the matrix.
   EXPECTED_TARGETS: >-
-    x86_64-unknown-linux-musl aarch64-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc
+    x86_64-unknown-linux-musl aarch64-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin
+    x86_64-pc-windows-msvc
 
 jobs:
   Release:
@@ -73,7 +74,27 @@ jobs:
               ;;
           esac
           Version="${GITHUB_REF_NAME#Agentic/v}"
-          ManifestVersion="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+          # Scoped to `[workspace.package]`, not `grep -m1 '^version ='`. The
+          # latter reads whichever `version` key comes first in the file, so a
+          # new table above `[workspace.package]` would silently release the
+          # wrong number. This stops at the first version line inside the table
+          # and nowhere else.
+          ManifestVersion="$(
+            awk '
+              /^\[/ { InSection = ($0 ~ /^\[workspace\.package\]$/) ; next }
+              InSection && /^version[[:space:]]*=/ {
+                Line = $0
+                sub(/^[^"]*"/, "", Line)
+                sub(/".*$/, "", Line)
+                print Line
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${ManifestVersion}" ]; then
+            echo "::error::could not read a version from [workspace.package] in Cargo.toml"
+            exit 1
+          fi
           if [ "${Version}" != "${ManifestVersion}" ]; then
             echo "::error::tag says ${Version} but [workspace.package] version is ${ManifestVersion}"
             exit 1
@@ -275,7 +296,16 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             Version="${GITHUB_REF_NAME#Agentic/v}"
           else
-            Version="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+            # Ask cargo rather than grepping the manifest: the version lives in
+            # `[workspace.package]`, and a text search would read whichever
+            # `version` key came first. This is the version of the package that
+            # was just built, which is the one the archive is named after.
+            Version="$(cargo metadata --no-deps --offline --format-version 1 \
+              | jq -r '.packages[] | select(.name == "agentic") | .version')"
+            if [ -z "${Version}" ]; then
+              echo "::error::cargo metadata reported no version for the agentic package"
+              exit 1
+            fi
           fi
           echo "version=${Version}" >> "${GITHUB_OUTPUT}"
           echo "packaging agentic ${Version} for ${{ matrix.target }}"
@@ -458,6 +488,41 @@ jobs:
         with:
           toolchain: nightly
 
+      # The crate set is declared from `cargo metadata` - the workspace's own
+      # answer - and written to a file that packaging, attaching and the final
+      # asset assertion all read. Deriving the set from `dist/*.crate` instead
+      # would make "whatever packaging managed to produce" the definition of
+      # complete: a crate that silently stopped packaging would vanish from both
+      # sides of the comparison and the release would still look whole.
+      #
+      # Runs before anything is packaged, so the declaration cannot be
+      # influenced by packaging output.
+      - name: Declare the expected crates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | "\(.name) \(.version) \(.manifest_path)"' \
+            | LC_ALL=C sort > "${RUNNER_TEMP}/crates.txt"
+          if [ ! -s "${RUNNER_TEMP}/crates.txt" ]; then
+            echo "::error::cargo metadata reported no packages"
+            exit 1
+          fi
+          cat "${RUNNER_TEMP}/crates.txt"
+          # Every member must carry the version the tag names: a member left
+          # behind at the previous version ships a `.crate` that cannot resolve
+          # its siblings from this release.
+          awk -v Want="${VERSION}" '
+            $2 != Want { printf "::error::%s is %s but the release is %s\n", $1, $2, Want ; Bad = 1 }
+            END { exit(Bad ? 1 : 0) }
+          ' "${RUNNER_TEMP}/crates.txt"
+          awk -v Want="${VERSION}" '{ print $1 "-" Want ".crate" }' \
+            "${RUNNER_TEMP}/crates.txt" > "${RUNNER_TEMP}/expected-crates.txt"
+          cat "${RUNNER_TEMP}/expected-crates.txt"
+          # A word list for the read-back step, which compares names rather than
+          # iterating a file. The file stays the source; this is a copy of it.
+          echo "EXPECTED_CRATES=$(tr '\n' ' ' < "${RUNNER_TEMP}/expected-crates.txt")" >> "${GITHUB_ENV}"
+
       # Not on crates.io: the `.crate` files are how a consumer gets one crate's
       # packaged source without a registry. Two things stand between this tree
       # and a `.crate`, and both are answered here rather than by publishing:
@@ -472,7 +537,8 @@ jobs:
       #
       # `--no-verify` because the tree was already built per target above;
       # `--allow-dirty` because packaging writes build output the next package
-      # then sees.
+      # then sees; `--locked` so a lockfile that no longer matches the manifests
+      # fails here too instead of packaging a different tree.
       - name: Package every crate
         shell: bash
         run: |
@@ -484,12 +550,30 @@ jobs:
               | jq -r '.packages[] | "\(.name) = { path = \"\(.manifest_path | sub("/Cargo.toml$"; ""))\" }"'
           } > "${Patch}"
           cat "${Patch}"
-          for Manifest in Crate/*/Cargo.toml; do
+          # `Target/package` holds a previous run's crates whenever the build
+          # directory survived - a restored cache, a local rehearsal. A bare
+          # `cp Target/package/*.crate` would then attach a second version's
+          # crates beside this one's, so the directory starts empty and only the
+          # declared names are copied out.
+          rm -rf Target/package
+          awk '{ print $3 }' "${RUNNER_TEMP}/crates.txt" | while IFS= read -r Manifest; do
             echo "::group::cargo package ${Manifest}"
-            cargo --config "${Patch}" package --no-verify --allow-dirty --manifest-path "${Manifest}"
+            cargo --config "${Patch}" package --no-verify --allow-dirty --locked \
+              --manifest-path "${Manifest}"
             echo "::endgroup::"
           done
-          cp Target/package/*.crate dist/
+          Missing=0
+          while IFS= read -r Crate; do
+            if [ -f "Target/package/${Crate}" ]; then
+              cp "Target/package/${Crate}" dist/
+            else
+              echo "::error::cargo package produced no ${Crate}"
+              Missing=1
+            fi
+          done < "${RUNNER_TEMP}/expected-crates.txt"
+          if [ "${Missing}" -ne 0 ]; then
+            exit 1
+          fi
           ls -l dist/*.crate
 
       # The offline path: `cargo vendor` plus the source-replacement block it
@@ -570,19 +654,38 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          Files=(
-            dist/*.crate
-            dist/agentic-*-source.tar.gz
-            dist/agentic-*-vendor.tar.gz
-            dist/agentic-skills-*.tar.gz
-            dist/SHA256SUMS.txt
-          )
-          # Seven crates, the source tree, the vendor tree, the skill corpus and
-          # the merged list: a glob that silently matched fewer is a release that
-          # looks complete and is not.
-          if [ "${#Files[@]}" -lt 11 ]; then
-            echo "::error::expected at least 11 packaging assets, matched ${#Files[@]}"
+          Files=()
+          Missing=0
+          # One `.crate` per crate the workspace declares - by name, from the
+          # declaration written before packaging ran. A glob here would match
+          # whatever happened to be in `dist/`, which is exactly the set this
+          # step is supposed to be checking rather than trusting.
+          while IFS= read -r Crate; do
+            if [ -f "dist/${Crate}" ]; then
+              Files+=("dist/${Crate}")
+            else
+              echo "::error::missing packaging asset: ${Crate}"
+              Missing=1
+            fi
+          done < "${RUNNER_TEMP}/expected-crates.txt"
+          for File in \
+            "agentic-${VERSION}-source.tar.gz" \
+            "agentic-${VERSION}-vendor.tar.gz" \
+            "agentic-skills-${VERSION}.tar.gz" \
+            "SHA256SUMS.txt"; do
+            if [ -f "dist/${File}" ]; then
+              Files+=("dist/${File}")
+            else
+              echo "::error::missing packaging asset: ${File}"
+              Missing=1
+            fi
+          done
+          if [ "${Missing}" -ne 0 ]; then
+            exit 1
+          fi
+          Declared=$(( $(wc -l < "${RUNNER_TEMP}/expected-crates.txt") + 4 ))
+          if [ "${#Files[@]}" -ne "${Declared}" ]; then
+            echo "::error::declared ${Declared} packaging assets, collected ${#Files[@]}"
             exit 1
           fi
           printf '%s\n' "${Files[@]}"
@@ -590,8 +693,10 @@ jobs:
 
       # Gate two: read the release back. The asset set must contain every
       # expected name, and every expected file must have an entry in the merged
-      # checksum list. The expected list is built from the independent target
-      # declaration, not from the matrix, so a deleted leg fails by name.
+      # checksum list. Two independent declarations drive it - the target list
+      # from the workflow `env` and the crate list from `cargo metadata` - and
+      # neither is derived from the matrix or from packaging output, so a
+      # deleted leg or a crate that stopped packaging fails by name.
       #
       # This runs while the release is still a DRAFT on purpose: publishing is
       # what makes the asset set final, so an incomplete set has to be caught
@@ -610,8 +715,8 @@ jobs:
               esac
               printf 'SHA256SUMS-%s.txt\n' "${Target}"
             done
-            for Crate in dist/*.crate; do
-              basename "${Crate}"
+            for Crate in ${EXPECTED_CRATES}; do
+              printf '%s\n' "${Crate}"
             done
             printf 'agentic-%s-source.tar.gz\n' "${VERSION}"
             printf 'agentic-%s-vendor.tar.gz\n' "${VERSION}"

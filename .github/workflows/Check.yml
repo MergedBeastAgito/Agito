@@ -2,7 +2,8 @@ name: Check
 
 # One job per concern: a formatting slip, a clippy lint and a failing test are
 # three different answers, and a single job stops at the first one and hides the
-# other two behind it.
+# other two behind it. Five jobs also means five caches, so a re-push re-uses
+# the compiled dependencies of the job it is actually waiting on.
 concurrency:
   group: Check-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -13,7 +14,6 @@ permissions:
 on:
   push:
   pull_request:
-  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,19 +23,18 @@ jobs:
   Check:
     name: cargo check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # `rustfmt.toml` at the repository root is what makes the format gate
-      # meaningful: the house style is tabs, `space_after_colon = false`,
-      # `imports_granularity`, `format_strings` and the rest, and stable rustfmt
-      # drops the unstable options silently instead of failing. Nightly is
-      # therefore the toolchain in every job here.
-      - name: Setup Rust (nightly, latest)
+      # Stable, not nightly: `rust-version = "1.88"` in the workspace manifest
+      # is a promise the tree builds on stable, and a gate that needs nightly to
+      # honour it is not checking that promise. The one exception is the format
+      # job below, whose formatter options only exist on nightly.
+      - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
-          toolchain: nightly
-          components: rustfmt, clippy
+          toolchain: stable
 
       # `.cargo/config.toml` puts the build directory at `Target` (capital), not
       # the default `target`, so that is the path worth caching.
@@ -57,14 +56,15 @@ jobs:
   Clippy:
     name: cargo clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Rust (nightly, latest)
+      - name: Setup Rust (stable, clippy)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
-          toolchain: nightly
-          components: rustfmt, clippy
+          toolchain: stable
+          components: clippy
 
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -78,23 +78,28 @@ jobs:
 
       # `--all-targets` on purpose: the differential suites under `Crate/*/Test/`
       # are where the fakes live, and a lint that only sees the libraries would
-      # let them rot.
+      # let them rot. `-D warnings` because a warning nobody has to fix is a
+      # warning everybody learns to ignore.
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   Format:
     name: cargo fmt --check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Pinned to the nightly that formatted the tree, and deliberately not
-      # `nightly`: rustfmt's output moves between nightlies, so an unpinned
-      # format gate goes red on an unrelated push the day the formatter changes
-      # its mind. `rustfmt.toml` at the repository root is the other half of the
-      # pin - it carries the house style into CI, which has no parent directory
-      # to inherit it from, and the two together are what make this job
-      # reproducible rather than a coin flip.
+      # Nightly here and nowhere else, because `rustfmt.toml` at the repository
+      # root is the house style and most of it is nightly-only: `hard_tabs`,
+      # `space_after_colon`, `imports_granularity`, `group_imports`,
+      # `format_strings` and twenty-odd more. Stable rustfmt does not fail on
+      # them - it warns `unstable features are only available in nightly` and
+      # formats with the defaults instead, which on this tree means 798 diffs
+      # and a red gate on every push. Pinned to a date rather than `nightly`
+      # for the other half of the problem: rustfmt's output moves between
+      # nightlies, so a floating pin goes red on an unrelated push the day the
+      # formatter changes its mind.
       - name: Setup Rust (nightly, pinned to the formatter)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
@@ -107,14 +112,14 @@ jobs:
   Test:
     name: cargo test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Rust (nightly, latest)
+      - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
-          toolchain: nightly
-          components: rustfmt, clippy
+          toolchain: stable
 
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -134,14 +139,14 @@ jobs:
   Skills:
     name: skill corpus gate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Rust (nightly, latest)
+      - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
-          toolchain: nightly
-          components: rustfmt, clippy
+          toolchain: stable
 
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -153,13 +158,21 @@ jobs:
           key: cargo-skills-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: cargo-skills-${{ runner.os }}-
 
+      # The gate command itself carries no `--locked`, so the lock file is
+      # checked here instead: `cargo run` would otherwise rewrite a stale
+      # `Cargo.lock` in the workspace and report success.
+      - name: cargo fetch (lock file must be current)
+        run: cargo fetch --locked
+
       # `agentic skills` reports findings and exits 0 - the corpus is data, not
       # an assertion - so the gate reads the sentence rather than the status
-      # code. A finding has to fail the push, not annotate it.
+      # code. The pattern carries both commas on purpose: `0 finding(s)` alone
+      # would also match `10 finding(s)`, which is the case this gate exists
+      # to catch.
       - name: Skill corpus gate
         run: |
           set -euo pipefail
-          Output="$(cargo run --locked -p agentic --release -- skills Documentation/Skill)"
+          Output="$(cargo run -p agentic --release -- skills Documentation/Skill)"
           printf '%s\n' "${Output}"
           if ! printf '%s\n' "${Output}" | grep -qF ', 0 finding(s),'; then
             echo "::error::the skill corpus under Documentation/Skill has findings"

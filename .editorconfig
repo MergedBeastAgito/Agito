@@ -23,9 +23,10 @@ indent_size = 2
 indent_style = tab
 indent_size = 4
 
-# The Rust tree is tab-indented too, and by hand: there is no `rustfmt.toml`
-# setting `hard_tabs`, so `cargo fmt` would rewrite every crate to four spaces.
-# The editor follows the tree rather than the tool's default.
+# The Rust tree is tab-indented, and now the tool agrees: `rustfmt.toml` sets
+# `hard_tabs = true`, adopted from the sibling Aphrodite tree. The editor entry
+# below is here so a file opened before rustfmt runs already looks like its
+# neighbours.
 [*.rs]
 indent_style = tab
 indent_size = 4
