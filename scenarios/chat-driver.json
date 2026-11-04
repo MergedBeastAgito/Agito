@@ -1,5 +1,5 @@
 {
-	"$comment": "The differential scenarios for `agentic.chat.ask`. One file, read by both implementations: `scenarios/lib/chat.mjs` drives `Package/chat-driver`, `Crate/ChatDriver/Test/Parity.rs` drives the Rust port, and both answer the same `expect` block. `effects` is the ordered list of what the fake page observed - the protocol the implementation spoke - so an implementation that returns the right value by the wrong route fails. Trace and source objects are written with their keys in alphabetical order, because the Rust half serialises a `serde_json` map and the two observation files have to be comparable as text. See `Documentation/Parity.md` for the case map.",
+	"$comment": "The scenarios for `agentic.chat.ask`, and the only statement of the contract the chat driver is held to. `Crate/ChatDriver/Test/Parity.rs` reads this file and `generated/chat-driver.timing.json`, drives the port through a scripted page, and asserts each case's `expect` block. `effects` is the ordered list of what the fake page observed - the protocol the implementation spoke - so a port that returns the right value by the wrong route fails. Trace and source objects are written with their keys in alphabetical order, which is the order `serde_json`'s map serialises, so the file reads the way the port reports. A case's `rust` names the unit case in `Crate/ChatDriver/Test/Chat.rs` that proves it; a case whose rule only the fake can express says so in `scenario-only`; and `Parity.rs` refuses a case that names a test which does not exist. `Documentation/Parity.md` says what this file establishes and what it does not.",
 	"capability": "agentic.chat.ask",
 	"version": 1,
 	"fixture": {
@@ -50,10 +50,9 @@
 	"cases": [
 		{
 			"id": "port-declares-its-errors",
-			"typescript": "the port declares exactly the errors the manifest promises",
 			"rust": "the_port_declares_exactly_the_errors_the_manifest_promises",
-			"skip": ["typescript", "rust"],
-			"unported": "The scenario format has one vocabulary for what a call did - an answer, an error, a void - and no step for reading a package's own module.json. The case asserts that the four codes a package declares are the four its manifest names; there is no page to open and no question to ask, so the scenario run skips it on both sides. Both suites keep the equivalent assertion.",
+			"skip": ["rust"],
+			"unported": "The scenario format has one vocabulary for what a call did - an answer, an error, a void - and no step for reading a module's own module.json. The case asserts that the four codes the driver declares are the four its manifest names; there is no page to open and no question to ask, so the scenario run skips it. `Crate/ChatDriver/Test/Chat.rs` keeps the assertion, and `agentic verify --module @agentic/chat-driver` reports it.",
 			"steps": [],
 			"expect": {
 				"result": {
@@ -65,7 +64,6 @@
 		},
 		{
 			"id": "answer-trace-sources",
-			"typescript": "returns the answer, its trace and its sources",
 			"rust": "returns_the_answer_its_trace_and_its_sources",
 			"steps": [
 				{
@@ -143,7 +141,6 @@
 		},
 		{
 			"id": "open-and-release",
-			"typescript": "opens the configured page and disposes the target once",
 			"rust": "opens_the_configured_page_and_disposes_the_target_once",
 			"steps": [
 				{
@@ -181,7 +178,6 @@
 		},
 		{
 			"id": "mode-press",
-			"typescript": "presses the toggle when the composer is not in search mode",
 			"rust": "presses_the_toggle_when_the_composer_is_not_in_search_mode",
 			"steps": [
 				{
@@ -227,7 +223,6 @@
 		},
 		{
 			"id": "mode-stuck",
-			"typescript": "refuses with wrong-mode and sends nothing when the toggle never reads search",
 			"rust": "refuses_with_wrong_mode_and_sends_nothing_when_the_toggle_never_reads_search",
 			"steps": [
 				{
@@ -261,7 +256,6 @@
 		},
 		{
 			"id": "mode-question-unsupported",
-			"typescript": "refuses a question that asks for a mode this port does not offer",
 			"rust": "refuses_a_question_that_asks_for_a_mode_this_port_does_not_offer",
 			"steps": [
 				{
@@ -288,7 +282,6 @@
 		},
 		{
 			"id": "model-wrong",
-			"typescript": "refuses with wrong-model and sends nothing when the page is set to another model",
 			"rust": "refuses_with_wrong_model_and_sends_nothing",
 			"steps": [
 				{
@@ -320,7 +313,6 @@
 		},
 		{
 			"id": "model-normalised",
-			"typescript": "matches the label across case and whitespace, and reports what it read",
 			"rust": "matches_the_label_across_case_and_whitespace_and_reports_what_it_read",
 			"steps": [
 				{
@@ -363,7 +355,6 @@
 		},
 		{
 			"id": "answer-streams-then-settles",
-			"typescript": "returns the last text of an answer that stops changing",
 			"rust": "returns_the_last_text_of_an_answer_that_stops_changing",
 			"steps": [
 				{
@@ -426,7 +417,6 @@
 		},
 		{
 			"id": "answer-new-turn-only",
-			"typescript": "reads the answer this question caused, not the one already in the thread",
 			"rust": "reads_the_answer_this_question_caused_not_the_one_already_in_the_thread",
 			"steps": [
 				{
@@ -478,7 +468,6 @@
 		},
 		{
 			"id": "answer-this-turn-trace",
-			"typescript": "reads the steps and sources of this turn, not the earlier turn's",
 			"rust": "reads_the_steps_and_sources_of_this_turn",
 			"steps": [
 				{
@@ -569,7 +558,6 @@
 		},
 		{
 			"id": "answer-never-settles",
-			"typescript": "refuses with not-ready when the answer never stops changing",
 			"rust": "refuses_with_not_ready_when_the_answer_never_stops_changing",
 			"steps": [
 				{
@@ -599,8 +587,8 @@
 		},
 		{
 			"id": "answer-hangs",
-			"typescript": "does not wait for ever on a page that ignores its deadline",
 			"rust": null,
+			"scenario-only": "`Test/Chat.rs` has no page that hangs, so no unit case can prove this; the parity fake does, and the scenario is the only place the rule is exercised.",
 			"steps": [
 				{
 					"op": "ask"
@@ -630,13 +618,12 @@
 					"evaluate:mode",
 					"release:https://chat.example.test/"
 				],
-				"note": "The two ports word this failure differently - TypeScript's message names the deadline, Rust's names the page - so the scenario asserts the code and the observation, which is what the port promises.",
+				"note": "The message is asserted as a substring, not as a whole sentence: the code and the observation are the contract, and the sentence is the port's own wording - pinning it would make a rewording look like a change in behaviour.",
 				"reports": 0
 			}
 		},
 		{
 			"id": "answer-collapsed",
-			"typescript": "refuses with truncated when the answer hides behind a Read more control",
 			"rust": "refuses_with_truncated_when_the_answer_hides_behind_a_read_more_control",
 			"steps": [
 				{
@@ -687,7 +674,6 @@
 		},
 		{
 			"id": "open-fails",
-			"typescript": "reports not-ready when the page cannot be opened",
 			"rust": "reports_not_ready_when_the_page_cannot_be_opened",
 			"steps": [
 				{
@@ -715,8 +701,8 @@
 		},
 		{
 			"id": "open-hangs",
-			"typescript": "does not wait for ever on a page that never opens",
 			"rust": null,
+			"scenario-only": "`Test/Chat.rs` has no page that never opens, so no unit case can prove this; the parity fake does, and the scenario is the only place the rule is exercised.",
 			"steps": [
 				{
 					"op": "ask"
@@ -746,7 +732,6 @@
 		},
 		{
 			"id": "evaluate-fails",
-			"typescript": "reports not-ready when the page fails while it is being read",
 			"rust": "reports_not_ready_when_the_page_fails_while_it_is_being_read",
 			"steps": [
 				{
@@ -777,7 +762,6 @@
 		},
 		{
 			"id": "submit-disabled",
-			"typescript": "refuses to press a send control that never enables",
 			"rust": "refuses_to_press_a_send_control_that_never_enables",
 			"steps": [
 				{
@@ -813,7 +797,6 @@
 		},
 		{
 			"id": "signal-aborted-before-open",
-			"typescript": "reports not-ready before opening anything when the signal already fired",
 			"rust": "reports_not_ready_before_opening_anything_when_the_signal_already_fired",
 			"steps": [
 				{
@@ -841,7 +824,6 @@
 		},
 		{
 			"id": "answer-cancelled",
-			"typescript": "reports not-ready when the caller gives up while the answer is arriving",
 			"rust": "reports_not_ready_when_the_caller_gives_up_while_the_answer_is_arriving",
 			"steps": [
 				{
@@ -885,7 +867,6 @@
 		},
 		{
 			"id": "release-hangs",
-			"typescript": "reports a release that hangs instead of waiting for it",
 			"rust": "reports_a_release_that_hangs_instead_of_waiting_for_it",
 			"steps": [
 				{
@@ -935,7 +916,6 @@
 		},
 		{
 			"id": "mode-not-text",
-			"typescript": "refuses a mode that is not text with wrong-mode, and sends nothing",
 			"rust": "refuses_a_mode_that_is_not_text_with_wrong_mode_and_sends_nothing",
 			"steps": [
 				{
@@ -968,7 +948,6 @@
 		},
 		{
 			"id": "answers-not-a-thread",
-			"typescript": "refuses a thread read that is not a thread with not-ready",
 			"rust": "refuses_a_thread_read_that_is_not_a_thread",
 			"steps": [
 				{
@@ -1012,7 +991,6 @@
 		},
 		{
 			"id": "trace-not-a-list",
-			"typescript": "refuses a trace that is not a list of steps with not-ready",
 			"rust": "refuses_a_trace_that_is_not_a_list_of_steps",
 			"steps": [
 				{
@@ -1054,7 +1032,6 @@
 		},
 		{
 			"id": "sources-not-a-list",
-			"typescript": "refuses sources that are not a list with not-ready",
 			"rust": "refuses_sources_that_are_not_a_list",
 			"steps": [
 				{
@@ -1097,10 +1074,9 @@
 		},
 		{
 			"id": "options-absent",
-			"typescript": "refuses a call with no options as not-ready, not a TypeError",
 			"rust": null,
-			"skip": ["typescript", "rust"],
-			"unported": "The case passes `undefined` where the TypeScript port declares an `OperationOptions`, and asserts that the driver's own guard turns the missing budget into `not-ready` rather than a `TypeError`. Rust has no `undefined`: a `Call` is a value the caller must construct, so there is no hole to fall into and nothing to prove. The scenario run skips it on both sides; `Chat.test.ts` is where it is proved.",
+			"skip": ["rust"],
+			"unported": "The case passed `undefined` where the deleted TypeScript port declared an `OperationOptions`, and asserted that the driver's own guard turned the missing budget into `not-ready` rather than a `TypeError`. Rust has no `undefined`: a `Call` is a value the caller must construct, so there is no hole to fall into and nothing to prove. Nothing executes this case now - it stays as the record of a hole the type system closes - and the scenario run skips it.",
 			"steps": [],
 			"expect": {
 				"result": {
@@ -1112,10 +1088,9 @@
 		},
 		{
 			"id": "question-absent",
-			"typescript": "refuses a call with no question as not-ready, not a TypeError",
 			"rust": null,
-			"skip": ["typescript", "rust"],
-			"unported": "The case passes `undefined` where the TypeScript port declares a `Question`, and asserts the port's four-code contract survives a caller that is not a type checker. Rust's `Question` is a struct with no absent value, so the case has no counterpart. The scenario run skips it on both sides; `Chat.test.ts` is where it is proved.",
+			"skip": ["rust"],
+			"unported": "The case passed `undefined` where the deleted TypeScript port declared a `Question`, and asserted the port's four-code contract survived a caller that is not a type checker. Rust's `Question` is a struct with no absent value, so the case has no counterpart. Nothing executes it now - it stays as the record of a hole the type system closes - and the scenario run skips it.",
 			"steps": [],
 			"expect": {
 				"result": {

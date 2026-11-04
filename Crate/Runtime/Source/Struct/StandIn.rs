@@ -17,10 +17,11 @@
 //!
 //! # The decision, and its mirror
 //!
-//! `Package/spacetime-catalog/Source/Reducers.ts` makes the same decision in
-//! `record`, over the same columns, and `Test/Destination.test.ts` there drives
-//! the same transcript to the same refusal. The correspondence is exact, column
-//! for column:
+//! The reducer this stand-in mirrors had a TypeScript statement - `record`,
+//! over the same columns, driven by the same transcript to the same refusal -
+//! and that statement was deleted with the TypeScript layer.
+//! `Documentation/Spacetime-Catalog.md` carries the rules in prose, and the
+//! correspondence below is what a crate for them would have to keep:
 //!
 //! | reducer                                   | stand-in                                  |
 //! | ----------------------------------------- | ----------------------------------------- |

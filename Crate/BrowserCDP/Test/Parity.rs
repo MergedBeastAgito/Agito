@@ -1,27 +1,24 @@
-//! The Rust side of the differential run for `agentic.browse`.
+//! The scenarios for `agentic.browse`, answered by the Rust port.
 //!
-//! These cases are not written here: they are read from
+//! The cases are not written here: they are read from two files -
 //! `scenarios/browser-cdp.json` and
-//! `scenarios/generated/browser-cdp.timing.json`, the same files
-//! `Package/browser-cdp/Test/Parity.test.ts` reads. What this file adds is only
-//! the fake, the interpreter and the assertion - the fixture, the steps, the
-//! expected result and the expected ordered effect list all come
-//! from the scenario files, so the two implementations cannot drift by being
-//! tested against two hand-written suites.
+//! `scenarios/generated/browser-cdp.timing.json`. What this file adds is the
+//! fake, the interpreter and the assertion - the fixture, the steps, the
+//! expected result and the expected ordered effect list all come from the
+//! scenario files, so the contract has one statement rather than two.
 //!
 //! `effects` is the protocol the implementation spoke: every launch, attach,
-//! evaluation and release the fake observed, in order. Two ports that returned
-//! the same value by different routes disagree here, which is the whole point.
+//! evaluation and release the fake observed, in order. A port that returned the
+//! right value by a different route disagrees here, which is the whole point.
 //!
-//! `Test/Browse.rs` is kept as it is: that suite is the contract, this one is
-//! the comparison. `AGENTIC_PARITY_OUT=<path>` makes this test also write what
-//! it observed as JSON, which is how `scenarios/run.mjs --compare` gets the
-//! Rust half of the differential run.
+//! `Test/Browse.rs` is the contract suite and this one is its interpreter:
+//! every case names the unit case that proves it in its `rust` field, and
+//! `every_scenario_names_a_case_the_rust_suite_has` refuses a case that names a
+//! test which does not exist.
 
 #![allow(non_snake_case, non_upper_case_globals)]
 
 use std::{
-	collections::BTreeMap,
 	sync::{
 		Arc,
 		Mutex,
@@ -44,7 +41,7 @@ use AgenticBrowserCDP::{
 	Transport,
 };
 use AgenticRuntime::{BlockOn, Call, Cancellation, Clock, FutureBox, Never, Pace, Signal};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 /// Where every observation the fake made is written, in order.
 type Effects = Arc<Mutex<Vec<String>>>;
@@ -581,11 +578,46 @@ fn mismatches(Observed:&Value, Expect:&Value) -> Vec<String> {
 	Wrong
 }
 
-/// Every scenario, against its expectation, with what was observed left behind
-/// for the differential run to compare against the TypeScript half.
+/// Every scenario names a case this crate's contract suite has, so a scenario
+/// cannot point at a test that was renamed away.
+///
+/// A case with no unit case of its own - a rule only the scenario's fake can
+/// express - says so in `scenario-only` rather than leaving the field null and
+/// the question open.
+#[test]
+fn every_scenario_names_a_case_the_rust_suite_has() {
+	let Contract = include_str!("../Test/Browse.rs");
+	for File in scenario_files() {
+		let Cases = File.get("cases").and_then(Value::as_array).cloned().unwrap_or_default();
+		for Entry in Cases {
+			if skipped_on_rust(&Entry) {
+				continue;
+			}
+			let Id = string_at(&Entry, &["id"]).unwrap_or_else(|| "<unnamed>".to_string());
+			match Entry.get("rust").and_then(Value::as_str) {
+				Some(Name) => {
+					assert!(
+						Contract.contains(&format!("fn {Name}(")),
+						"{Id} names a Rust case that does not exist: {Name}"
+					)
+				},
+				None => {
+					assert!(
+						Entry
+							.get("scenario-only")
+							.and_then(Value::as_str)
+							.is_some_and(|Reason| !Reason.trim().is_empty()),
+						"{Id} names no Rust case and gives no `scenario-only` reason"
+					)
+				},
+			}
+		}
+	}
+}
+
+/// Every scenario, against its expectation.
 #[test]
 fn every_scenario_agrees_with_its_expectation() {
-	let mut Observed:BTreeMap<String, Value> = BTreeMap::new();
 	let mut Wrong:Vec<String> = Vec::new();
 	let mut Seen = 0usize;
 
@@ -602,16 +634,8 @@ fn every_scenario_agrees_with_its_expectation() {
 			for Sentence in mismatches(&One, &Expect) {
 				Wrong.push(format!("{Id}: {Sentence}"));
 			}
-			Observed.insert(Id, One);
 			Seen += 1;
 		}
-	}
-
-	if let Ok(Path) = std::env::var("AGENTIC_PARITY_OUT") {
-		let Document =
-			serde_json::to_string_pretty(&Value::Object(Observed.clone().into_iter().collect::<Map<String, Value>>()))
-				.unwrap_or_default();
-		let _ = std::fs::write(Path, Document);
 	}
 
 	assert!(Seen > 0, "no scenario files were found");

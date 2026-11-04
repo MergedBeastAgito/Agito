@@ -240,12 +240,16 @@ the last two questions it was asked were never reached.
 
 **Asked:** the thread (`:281`), which makes this the precondition for its own recommendation.
 
-**Settle it with:** the suite it names - attach/launch, navigation races, evaluation timeout,
-disconnect, disposal, shared-browser ownership - run against the current TS transport and against
-`chromiumoxide` behind the proposed session API, comparing results per case.
+**Closed by the layer's removal.** The suite it names - attach/launch, navigation races, evaluation
+timeout, disconnect, disposal, shared-browser ownership - was answered by the Rust adapter through
+`Crate/BrowserCDP/Test/Browse.rs` and the browse scenarios, and then the TypeScript half was deleted.
+There is nothing left to compare against, so the question as written can no longer be run. What it
+was protecting is now a different question, and a live one: whether those cases are right, given
+that only one implementation asserts them (`Documentation/Parity.md` §What the differential run
+established, while it existed).
 
-**Blocks:** `agentic-browser-cdp` and the whole port. `Documentation/Rust.md` is written as if the
-backend decision is made; the capture makes it conditional on this run (`:226`).
+**Blocks:** nothing now. The backend decision it conditioned is made - `chromiumoxide` behind the
+session API - and `agentic-browser-cdp` is the crate that carries it.
 
 ## Q19 - How do the manifest fields map onto Rust?
 
@@ -263,16 +267,20 @@ property it exists for.
 
 **Asked:** the thread's question 5 (`:47`), asserted at `:58` but never specified.
 
-**Settle it with:** `cargo metadata --format-version 1`, walk the resolved dependency edges, and
-fail on any edge outside an allowlist - the Cargo analogue of `node Scripts/Boundaries.mjs`, which
-is what this workspace runs today.
+**Answered:** `Crate/Agentic/Test/Boundaries.rs`, which reads every crate's `module.json` for its kind
+and its `Cargo.toml` for its edges, and fails on an edge the design does not allow - a capability
+naming an adapter, an adapter naming another adapter, anything naming the composition root. It runs
+in `cargo test --workspace`, so the gate is the test job rather than a step somebody remembers. The
+`cargo metadata` walk this entry used to propose stays the stronger check if features ever make the
+declared edges and the resolved ones disagree; the declared edges are what a reviewer reads, and
+they are what the test holds.
 
 ```sh
-cargo metadata --format-version 1 --no-deps
+cargo test -p agentic --test Boundaries
 ```
 
-**Blocks:** the workspace CI, and `Documentation/Design.md`'s claim that the four layers are
-enforced rather than merely described.
+**Blocks:** nothing now. `Documentation/Design.md`'s claim that the four layers are enforced rather
+than merely described is what this test makes true.
 
 ## Q21 - Is the house style what the thread was told it is?
 
@@ -332,14 +340,15 @@ usable (`Documentation/Rust.md` §Still open 1).
 
 # What blocks the most work
 
-**Q18, Rust/TypeScript parity.** Everything in `Documentation/Rust.md` past the crate layout waits
-on it, and the thread's own recommendation is conditional on it. A failed parity run does not
-invalidate the port; it converts the sidecar from migration bridge to permanent component, which
-changes the crate count.
+**Q18, Rust/TypeScript parity.** No longer a question: the TypeScript half was deleted, so the
+comparison it names cannot be run. It is kept in the list above as the record of a precondition that
+the tree satisfied and then removed, and what replaces it is the narrower question in
+`Documentation/Parity.md` - whether the cases only the Rust side asserts are right.
 
-**Q19 and Q20, manifest mapping and the arrows check.** These are the two halves of the answer that
-was cut off. Without them the manifest is a JSON file nobody has mapped and the layering rule is a
-convention, which is exactly the state the Rust port exists to leave behind.
+**Q19 and Q20, manifest mapping and the arrows check.** These were the two halves of the answer that
+was cut off. Q20 is now answered by `Crate/Agentic/Test/Boundaries.rs`; Q19 - a serde struct that
+validates a manifest in CI - is still open, and without it the manifest is a JSON file nobody has
+mapped.
 
 **Q9 and Q10, transport identity.** If a transport can address a post by position, the browser
 port's signature is wrong, and it is wrong in a way that every capability above it inherits. This is
@@ -350,3 +359,35 @@ it the one to run first.
 in `research-575cb198.md` is implementable as written or only as a sketch. Nothing in this workspace
 depends on them yet, which is why they are last: the thread that produced them has no consumer in
 `Documentation/` today.
+
+---
+
+# Gates the TypeScript layer took with it
+
+The TypeScript packages, the scenario runners and the Node toolchain were deleted once the
+expressions were compiled at build time and the crates answered every scenario themselves. Four
+gates went with them. Each is recorded here with what it held and what holds it now, because a gate
+that disappears quietly is a property nobody notices losing.
+
+- **The feed bundler's determinism.** `Scripts/Feed.mjs` drove `.hermes/tools/bundle.mjs` over a
+  fixture and asserted that it splits, excludes and orders the same way twice. Both the tool and the
+  gate were Node. The tool stays - it is local tooling, not part of the build - and nothing holds
+  its determinism. **Owed:** a Rust gate over the bundler, or a decision that the bundler is not
+  worth one.
+
+- **The mutation suite.** `scenarios/mutate.mjs` applied five defects to both implementations'
+  sources and insisted both suites rejected each. Three of the five edited TypeScript files that no
+  longer exist. **Owed:** the five defects as a Rust-only harness, run by hand rather than from
+  inside `cargo test` - a test that rewrites its own sources and re-runs `cargo test` is a test that
+  can leave the tree mutated, and this working tree is swept into commits by an external process.
+  The five are named in `Documentation/Parity.md` with the test each must break.
+
+- **The markdown formatter.** `prettier --check` was the prose gate. **Decision:** no formatter
+  check on markdown. Prose is formatted by hand and by the editor's own settings, and a Rust
+  formatter for a house style this specific does not exist. `cargo fmt --check` remains the
+  formatting gate for the code.
+
+- **The catalogue's tests.** `Package/spacetime-catalog` held the database rules as data and 25
+  assertions over them, and no crate replaced it. **Owed:** `agentic-spacetime-catalog`, with the
+  rules as tables and the same cases. `Documentation/Spacetime-Catalog.md` is the statement of the
+  rules in the meantime, and it is prose, so nothing compiles it.

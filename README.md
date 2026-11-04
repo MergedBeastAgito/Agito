@@ -8,19 +8,33 @@ product consumes this workspace and supplies its own composition root.
 
 ## The shape of it
 
-Two trees and one specification. `Package/` states what each capability must do, in TypeScript that
-runs directly on Node. `Crate/` is the port of that specification into a Cargo workspace.
-`Documentation/` records the decisions the two share, `scenarios/` is the evidence that they agree,
-and `Scripts/` is the gate that keeps the arrows pointing inward.
+One tree and one specification. `Crate/` is a Cargo workspace of seven crates: the specification and
+the implementation are the same artifact, and the scenarios under `scenarios/` are the evidence that
+each crate answers the contract its file states. `Documentation/` records the decisions the tree
+makes and why.
+
+There used to be two trees. `Package/` held the same capabilities as TypeScript, `scenarios/` was one
+input both implementations answered to, and `Scripts/` was a Node gate over the pair. That layer was
+deleted once the browser expressions were compiled at build time and every scenario was answered by
+a crate. It was not a predecessor kept for reference: it was a second implementation of the same
+rules, a second toolchain and a second set of gates, and keeping it meant every behaviour had to be
+written twice before either side could be believed. What it established is recorded in
+`Documentation/Parity.md`; what it enforced is now a test in `Crate/Agentic/Test/`.
+
+The one TypeScript that remains is under `Crate/*/Source/Script/`: the expressions a driver sends to
+a page, compiled by that crate's `build.rs` into the JavaScript the page receives. That is not a
+second implementation - it is the page's own code, in the language the page runs, checked by a
+compiler instead of hidden inside a `format!` string.
 
 The arrows point inward and nothing imports a root. A capability may import its own port and data
 shapes; an adapter implements one port against one mechanism; a workflow composes capabilities; the
 composition root binds ports to adapters. A capability that imports an adapter is a defect rather
 than a shortcut: it makes the capability untestable without the provider, which is the one property
-this workspace exists to keep.
+this workspace exists to keep. `Crate/Agentic/Test/Boundaries.rs` holds that rule against every
+crate's manifest and dependency list, so it fails as a test rather than being a convention.
 
-Every package and every crate carries `module.json`. The field that does the most work is `state`,
-because it decides what a harness may warm and what it must revalidate at admission:
+Every crate carries `module.json`. The field that does the most work is `state`, because it decides
+what a harness may warm and what it must revalidate at admission:
 
 - **`stateless`** - nothing to check.
 - **`holds-transport`** - a liveness probe, because an open socket can be dead.
@@ -35,38 +49,14 @@ warm pool starts returning wrong answers quickly.
 
 ---
 
-## Package/
-
-Six TypeScript packages, one per capability, each with a port, the data shapes it names and a
-fake-based suite. They are the specification the Rust port mirrors: a change to a port or a failure
-code belongs here first, and `scenarios/` is what holds the other tree to it.
-
-- **`browser-cdp`** - the shared execution substrate: attach versus launch, bounded evaluation, and
-  disposal that closes only what it launched.
-- **`chat-driver`** - ask a chat product, correlate turns, verify mode and model, then read the
-  answer and its step trace.
-- **`design-verification`** - measure a built page and produce evidence; the expectations stay with
-  the consumer.
-- **`runtime`** - admission, leases with a fence, per-run budgets, cancellation, cleanup and
-  lifecycle telemetry.
-- **`skill-contract`** - discover, validate and package a skill corpus, with a stable digest.
-- **`spacetime-catalog`** - the database model as rules and table descriptions: capabilities,
-  generations, leases, probes, beliefs and trace.
-
-The suites are fake-based throughout. A page is a scripted responder, a browser is a scripted
-launcher, and a deadline passes because the test advanced a clock it owns. Nothing in this tree
-starts Chromium or opens a socket.
-
----
-
 ## Crate/
 
-The same specification as a Cargo workspace of seven crates, in the house layout: one directory per
-crate under `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/`
-for data and contracts, `Source/Script/` for the TypeScript compiled into the JavaScript sent to a
-page, PascalCase module names, and one `Target/` at the workspace root. `Crate/README.md` carries
-the per-crate dependency lists, and `Documentation/Script.md` says how a script is compiled and why
-it is erased rather than transpiled.
+A Cargo workspace of seven crates, in the house layout: one directory per crate under `Crate/`,
+`Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and contracts,
+`Source/Script/` for the TypeScript compiled into the JavaScript sent to a page, PascalCase module
+names, and one `Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency
+lists, and `Documentation/Script.md` says how a script is compiled and why it is erased rather than
+transpiled.
 
 - **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
   `Bound`/`Race` combinators, and the policy engine. No dependencies.
@@ -82,22 +72,74 @@ it is erased rather than transpiled.
 `tokio` and nothing they pull in resolves it: time arrives as a `Call` (a deadline and a
 cancellation) and a `Pace` (a clock and a wait), both supplied by the composition root. **No
 capability imports an adapter**: each declares the trait it needs, and the workflow owns the
-bindings that implement them. Both rules are checkable with `cargo tree`, and both are checked in
-`Crate/README.md`'s verification block.
+bindings that implement them. Both rules are checkable with `cargo tree`, and both are checked by
+`Crate/Agentic/Test/Boundaries.rs`.
 
-`Package/spacetime-catalog` has no crate yet. The port covers the five packages that carry a port;
-the catalogue is rules and table descriptions with nothing to execute, and a crate for it would be a
-shape the TypeScript side has not settled.
+The database catalogue has no crate yet. Its rules were the one capability whose TypeScript
+statement was the only statement of them, so deleting the layer retired it rather than ported it:
+`Documentation/Spacetime-Catalog.md` is what is left, it is prose, and
+`Documentation/Open-Questions.md` records the crate as owed.
 
 ---
 
 ## scenarios/
 
-One scenario file per capability, read by both implementations, with the ordered effect list each
-one produced. `node scenarios/run.mjs --compare` runs both sides and reports every disagreement;
-`scenarios/mutate.mjs` applies the mutations both suites must reject, so a green run is not merely a
-green run. `Documentation/Parity.md` says exactly what that evidence establishes and what it does
-not.
+One scenario file per capability, plus the timing files, read by the Rust parity suites. Each case
+states a fixture, a sequence of steps and the expected result, the ordered effect list and the number
+of reports. `Crate/BrowserCDP/Test/Parity.rs`, `Crate/ChatDriver/Test/Parity.rs` and
+`Crate/SkillContract/Test/Parity.rs` read them and answer them through scripted fakes, so
+`cargo test --workspace` is the whole of the scenario gate.
+
+`effects` is the protocol the implementation spoke, not its answer: every launch, attach, evaluation,
+write, send, release and report the fake observed, in order. A port that answers correctly by the
+wrong route fails. A case names the unit case that proves it in its `rust` field, and each parity
+suite refuses a case that names a test which does not exist.
+
+These files used to be the input to a differential run: a Node referee drove the TypeScript packages
+in process, asked cargo for the Rust half, and compared the two observation files. That referee is
+gone with the TypeScript side, and with it the claim that the two implementations agree.
+`Documentation/Parity.md` records what the comparison established while it existed and what replaced
+it - the Rust tests, which are now the only statement of the contract.
+
+---
+
+## The gates
+
+Two checks that used to be Node scripts are Rust tests, because a gate that lives in the toolchain
+being deleted is a gate that leaves with it:
+
+- **`Crate/Agentic/Test/Boundaries.rs`** - reads every crate's `module.json` for its kind and its
+  `Cargo.toml` for its edges, and fails when a capability names an adapter, an adapter names another
+  adapter, or anything names the composition root. It also refuses a kind it does not know, so a new
+  crate kind fails loudly rather than passing as "anything goes".
+- **`Crate/Agentic/Test/Legend.rs`** - fails when a page under `Documentation/Diagram/` carries a
+  Mermaid block without the shared legend, when a diagram has no frontmatter, theme or class
+  annotation, when a `.svg` has no `.mmd` beside it, or when a render is a placeholder. A page added
+  without a legend leaves its terms undefined for the next reader.
+
+Both run in `cargo test --workspace`, which is why the gate below is one command. Two further gates
+did not survive the deletion - the feed bundler's determinism and the mutation suite - and
+`Documentation/Open-Questions.md` records each with what it held and what is owed.
+
+---
+
+## .hermes/
+
+The record and the local tooling. `research/` holds the captures this workspace came out of, never
+edited, with `catalog.mjs` indexing them into `Index.md`. `tools/` holds the feed, and every tool
+there is a standalone script that takes a DevTools websocket URL - local tooling, not part of the
+build and not required by any gate:
+
+- **`bundle.mjs`** - turn a tree into deterministic batches: `tree.txt`, `batch-NN.txt` per payload,
+  and a `manifest.json` of what went where and what was left out.
+- **`attach.mjs`** - set those batches on a chat composer's hidden file input through
+  `DOM.setFileInputFiles`, the only path that both sets the files and lets the page react to them.
+- **`observe.mjs`** - watch a chat page and report only what changed, so a caller waits for the page
+  to settle instead of sleeping for a fixed time.
+- **`cdp-extract.mjs`** - serialise a rendered answer to Markdown with the maths kept as maths, read
+  from `<annotation encoding="application/x-tex">` rather than from `innerText`.
+- **`cdp-trace.mjs`** - read a step trace as the tree the page actually nests, and write `id` and
+  `parent` on every line instead of counting depth.
 
 ---
 
@@ -115,9 +157,12 @@ a decision, and a document that changes its mind says so rather than rewriting t
   about what it is running.
 - **`Review.md`** - the external review's verdict and the defect it found.
 - **`Rust.md`** - the port: layout, manifest, and the questions it left open.
+- **`Script.md`** - how a page script is compiled, which compiler was chosen, and the measurements
+  behind it.
 - **`Spacetime-Catalog.md`** - the catalogue as rules and data, and why it lives here rather than in
   a module that imports the server SDK.
-- **`Parity.md`** - the evidence that the two implementations are the same program.
+- **`Parity.md`** - what the scenarios establish, what the differential run established while it
+  existed, and what replaced it.
 - **`Research.md`** - the index over the captures: what each thread settled, what it left open, and
   which document consumed it.
 - **`Open-Questions.md`** - every question still open, with the experiment that would settle it and
@@ -127,54 +172,17 @@ a decision, and a document that changes its mind says so rather than rewriting t
 
 ---
 
-## Scripts/
-
-The gate. Plain Node, no build step and no dependency of their own:
-
-- **`Boundaries.mjs`** - walks every package's source and refuses an import that reverses an arrow
-  or crosses a boundary its `module.json` does not declare.
-- **`Feed.mjs`** - drives `.hermes/tools/bundle.mjs` over a fixture and asserts that it splits,
-  excludes and orders deterministically. A bundler that is not deterministic is a bundler whose
-  batches cannot be compared between runs.
-- **`Legend.mjs`** - fails when a page under `Documentation/Diagram/` carries a Mermaid block
-  without the shared legend, because a page added without one leaves its terms undefined for the
-  next reader.
-
----
-
-## .hermes/
-
-The record and the tooling. `research/` holds the captures this workspace came out of, never edited,
-with `catalog.mjs` indexing them into `Index.md`. `tools/` holds the feed, and every tool there is a
-standalone script that takes a DevTools websocket URL:
-
-- **`bundle.mjs`** - turn a tree into deterministic batches: `tree.txt`, `batch-NN.txt` per payload,
-  and a `manifest.json` of what went where and what was left out.
-- **`attach.mjs`** - set those batches on a chat composer's hidden file input through
-  `DOM.setFileInputFiles`, the only path that both sets the files and lets the page react to them.
-- **`observe.mjs`** - watch a chat page and report only what changed, so a caller waits for the page
-  to settle instead of sleeping for a fixed time.
-- **`cdp-extract.mjs`** - serialise a rendered answer to Markdown with the maths kept as maths, read
-  from `<annotation encoding="application/x-tex">` rather than from `innerText`.
-- **`cdp-trace.mjs`** - read a step trace as the tree the page actually nests, and write `id` and
-  `parent` on every line instead of counting depth.
-
----
-
 ## Before you start
 
-- **Node ≥ 22.23.0** - the suites run TypeScript directly by type stripping, so there is no compile
-  step and no `tsc` in the gate.
-- **pnpm** - `pnpm install` reads `pnpm-workspace.yaml`, which lists the root and `Package/*`.
-- **Rust ≥ 1.88** - `Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`.
+- **Rust ≥ 1.88** - `Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`. That is the
+  only toolchain: there is no `node_modules`, no package manager and no formatter to install.
 
 ## The gate
 
 ```
-npm run check          # the boundaries and the bundler
-npm run Test           # the six TypeScript suites, fakes only
-npm run Format:Check   # prettier, the same rules the sibling repositories use
-cargo test --workspace
+cargo test --workspace      # every suite, the parity scenarios, the boundaries and the diagrams
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
 ```
 
 `cargo test --workspace` never starts Chromium and never opens a socket: a page is a scripted

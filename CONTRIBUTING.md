@@ -27,15 +27,16 @@ corrections of an earlier pass, and both record the pass they correct.
 A change is ready when these pass, and none of them needs the network:
 
 ```
-npm run check
-npm run Test
-npm run Format:Check
-cd rust && cargo test --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
 ```
 
-`npm run check` is the one that matters most. It refuses an import that reverses an arrow, and it
-holds the feed bundler deterministic. A new package needs a `module.json` before it needs a test,
-because the boundary check reads the manifest rather than the code.
+`cargo test --workspace` is the one that matters most: it refuses an import that reverses an arrow
+(`Crate/Agentic/Test/Boundaries.rs`), it holds every diagram to the shared legend
+(`Crate/Agentic/Test/Legend.rs`), and it answers every scenario in `scenarios/` through the fakes. A
+new crate needs a `module.json` before it needs a test, because the boundary check reads the
+manifest rather than the code.
 
 The suites are fake-based by design: a page is a scripted responder, a browser is a scripted
 launcher, and a deadline passes because the test advanced a clock it owns. A test that needs a real
@@ -49,8 +50,8 @@ One convention, everywhere in the tree: folders, files, identifiers and prose.
 
 | Kind       | Rule                                                                   | Example                                                 |
 | ---------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
-| Folder     | PascalCase when it names a role; lowercase where an ecosystem fixes it | `Crate/BrowserCDP/Source`, `Package/browser-cdp/Source` |
-| File       | PascalCase, one concept per file                                       | `Port.ts`, `Library.rs`, `Scope.md`                     |
+| Folder     | PascalCase when it names a role; lowercase where a tool fixes it       | `Crate/BrowserCDP/Source`, `scenarios/`                  |
+| File       | PascalCase, one concept per file                                       | `Port.rs`, `Library.rs`, `Scope.md`                     |
 | Acronym    | fully uppercase, in names and prose                                    | `CLI`, `URL`, `API`, `JSON`, `CDP`                      |
 | Identifier | PascalCase for types and values; camelCase for locals                  | `CDPClient`, `cdpValue`                                 |
 
@@ -58,15 +59,14 @@ A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a file or cr
 keeps it - `BrowserCDP`, `CDPSession`.
 
 Two kinds of name sit outside the rule because something else already fixes their spelling: the
-ecosystem's root files (`package.json`, `module.json`, `Cargo.toml`, `tsconfig.json`) and
-wire-format field names such as `webSocketDebuggerUrl`. A third is narrower than it looks: a
-TypeScript package's directory is the npm package's own name with its scope dropped, so it stays
-lowercase - `Package/browser-cdp` - while everything above and below it follows the rule:
-`Package/`, `Source/`, `Test/`.
+ecosystem's root files (`module.json`, `Cargo.toml`, `Cargo.lock`) and wire-format field names such
+as `webSocketDebuggerUrl`. A third is narrower than it looks: a script under `Source/Script/` is
+TypeScript that the crate's `build.rs` compiles, and its path is the argument the `script!` macro
+takes - `script!("Expressions/ReadAnswers")` - so the file and the macro call carry the same
+PascalCase name.
 
-The two trees have one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/, Test/}` and
-`Package/<Name>/{module.json, Source/, Test/}`. `Source/` holds the code and `Test/` the suites, in
-both. The Rust half is the strict case because a module path is a file path:
+The tree has one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/, Test/}`. `Source/` holds
+the code and `Test/` the suites. It is strict because a module path is a file path:
 `Crate/<Name>/Source/Library.rs` is the library root, `Fn/` holds operations, `Struct/` holds data
 and contracts, and every module name matches its file.
 

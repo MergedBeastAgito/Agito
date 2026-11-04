@@ -1,8 +1,0 @@
-{
-	"name": "@agentic/chat-driver",
-	"version": "0.1.0",
-	"private": true,
-	"description": "Ask a chat product and read the answer plus its step trace.",
-	"type": "module",
-	"main": "Target/index.js"
-}

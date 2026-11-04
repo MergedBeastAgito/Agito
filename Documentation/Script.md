@@ -30,16 +30,16 @@ their `cargo add` resolved to on the same day.
 ## The compiler: OXC's parser, used for its spans
 
 - **OXC, parser only** - `oxc_parser` with `oxc_ast`, `oxc_ast_visit`, `oxc_span`, `oxc_allocator`.
-  199 crates, **18.9 s** to build cold (37.6 s of CPU), **120 µs** per file warm, 1,565 bytes out.
+  199 packages, **18.9 s** to build cold (37.6 s of CPU), **120 µs** per file warm, 1,565 bytes out.
   Byte-identical to the JavaScript the page was already being sent. **This is the choice.**
 - **OXC's own TypeScript transform** - adding `oxc_semantic`, `oxc_transformer`, `oxc_codegen`. 303
-  crates, 38.4 s cold (69.3 s CPU), 212 µs per file, 1,519 bytes out. It re-prints the file: the
+  packages, 38.4 s cold (69.3 s CPU), 212 µs per file, 1,519 bytes out. It re-prints the file: the
   first difference is at byte 9, where it appends a semicolon after the spliced marker
   (`__PARAM_Serialise__;`) and re-indents to one tab.
 - **SWC** - `swc_ecma_parser`, `swc_ecma_transforms_typescript`, `swc_ecma_codegen`, `swc_common`,
-  `swc_ecma_ast`. 340 crates, 47.7 s cold (96.3 s CPU), 298 µs per file, 1,805 bytes out. First
+  `swc_ecma_ast`. 340 packages, 47.7 s cold (96.3 s CPU), 298 µs per file, 1,805 bytes out. First
   difference at byte 3.
-- **`deno_ast`** - the SWC wrapper. 460 crates, 74.9 s cold (122.6 s CPU), 639 µs per file, 1,673
+- **`deno_ast`** - the SWC wrapper. 460 packages, 74.9 s cold (122.6 s CPU), 639 µs per file, 1,673
   bytes out. First difference at byte 3. Its dependency tree is the largest of the four and the
   slowest, for the same output as SWC.
 - **`esbuild` 0.28.2** - a 10.6 MB standalone binary, so not embeddable in a Rust build. 15.9 ms
@@ -165,10 +165,19 @@ cargo test -p agentic-chat-driver -p agentic-workflow
 # A malformed script names its file and line and fails the build.
 printf '(() => {\n\treturn 1;\n)()\n' > Crate/ChatDriver/Source/Script/Expressions/Broken.ts
 cargo build -p agentic-chat-driver   # error: Source/Script/Expressions/Broken.ts:3:1: Unexpected token
+
+# A call site that disagrees with a script's declarations fails to compile, at the call site.
+#   error[E0080]: evaluation panicked: script parameters: a declared parameter is missing
+#   --> Crate/ChatDriver/Source/Fn/Expressions.rs:148:2
+
+# The scenarios: every case in `scenarios/` against its expectation, through the
+# scripted fakes. This is the whole contract now - the TypeScript side that used
+# to answer the same files was deleted with its toolchain.
+cargo test --workspace --offline --test Parity
 ```
 
-The measurements behind the table above were taken with the spike crates in the session scratch
-directory, each built from an empty `target/`:
+The measurements above were taken with spike crates in the session scratch directory, each built
+from an empty `target/`, with the package count read from `cargo tree | wc -l`:
 
 ```sh
 RUSTC_WRAPPER= /usr/bin/time -p cargo build   # cold, sccache defeated

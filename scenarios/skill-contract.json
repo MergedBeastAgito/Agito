@@ -1,12 +1,11 @@
 {
-	"$comment": "The differential scenarios for `agentic.skill.validate`. One file, read by both implementations: `scenarios/lib/skill.mjs` drives `Package/skill-contract`, `Crate/SkillContract/Test/Parity.rs` drives the Rust port, and both answer the same `expect` block. Unlike `browser-cdp.json` this capability reads a real filesystem, so a scenario describes a corpus - a tree of files - and each side builds that tree in its own temporary directory before the port runs. The tree is described by `fixture`: `corpus` (one skill directory each: `name` is the directory name, `frontmatter` is the text between the fences of `SKILL.md`, `references` are files under `Reference/`, `referenceIndex` is `Reference/Index.md`, `cited` (default true) decides whether the corpus root's index names it, `noBody` leaves the directory without a `SKILL.md`), `symlink` (one more skill, written outside the corpus root and linked in by name), `corpusIndex` (`Index.md`, `AGENTS.md` or null, its text generated from the `cited` flags), `rootFiles` (files at the root, which are not skills), `absentRoot` (the root does not exist) and `touchAfterFirstValidate` (a path written under the first validated skill after that call returns). The steps are `discover`; `validate <skill>` (discover, then validate that record); `validateDiscovered <skill>` (validate the record the last discover answered, so no second discover happens); `digest` (the last discovered records, a literal `skills` list, or that list with one `mutate` - `{reverse: true}` or `{at, ...fields}` - applied); and `touch` (push every file's modification time a day forward). `effects` is what the port reported, in order: `discovered:<name>` for every skill a discover answered and `finding:<rule>:<skill>` for every finding a validate reported, so a port that answered the same findings in a different order, or discovered twice where the scenario says once, fails. `digest` and `touch` have no effects. Every digest is asserted as an exact constant, never as a pattern: the recorded `sha256:86b8b052...` is the one both contract suites already record, and the other constants are the values both ports must agree on for the corpora described here. The one thing this file cannot see is a finding's `detail`: the shared comparison in `scenarios/lib/load.mjs` compares a `findings` result by rule, so detail wording stays with the two contract suites. See `Documentation/Parity.md` for the case map.",
+	"$comment": "The scenarios for `agentic.skill.validate`, and the only statement of the contract the skill contract is held to. `Crate/SkillContract/Test/Parity.rs` reads this file, builds each corpus in a temporary directory and asserts the case's `expect` block. Unlike `browser-cdp.json` this capability reads a real filesystem, so a scenario describes a corpus - a tree of files - and the test builds that tree before the port runs. The tree is described by `fixture`: `corpus` (one skill directory each: `name` is the directory name, `frontmatter` is the text between the fences of `SKILL.md`, `references` are files under `Reference/`, `referenceIndex` is `Reference/Index.md`, `cited` (default true) decides whether the corpus root's index names it, `noBody` leaves the directory without a `SKILL.md`), `symlink` (one more skill, written outside the corpus root and linked in by name), `corpusIndex` (`Index.md`, `AGENTS.md` or null, its text generated from the `cited` flags), `rootFiles` (files at the root, which are not skills), `absentRoot` (the root does not exist) and `touchAfterFirstValidate` (a path written under the first validated skill after that call returns). The steps are `discover`; `validate <skill>` (discover, then validate that record); `validateDiscovered <skill>` (validate the record the last discover answered, so no second discover happens); `digest` (the last discovered records, a literal `skills` list, or that list with one `mutate` - `{reverse: true}` or `{at, ...fields}` - applied); and `touch` (push every file's modification time a day forward). `effects` is what the port reported, in order: `discovered:<name>` for every skill a discover answered and `finding:<rule>:<skill>` for every finding a validate reported, so a port that answered the same findings in a different order, or discovered twice where the scenario says once, fails. `digest` and `touch` have no effects. Every digest is asserted as an exact constant, never as a pattern: the recorded `sha256:86b8b052...` is the one the contract suite records, and the other constants are the values the port must answer for the corpora described here. The one thing this file cannot see is a finding's `detail`: the comparison is by rule, so detail wording stays with `Crate/SkillContract/Test/SkillContract.rs`. A case's `rust` names the unit case that proves it, and `Parity.rs` refuses a case that names a test which does not exist. See `Documentation/Parity.md`.",
 	"capability": "agentic.skill.validate",
 	"version": 1,
 	"fixture": {},
 	"cases": [
 		{
 			"id": "discover-order",
-			"typescript": "discover returns every skill directory, ordered by name, whatever order they were created in",
 			"rust": "discover_returns_every_skill_directory_ordered_by_name",
 			"fixture": {
 				"corpus": [
@@ -39,7 +38,6 @@
 		},
 		{
 			"id": "discover-deterministic",
-			"typescript": "discover is deterministic: two runs over the same tree agree",
 			"rust": "discover_is_deterministic_across_two_runs",
 			"note": "Two discovers, then a digest of the second: the effect list proves both runs answered the same order, and the digest - over name, description and references - proves they answered the same records, which is the `deepEqual` the TypeScript suite makes.",
 			"fixture": {
@@ -97,7 +95,6 @@
 		},
 		{
 			"id": "discover-symlink",
-			"typescript": "a symlinked skill directory is discovered like a real one",
 			"rust": "a_symlinked_skill_directory_is_discovered_like_a_real_one",
 			"note": "The linked skill lives outside the corpus root and is linked in by name; the digest proves the description was read through the link, not just the name.",
 			"fixture": {
@@ -119,7 +116,6 @@
 		},
 		{
 			"id": "valid-skill",
-			"typescript": "a valid skill has no findings",
 			"rust": "a_valid_skill_has_no_findings",
 			"fixture": {
 				"corpus": [
@@ -140,7 +136,6 @@
 		},
 		{
 			"id": "unlisted-reference",
-			"typescript": "a reference file the index does not name is one unlisted-reference finding",
 			"rust": "a_reference_file_the_index_does_not_name_is_one_unlisted_reference",
 			"fixture": {
 				"corpus": [
@@ -164,7 +159,6 @@
 		},
 		{
 			"id": "reference-tree-without-index",
-			"typescript": "a reference tree without an index reports each file as unlisted",
 			"rust": "a_reference_tree_without_an_index_reports_each_file_as_unlisted",
 			"fixture": {
 				"corpus": [
@@ -191,7 +185,6 @@
 		},
 		{
 			"id": "index-names-longer-file",
-			"typescript": "an index that names a longer file does not name the shorter one",
 			"rust": "an_index_that_names_a_longer_file_does_not_name_the_shorter_one",
 			"fixture": {
 				"corpus": [
@@ -212,9 +205,8 @@
 		},
 		{
 			"id": "no-skill-file",
-			"typescript": "a skill directory without a SKILL.md is unparsable and uncited, not an exception",
 			"rust": "a_skill_directory_without_a_body_is_unparsable_and_uncited",
-			"note": "`cited` is false, so the root index exists and names nothing: the TypeScript suite's empty corpus index. A validate that threw instead of reporting would fail the runner rather than answer these two rules, which is the `doesNotReject` the TypeScript suite makes.",
+			"note": "`cited` is false, so the root index exists and names nothing: the empty corpus index this contract has to answer. A validate that threw instead of reporting would fail the test rather than answer these two rules.",
 			"fixture": {
 				"corpus": [{ "name": "Bare", "noBody": true, "cited": false }],
 				"corpusIndex": "Index.md"
@@ -230,7 +222,6 @@
 		},
 		{
 			"id": "unparsable-frontmatter",
-			"typescript": "unparsable frontmatter is a finding, not a rejection",
 			"rust": "unparsable_frontmatter_is_a_finding_not_a_rejection",
 			"fixture": {
 				"corpus": [
@@ -249,7 +240,6 @@
 		},
 		{
 			"id": "no-description",
-			"typescript": "a frontmatter without a description is unparsable",
 			"rust": "a_frontmatter_without_a_description_is_unparsable",
 			"fixture": {
 				"corpus": [{ "name": "Delta", "frontmatter": "name: delta" }],
@@ -263,7 +253,6 @@
 		},
 		{
 			"id": "name-mismatch",
-			"typescript": "a frontmatter name that disagrees with the directory is unparsable",
 			"rust": "a_frontmatter_name_that_disagrees_with_the_directory_is_unparsable",
 			"fixture": {
 				"corpus": [
@@ -282,7 +271,6 @@
 		},
 		{
 			"id": "corpus-index-agents",
-			"typescript": "a corpus root that names its skills in AGENTS.md is read as well as one that uses Index.md",
 			"rust": "a_corpus_root_that_names_its_skills_in_agents_md_is_read_as_well",
 			"fixture": {
 				"corpus": [
@@ -303,7 +291,6 @@
 		},
 		{
 			"id": "uncited",
-			"typescript": "a skill the corpus index does not name is uncited",
 			"rust": "a_skill_the_corpus_index_does_not_name_is_uncited",
 			"fixture": {
 				"corpus": [
@@ -323,7 +310,6 @@
 		},
 		{
 			"id": "rules-are-declared",
-			"typescript": "every finding uses one of the three rules the manifest declares",
 			"rust": "every_finding_uses_one_of_the_three_rules_the_manifest_declares",
 			"note": "One sweep over the corpus of every rule: the effect list is every finding in the order a sweep reports them, which is the part of this case a corpus can state. That each rule is also declared in `module.json` is a manifest fact, not a corpus fact, and stays with the two contract suites.",
 			"fixture": {
@@ -384,7 +370,6 @@
 		},
 		{
 			"id": "validate-stateless",
-			"typescript": "validate is stateless: the same skill answers the same findings twice",
 			"rust": "validate_is_stateless_and_answers_the_same_findings_twice",
 			"note": "One discover, then the same held record validated twice: no second discover appears in the effects, and the finding is reported both times.",
 			"fixture": {
@@ -417,7 +402,6 @@
 		},
 		{
 			"id": "validate-rereads",
-			"typescript": "validate re-reads the directory, so a file added after the first call is reported by the second",
 			"rust": "validate_re_reads_the_directory_so_a_later_file_is_reported",
 			"note": "`touchAfterFirstValidate` writes `Reference/Later.md` after the first call returns; the second call on the same held record must see it.",
 			"fixture": {
@@ -444,7 +428,6 @@
 		},
 		{
 			"id": "no-reference-tree",
-			"typescript": "a skill with no Reference tree is valid",
 			"rust": "a_skill_with_no_reference_tree_is_valid",
 			"fixture": {
 				"corpus": [
@@ -463,7 +446,6 @@
 		},
 		{
 			"id": "folded-description",
-			"typescript": "a folded description is read as the description",
 			"rust": "a_folded_description_is_read_as_the_description",
 			"note": "The digest is over `description`, so it is what proves the folded scalar was joined into one sentence rather than left with its breaks.",
 			"fixture": {
@@ -490,9 +472,8 @@
 		},
 		{
 			"id": "absent-root",
-			"typescript": "an unreadable root is an empty corpus, not a rejection",
 			"rust": "an_unreadable_root_is_an_empty_corpus_not_a_failure",
-			"note": "The root is never created. A discover that threw would fail the runner; the digest of the empty list is a literal record list, which is the `digest([])` the TypeScript suite calls.",
+			"note": "The root is never created. A discover that threw would fail the test; the digest of the empty list is a literal record list, which is `digest([])`.",
 			"fixture": { "absentRoot": true },
 			"steps": [{ "op": "discover" }, { "op": "digest", "skills": [] }],
 			"expect": {
@@ -505,7 +486,6 @@
 		},
 		{
 			"id": "digest-ignores-mtimes",
-			"typescript": "the digest ignores modification times",
 			"rust": "the_digest_ignores_modification_times_and_directories",
 			"note": "A day is added to every file after the first discover; the digest must still be the recorded constant for this corpus.",
 			"fixture": {
@@ -530,7 +510,6 @@
 		},
 		{
 			"id": "digest-order",
-			"typescript": "the digest changes when a name, a description, a reference or the order changes",
 			"rust": "the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes",
 			"note": "One of five ids that together state this case: each mutation is digested on its own, so a distinct constant is what says it changed.",
 			"fixture": {
@@ -556,9 +535,8 @@
 		},
 		{
 			"id": "digest-name",
-			"typescript": "the digest changes when a name, a description, a reference or the order changes",
 			"rust": "the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes",
-			"note": "The renamed record is the one the TypeScript suite builds with a spread; here the mutation is named, so neither side has to know what a spread is.",
+			"note": "The renamed record is written here as an explicit `mutate`, so the scenario says which field changed instead of leaving the reader to infer it from a copy.",
 			"fixture": {
 				"corpus": [
 					{
@@ -585,7 +563,6 @@
 		},
 		{
 			"id": "digest-description",
-			"typescript": "the digest changes when a name, a description, a reference or the order changes",
 			"rust": "the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes",
 			"fixture": {
 				"corpus": [
@@ -613,7 +590,6 @@
 		},
 		{
 			"id": "digest-references",
-			"typescript": "the digest changes when a name, a description, a reference or the order changes",
 			"rust": "the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes",
 			"fixture": {
 				"corpus": [
@@ -644,9 +620,8 @@
 		},
 		{
 			"id": "digest-directory-excluded",
-			"typescript": "the digest changes when a name, a description, a reference or the order changes",
 			"rust": "the_digest_changes_when_a_name_a_description_a_reference_or_the_order_changes",
-			"note": "The same list with a different `directory` must digest to the same constant: that is the half of the TypeScript case that asserts equality, and it is what lets the same corpus digest the same in two checkouts.",
+			"note": "The same list with a different `directory` must digest to the same constant: the directory is where a skill happens to live, not part of what it says, and that is what lets the same corpus digest the same in two checkouts.",
 			"fixture": {
 				"corpus": [
 					{
@@ -676,7 +651,6 @@
 		},
 		{
 			"id": "digest-recorded",
-			"typescript": "the digest of the valid skill is the recorded one",
 			"rust": "the_digest_of_the_valid_skill_is_the_recorded_one",
 			"note": "The strongest parity evidence in this capability: one constant, recorded by both contract suites, computed here from a corpus each side built itself.",
 			"fixture": {

@@ -1,34 +1,29 @@
-//! The Rust side of the differential run for `agentic.skill.validate`.
+//! The scenarios for `agentic.skill.validate`, answered by the Rust port.
 //!
-//! These cases are not written here: they are read from
-//! `scenarios/skill-contract.json`, the same file
-//! `Package/skill-contract/Test/Parity.test.ts` reads. What this file adds is
-//! only the corpus builder, the interpreter and the assertion - the tree, the
-//! steps, the expected result and the expected ordered effect list all come
-//! from the scenario file, so the two implementations cannot drift by being
-//! tested against two hand-written suites.
+//! The cases are not written here: they are read from
+//! `scenarios/skill-contract.json`. What this file adds is the corpus builder,
+//! the interpreter and the assertion - the tree, the steps, the expected result
+//! and the expected ordered effect list all come from the scenario file, so the
+//! contract has one statement rather than two.
 //!
 //! The capability reads a real filesystem, so the corpus is real: the fixture
-//! is materialised under `std::env::temp_dir()` exactly as the TypeScript side
-//! materialises it under `mkdtemp`, byte for byte, and removed afterwards. Only
-//! the root path differs between the two runs, and the root path is outside
-//! every observation - `directory` is excluded from the digest and no effect
-//! carries a path.
+//! is materialised under `std::env::temp_dir()` and removed afterwards. Only
+//! the root path differs between two runs, and the root path is outside every
+//! observation - `directory` is excluded from the digest and no effect carries
+//! a path.
 //!
 //! `effects` is what the port reported, in order: every skill a `discover`
-//! answered and every finding a `validate` reported. Two ports that answered
-//! the same findings in a different order disagree here, which is the whole
-//! point.
+//! answered and every finding a `validate` reported. A port that answered the
+//! same findings in a different order disagrees here, which is the whole point.
 //!
-//! `Test/SkillContract.rs` is kept as it is: that suite is the contract, this
-//! one is the comparison. `AGENTIC_PARITY_OUT=<path>` makes this test also
-//! write what it observed as JSON, which is how `scenarios/run.mjs --compare`
-//! gets the Rust half of the differential run.
+//! `Test/SkillContract.rs` is the contract suite and this one is its
+//! interpreter: every case names the unit case that proves it in its `rust`
+//! field, and `every_scenario_names_a_case_the_rust_suite_has` refuses a case
+//! that names a test which does not exist.
 
 #![allow(non_snake_case, non_upper_case_globals)]
 
 use std::{
-	collections::BTreeMap,
 	fs,
 	path::{Path, PathBuf},
 	sync::atomic::{AtomicU64, Ordering},
@@ -37,7 +32,7 @@ use std::{
 
 use AgenticRuntime::BlockOn;
 use AgenticSkillContract::{Create, Skill, SkillContract};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 /// Distinguishes two corpora built in the same process, which one test builds
 /// one after another.
@@ -289,10 +284,10 @@ fn run_case(Fixture:&Value, Entry:&Value) -> Value {
 
 /// What one observation got wrong, as sentences. Empty means the case agreed.
 ///
-/// This is `scenarios/lib/load.mjs`'s `compare`, written out for the kinds this
-/// capability answers: a `findings` result is compared by rule, a `names`
-/// result by the names and their order, and a `digest` result by its exact
-/// constant - never by a pattern, because the constant is the evidence.
+/// The comparison is written out for the kinds this capability answers: a
+/// `findings` result is compared by rule, a `names` result by the names and
+/// their order, and a `digest` result by its exact constant - never by a
+/// pattern, because the constant is the evidence.
 fn mismatches(Observed:&Value, Expect:&Value) -> Vec<String> {
 	let mut Wrong = Vec::new();
 	let Want = Expect.get("result").cloned().unwrap_or(Value::Null);
@@ -402,13 +397,11 @@ fn skipped_on_rust(Entry:&Value) -> bool {
 		.unwrap_or(false)
 }
 
-/// Every scenario, against its expectation, with what was observed left behind
-/// for the differential run to compare against the TypeScript half.
+/// Every scenario, against its expectation.
 #[test]
 fn every_scenario_agrees_with_its_expectation() {
 	let File = scenario_file();
 	let Fixture = File.get("fixture").cloned().unwrap_or(Value::Null);
-	let mut Observed:BTreeMap<String, Value> = BTreeMap::new();
 	let mut Wrong:Vec<String> = Vec::new();
 	let mut Ran = 0usize;
 
@@ -421,18 +414,10 @@ fn every_scenario_agrees_with_its_expectation() {
 		for Sentence in mismatches(&One, Entry.get("expect").unwrap_or(&Value::Null)) {
 			Wrong.push(format!("{Id}: {Sentence}"));
 		}
-		Observed.insert(Id, One);
 		Ran += 1;
 	}
 
-	if let Ok(Path) = std::env::var("AGENTIC_PARITY_OUT") {
-		let Document =
-			serde_json::to_string_pretty(&Value::Object(Observed.clone().into_iter().collect::<Map<String, Value>>()))
-				.unwrap_or_default();
-		let _ = fs::write(Path, Document);
-	}
-
-	assert!(!Observed.is_empty(), "no scenarios were found");
+	assert!(Ran > 0, "no scenarios were found");
 	assert_eq!(
 		Ran,
 		cases(&File).iter().filter(|Entry| !skipped_on_rust(Entry)).count(),

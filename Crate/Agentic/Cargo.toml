@@ -34,9 +34,17 @@ non_upper_case_globals = "allow"
 upper_case_acronyms = "allow"
 
 [[test]]
+name = "Boundaries"
+path = "Test/Boundaries.rs"
+
+[[test]]
 name = "Composition"
 path = "Test/Composition.rs"
 
 [[test]]
 name = "Extract"
 path = "Test/Extract.rs"
+
+[[test]]
+name = "Legend"
+path = "Test/Legend.rs"

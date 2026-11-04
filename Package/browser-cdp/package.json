@@ -1,8 +1,0 @@
-{
-	"name": "@agentic/browser-cdp",
-	"version": "0.1.0",
-	"private": true,
-	"description": "Browser execution substrate: attach versus launch, bounded evaluation, disposal.",
-	"type": "module",
-	"main": "Target/index.js"
-}

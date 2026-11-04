@@ -1,36 +1,14 @@
 {
-	"[css]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[javascript]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[json]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[jsonc]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
 	"[markdown]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode",
 		"files.trimTrailingWhitespace": false
 	},
 	"[rust]": {
 		"editor.defaultFormatter": "rust-lang.rust-analyzer"
 	},
-	"[typescript]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[typescriptreact]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[yaml]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
 	"editor.codeActionsOnSave": {
 		"source.organizeImports": "explicit"
 	},
-	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"editor.defaultFormatter": "rust-lang.rust-analyzer",
 	"editor.detectIndentation": false,
 	"editor.formatOnSave": true,
 	"editor.insertSpaces": false,
@@ -44,8 +22,6 @@
 		"**/.DS_Store": true,
 		"**/.cache": true,
 		"**/.git": true,
-		"**/.turbo": true,
-		"**/node_modules": true,
 		"**/Target": false,
 		"**/Thumbs.db": true,
 		"**/tmp": false
@@ -53,21 +29,16 @@
 	"files.insertFinalNewline": true,
 	"files.trimTrailingWhitespace": true,
 	"files.watcherExclude": {
-		"**/node_modules/**": true,
 		".hermes/bundle/**": true,
 		".hermes/research-bundle/**": true,
 		".hermes/tmp/**": true,
-		".turbo/**": true,
 		"Target/**": true
 	},
 	"search.exclude": {
-		"**/node_modules/**": true,
-		"**/pnpm-lock.yaml": true,
 		"**/tmp": true,
 		".hermes/bundle/**": true,
 		".hermes/research-bundle/**": true,
 		".hermes/tmp/**": true,
-		".turbo/**": true,
 		"Target/**": true,
 		"Cargo.lock": true
 	}

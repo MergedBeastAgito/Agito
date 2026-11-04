@@ -54,6 +54,6 @@ Shapes carry kind: `(["event"])`, `[("store")]`, `{"decision"}`, `["process"]`. 
 | [`40-database/`](40-database/README.md) | internality | generations, leases, probes, and the abandoned holder        |
 | [`50-feed/`](50-feed/README.md)         | transport   | bundle, attach, observe, and the rate limit                  |
 
-`Scripts/Legend.mjs` checks the set: frontmatter with a theme, at least one class annotation, a
-rendered sibling over 1000 bytes, and no prose legend anywhere. The check does not prove a diagram
-is right - only that it renders and that its terms are typed.
+`Crate/Agentic/Test/Legend.rs` checks the set: frontmatter with a theme, at least one class
+annotation, a rendered sibling over 1000 bytes, and no prose legend anywhere. The check does not
+prove a diagram is right - only that it renders and that its terms are typed.

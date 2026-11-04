@@ -1,8 +1,8 @@
-# Text files keep LF in the working tree. `prettier.config.mjs` sets
-# `endOfLine: "lf"`, so a CRLF checkout fails `prettier --check` on every file at
-# once, and the editor's own `files.eol` cannot repair a file nobody opened. The
-# global `core.autocrlf=true` on a development machine would otherwise do exactly
-# that: files sit in the working tree with CRLF while their committed bytes are LF.
+# Text files keep LF in the working tree. The editor's own `files.eol` cannot
+# repair a file nobody opened, and a global `core.autocrlf=true` on a development
+# machine would otherwise leave files in the working tree with CRLF while their
+# committed bytes are LF: a whole-file diff on the next commit, and `env: bash\r`
+# in anything with a shebang.
 * text=auto eol=lf
 
 # Called out separately because a shebang is unforgiving: with CRLF the

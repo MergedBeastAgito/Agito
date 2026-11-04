@@ -190,11 +190,11 @@ unchanged, and the tests that prove them travel with them.
 
 ## What proves it
 
-```
-cd Package/spacetime-catalog
-node --test Test/*.test.ts
-```
+Nothing, at the moment. The rules were stated twice - here, and as data with 25 assertions in a
+TypeScript package this repository no longer carries - and that second statement was deleted with
+the layer it lived in. This document is what is left, and it is prose: nothing compiles it and
+nothing checks that the tables above agree with the reducers a module would ship.
 
-25 tests, no `spacetimedb` package installed, and no dependency in `package.json`. The workspace
-gate is `npm run check`, and the formatting gate is
-`pnpm exec prettier --check Package/spacetime-catalog Documentation/Spacetime-Catalog.md`.
+**Owed:** `agentic-spacetime-catalog`, a crate carrying the same rules as tables and the same 25
+cases, so the statement is executable again. `Documentation/Open-Questions.md` records it under the
+gates the TypeScript layer took with it.

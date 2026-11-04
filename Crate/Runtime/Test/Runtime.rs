@@ -26,8 +26,10 @@
 //! The three run against `StandIn`, which is the local stand-in for the
 //! reducer. That is the point of the split: the runner under test holds no
 //! lease state, so every assertion about a fence is an assertion about the
-//! double, and the double is pinned to the reducer by the mirror test in
-//! `Package/spacetime-catalog`.
+//! double. The reducer it mirrors had a TypeScript statement with a mirror test
+//! of its own; that statement was deleted with the TypeScript layer, so the
+//! double now stands alone and `Documentation/Spacetime-Catalog.md` is the
+//! prose it can be checked against.
 
 use std::{
 	sync::{

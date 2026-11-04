@@ -1,8 +1,9 @@
 # Rust workspace
 
-The TypeScript toolkit in `Package/` rebuilt as seven crates, keeping the port shapes and the
-failure classification the TypeScript suites already enforce. The TypeScript packages stay as they
-are: they are the specification, not a predecessor to delete.
+Seven crates: the port shapes and the failure classification this workspace settled on, and now the
+only statement of them. The TypeScript packages they were ported from were deleted once the page
+expressions were compiled at build time and every scenario was answered here - `Documentation/Parity.md`
+records what the comparison established while it existed, and what replaced it.
 
 The layout follows the house style of `github.com/PlayForm/Run`: one directory per crate under
 `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and
@@ -74,7 +75,7 @@ Both are checkable, and the checks are the first two commands below.
 ## Verification
 
 ```
-cargo test --workspace                                   # 177 tests, no browser, no network
+cargo test --workspace                                   # 206 tests, no browser, no network
 cargo run -p agentic -- --help                           # the composition root's commands
 cargo tree -p agentic-chat-driver | grep -c tokio         # 0
 cargo tree -p agentic-chat-driver | grep -c browser       # 0
@@ -82,9 +83,14 @@ cargo clippy --workspace -- -D warnings
 cargo fmt --check
 ```
 
-The tests are fake-based, as the TypeScript suites are: a page is a scripted responder, a browser is
-a scripted launcher, and a deadline passes because the test advanced a clock it owns. `cargo test`
-never starts Chromium and never opens a socket.
+The tests are fake-based: a page is a scripted responder, a browser is a scripted launcher, and a
+deadline passes because the test advanced a clock it owns. `cargo test` never starts Chromium and
+never opens a socket.
+
+Two of those tests are the gates that used to be Node scripts: `Test/Boundaries.rs` reads every
+crate's manifest and dependency list and fails on an edge the design does not allow, and
+`Test/Legend.rs` holds `Documentation/Diagram/` to the shared legend. Both are described in the
+workspace README.
 
 `agentic verify --module <name>` is the manifest check: it compares the errors a manifest names
 against the codes its crate's own type declares, so a manifest that has drifted from its code fails

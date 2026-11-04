@@ -3,12 +3,10 @@
 # would match that directory name at any depth.
 /Target/
 
-# Turbo's run cache, if a pipeline is ever added to `turbo.json`.
-.turbo/
-
-# Dependencies. Unanchored on purpose: the workspace root and every package can
-# hold one.
-node_modules/
+# No `node_modules/` and no `.turbo/` rule. The TypeScript toolchain was deleted
+# with the packages it served, so nothing creates either directory - and an
+# unanchored ignore rule for a directory nothing creates is a rule that hides the
+# day something starts creating one.
 
 # The resolution artefact. Committed on purpose: the release builds with
 # `--locked`, so the same tag has to produce the same bytes, and `--locked`
