@@ -116,7 +116,7 @@ pub fn Escape(Value:&str) -> String {
 			'\\' => Out.push_str("\\\\"),
 			'\n' => Out.push_str("\\n"),
 			'\r' => Out.push_str("\\r"),
-			'	' => Out.push_str("\	"),
+			'\t' => Out.push_str(r"\t"),
 			'\u{08}' => Out.push_str("\\b"),
 			'\u{0c}' => Out.push_str("\\f"),
 			Control if (Control as u32) < 0x20 => {

@@ -433,10 +433,18 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 
 	for File in Mut {
 		let Text = std::fs::read_to_string(&File).unwrap_or_else(|Error| {
-			panic!("{}: cannot be read: {Error}", File.display())
+			Stop(&format!("{}: cannot be read: {Error}", Shown(&File, &Root)))
 		});
 		let Compiled = Compile(&File, &Text).unwrap_or_else(|Failure| {
-			panic!("{Failure}");
+			// The path as a reader of this crate knows it: `Source/Script/...`,
+			// not the absolute path a build runs in.
+			Stop(&format!(
+				"{}:{}:{}: {}",
+				Shown(&Failure.File, &Root),
+				Failure.Line,
+				Failure.Column,
+				Failure.Message
+			))
 		});
 
 		// The output keeps the source's relative path, minus the extension, so
@@ -449,12 +457,12 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 		let Parameters = Out.join(&Relative).with_extension("params");
 		if let Some(Parent) = JavaScript.parent() {
 			std::fs::create_dir_all(Parent).unwrap_or_else(|Error| {
-				panic!("{}: cannot be created: {Error}", Parent.display())
+				Stop(&format!("{}: cannot be created: {Error}", Parent.display()))
 			});
 		}
 
 		Write(&JavaScript, &Compiled.JavaScript).unwrap_or_else(|Error| {
-			panic!("{}: cannot be written: {Error}", JavaScript.display())
+			Stop(&format!("{}: cannot be written: {Error}", JavaScript.display()))
 		});
 
 		let Declared = Compiled
@@ -463,7 +471,22 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 			.map(|Parameter| format!("{}:{}\n", Parameter.Name, Parameter.Kind.Name()))
 			.collect::<String>();
 		Write(&Parameters, &Declared).unwrap_or_else(|Error| {
-			panic!("{}: cannot be written: {Error}", Parameters.display())
+			Stop(&format!("{}: cannot be written: {Error}", Parameters.display()))
 		});
 	}
+}
+
+/// `Path` as a reader of this crate knows it, when it is inside the crate.
+fn Shown(Path:&Path, Root:&Path) -> String {
+	Path.strip_prefix(Root).unwrap_or(Path).display().to_string()
+}
+
+/// Stop the build with one line a reader can act on.
+///
+/// A build script that panics buries the position in a backtrace header; the
+/// point of naming the file and the line is that the reader goes there, so the
+/// message is the error and the exit status is the failure.
+fn Stop<T>(Message:&str) -> T {
+	eprintln!("error: {Message}");
+	std::process::exit(1);
 }
