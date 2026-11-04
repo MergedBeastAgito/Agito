@@ -161,18 +161,40 @@ jobs:
           printf '%s\n' "${Body}" > dist/ReleaseBody.md
           cat dist/ReleaseBody.md
 
+      # This repository publishes immutable releases, and GitHub refuses to add
+      # an asset to one that is already published. So the release is created as
+      # a DRAFT and stays one until `Finalize` has attached and verified every
+      # file; publishing is the last step, not the first. A tag whose release
+      # was already published is refused by name below, because at that point no
+      # amount of re-running can put a file on it.
+      - name: Refuse a tag whose release is already published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if Json="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft 2>/dev/null)"; then
+            if [ "$(printf '%s' "${Json}" | jq -r '.isDraft')" != "true" ]; then
+              echo "::error::${TAG} already has a published release, and an immutable release accepts no further assets. A published version is not re-tagged: bump [workspace.package] version and cut the next tag."
+              exit 1
+            fi
+            echo "${TAG} already has a draft release - reusing it"
+          else
+            echo "${TAG} has no release yet"
+          fi
+
       # Created exactly once, before any matrix leg attaches a file, so five
-      # concurrent `action-gh-release` invocations do not race to create it.
-      # `body_path` is what ships; `generate_release_notes` is kept because the
-      # house shape names it, and the REST API gives an explicit body precedence.
-      - name: Create the release
+      # concurrent uploads do not race to create it. `body_path` is what ships;
+      # `generate_release_notes` is kept because the house shape names it, and
+      # the REST API gives an explicit body precedence.
+      - name: Create the release (draft)
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
           body_path: dist/ReleaseBody.md
           generate_release_notes: true
-          draft: false
+          draft: true
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -329,24 +351,33 @@ jobs:
             agentic-*.*
             SHA256SUMS-${{ matrix.target }}.txt
           if-no-files-found: error
-          retention-days: 30
 
-      # The Release job already created the release; each leg only attaches its
-      # own archive and its own checksum list here. `agentic-*.*` cannot match
-      # the bare `agentic.exe` the Windows leg stages - the hyphen is what keeps
-      # the binary out of the asset list.
+      # The Release job already created the draft; each leg attaches only its own
+      # archive and its own checksum list here. `gh release upload` rather than
+      # the release action, because an action call that carries no `draft` input
+      # is one edit away from publishing the release before the assets are on
+      # it. `agentic-*.*` cannot match the bare `agentic.exe` the Windows leg
+      # stages - the hyphen is what keeps the binary out of the asset list.
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/Agentic/v')
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            agentic-*.*
-            SHA256SUMS-${{ matrix.target }}.txt
-          fail_on_unmatched_files: true
-          overwrite_files: true
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          Version: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          Target="${{ matrix.target }}"
+          case "${Target}" in
+            *windows*) Archive="agentic-${Version}-${Target}.zip" ;;
+            *) Archive="agentic-${Version}-${Target}.tar.gz" ;;
+          esac
+          for File in "${Archive}" "SHA256SUMS-${Target}.txt"; do
+            if [ ! -f "${File}" ]; then
+              echo "::error::${File} was never produced - refusing to attach a partial leg"
+              exit 1
+            fi
+          done
+          gh release upload "${GITHUB_REF_NAME}" "${Archive}" "SHA256SUMS-${Target}.txt" --clobber
 
   # Runs once, after every leg has finished. Two jobs in one: it packages what is
   # not a per-platform binary, and it proves the release is complete by reading
@@ -529,19 +560,45 @@ jobs:
           fi
 
       - name: Attach the packaging assets and the merged checksums
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          Files=(
             dist/*.crate
             dist/agentic-*-source.tar.gz
             dist/agentic-*-vendor.tar.gz
             dist/agentic-skills-*.tar.gz
             dist/SHA256SUMS.txt
-          fail_on_unmatched_files: true
-          overwrite_files: true
+          )
+          # Seven crates, the source tree, the vendor tree, the skill corpus and
+          # the merged list: a glob that silently matched fewer is a release that
+          # looks complete and is not.
+          if [ "${#Files[@]}" -lt 11 ]; then
+            echo "::error::expected at least 11 packaging assets, matched ${#Files[@]}"
+            exit 1
+          fi
+          printf '%s\n' "${Files[@]}"
+          gh release upload "${TAG}" "${Files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+
+      # Publishing is the last act, not the first: this repository's releases are
+      # immutable, so a release published before its assets are attached can
+      # never receive them. Up to here everything landed on a draft.
+      - name: Publish the draft
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          IsDraft="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft')"
+          if [ "${IsDraft}" = "true" ]; then
+            gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
+            echo "published ${TAG}"
+          else
+            echo "${TAG} is already published - leaving it alone"
+          fi
 
       # Gate two: read the release back. The asset set must contain every
       # expected name, and every expected file must have an entry in the merged
