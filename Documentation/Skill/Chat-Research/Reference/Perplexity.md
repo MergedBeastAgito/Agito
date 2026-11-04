@@ -88,6 +88,17 @@ as well, which survives the unmounting.
 
 ---
 
+## The model control's role attribute is not stable
+
+The model button has been observed with `aria-haspopup="dialog"` and, on a later build,
+`aria-haspopup="menu"`. A selector pinned to `dialog` reads `null` on the build that uses `menu`,
+and the driver then refuses the call as `wrong-model` with `the page reads nothing` — a correct
+refusal about a selector that aged out.
+
+Select on the attribute's presence, not its value, and scope it to the composer:
+`[class*='composer-row'] button[aria-haspopup]`. On the observed builds the only composer button
+carrying it is the model control.
+
 ## The scroll control and the in-flight flag
 
 Two things on the page carry the state a driver needs, and neither is the one a naive read would

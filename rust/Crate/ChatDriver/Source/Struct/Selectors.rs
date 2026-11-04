@@ -77,7 +77,7 @@ pub struct Selectors {
 pub fn DefaultSelectors() -> Selectors {
 	Selectors {
 		Mode:"[data-command-menu-control] button".to_string(),
-		Model:"[class*='composer-row'] button[aria-haspopup='dialog'], [data-appearance='framed'] button[aria-haspopup='dialog']".to_string(),
+		Model:"[class*='composer-row'] button[aria-haspopup], [data-appearance='framed'] button[aria-haspopup]".to_string(),
 		Composer:"textarea, [contenteditable='true']".to_string(),
 		Submit:"[data-testid='submit-button'], button[aria-label='Submit']".to_string(),
 		Answer:".prose[data-renderer='lm'], [data-testid='answer'], [role='article']".to_string(),
