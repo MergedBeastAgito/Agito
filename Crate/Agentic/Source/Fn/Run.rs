@@ -30,8 +30,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			// The workspace's own table first, then whatever the adapter roots
 			// declare. The origin column is what keeps the two apart: a row
 			// that says `workspace` is compiled into this binary, and a row that
-			// names a directory is a file that was there when the question was
-			// asked.
+			// names a file was read from it when the question was asked.
 			let Roots = Discover::Roots(&Adapter);
 			let Foreign = Discover::Discover(&Roots)?;
 			let mut Lines:Vec<String> = All

@@ -2,10 +2,13 @@
 
 A consumer of `agentic-sdk` and of nothing else this workspace ships. It builds a session, opens
 `Page/Probe.html` and evaluates an expression: the whole flow the facade exists for, written with
-the facade's names and no others.
+the facade's names and no others. Its `Test/` holds the adapter port as `Arc<dyn Adapter>` and asks
+`Serves` whether it agrees with the manifest that named it - the other consumer the facade exists
+for, and the one that has no workspace of its own to fall back on.
 
 ```
 cargo build                  # the facade alone; no other Agentic crate is named
+cargo test                   # the adapter port; no browser, no substrate
 cargo run                    # needs a browser; AGENTIC_BROWSER names one
 cargo tree --depth 1         # agentic-sdk and tokio, and nothing else
 ```

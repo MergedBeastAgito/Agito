@@ -64,11 +64,13 @@ ports, and one composition that uses four capabilities. Dependencies: `agentic-r
 `agentic-chat-driver`, `agentic-design-verification`, `agentic-skill-contract`,
 `agentic-browser-cdp`, `serde_json`.
 
-**`agentic-sdk`** - `Crate/Sdk/`. The facade: the stable surface of the five crates a consumer would
+**`agentic-sdk`** - `Crate/Sdk/`. The facade: the stable surface of the six crates a consumer would
 otherwise name, re-exported behind one dependency. It adds no behaviour - every item is a path over
-somebody else's - and its dependency list is the enforcement: five ports, no substrate, no executor.
-Dependencies: `agentic-runtime`, `agentic-browser-cdp`, `agentic-chat-driver`,
-`agentic-design-verification`, `agentic-skill-contract`.
+somebody else's - and its dependency list is the enforcement: six ports, no substrate, no executor.
+The sixth is `agentic-adapter`, which ships no port of its own but is the shape a substrate outside
+this tree implements: a third-party adapter depends on the facade and on nothing else, so the port
+it implements has to be reachable here. Dependencies: `agentic-runtime`, `agentic-browser-cdp`,
+`agentic-chat-driver`, `agentic-design-verification`, `agentic-skill-contract`, `agentic-adapter`.
 
 **`agentic`** - `Crate/Agentic/`. Wiring, the manifest table and the executable. Dependencies: all
 eight above, `clap`, `tokio`, `serde_json`, and `agentic-adapter` in its tests only - the binary
@@ -93,10 +95,12 @@ this workspace implements, so that a third party's driver can be held as `Arc<dy
 the composition root naming the crate that implements it. `Documentation/Adapter.md` is the
 contract.
 
-**A facade names ports and nothing else.** `agentic-sdk`'s dependency list is five crates and no
+**A facade names ports and nothing else.** `agentic-sdk`'s dependency list is six crates and no
 substrate, no executor and no serialiser, and the direction is one-way: the facade may import any
 port, and only the composition root may import the facade. A crate inside the workspace that reached
-for it would be importing its own re-export.
+for it would be importing its own re-export. A crate _outside_ the workspace is the case the facade
+exists for, and it is the one a third-party adapter is: it names the facade, implements the port the
+facade re-exports, and names nothing else.
 
 All three are checkable: the first two with `cargo tree`, the third by `Crate/Sdk/Test/Facade.rs`
 reading the facade's own dependency list, and the direction by `Test/Boundaries.rs` with every other

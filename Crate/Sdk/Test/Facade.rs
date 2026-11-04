@@ -1,11 +1,13 @@
 //! The facade, checked as a facade rather than as a crate that happens to build.
 //!
-//! Three claims, none of which the compiler makes on its own:
+//! Four claims, none of which the compiler makes on its own:
 //!
 //! - the crate depends on ports and never on a substrate, so a consumer that
 //!   names it cannot inherit the CDP client's choices;
 //! - a session is built, bounded and named with nothing but this crate's paths,
 //!   which is the flow a consumer performs;
+//! - the adapter port is reachable and implementable through this crate alone,
+//!   which is the whole reason a crate outside the tree depends on it;
 //! - the manifest table it carries is the table the modules actually ship, byte
 //!   for byte, rather than a copy that drifted.
 //!
@@ -18,6 +20,7 @@
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
 use AgenticSdk::{
+	Adapter,
 	All,
 	Browse,
 	Call,
@@ -30,7 +33,9 @@ use AgenticSdk::{
 	OpenOptions,
 	Options,
 	Ownership,
+	Serves,
 	Session,
+	StandIn,
 	Target,
 	Tokio,
 };
@@ -76,7 +81,15 @@ fn module() -> serde_json::Value {
 #[test]
 fn the_facade_depends_on_ports_and_never_on_a_substrate() {
 	let Declared = dependencies(&manifest(), "dependencies");
-	assert_eq!(Declared.len(), 5, "the five ports, and nothing else: {Declared:?}");
+	// The five ports a consumer would otherwise name, plus the adapter port a
+	// substrate outside this tree implements. Nothing else: a sixth entry that
+	// was not a port would be a substrate or a utility arriving through the
+	// facade's own dependency line.
+	assert_eq!(Declared.len(), 6, "six ports, and nothing else: {Declared:?}");
+	assert!(
+		Declared.iter().any(|Name| Name == "agentic-adapter"),
+		"the adapter port is what a third-party substrate implements: {Declared:?}"
+	);
 	for Name in &Declared {
 		assert!(Name.starts_with("agentic-"), "{Name} is not a port of this workspace");
 	}
@@ -116,6 +129,22 @@ fn a_session_is_built_and_bounded_from_the_facade_alone() {
 }
 
 #[test]
+fn a_consumer_holds_the_adapter_port_through_the_facade_alone() {
+	// The value a composition root passes on, built and held with nothing but
+	// this crate's names. `StandIn` stands in for a substrate, so this runs with
+	// no page, no process and no dynamic loading - and the point of the whole
+	// port is that the root constructs the adapter and hands it on.
+	let Held:Arc<dyn Adapter> = Arc::new(StandIn::New("agentic.nfsu.drive"));
+	assert_eq!(Held.Port(), "agentic.nfsu.drive");
+	assert!(Serves(&*Held, "agentic.nfsu.drive").is_ok());
+	// A manifest naming a different port is refused, and the refusal names both
+	// halves: the value and the file, because either could be the wrong one.
+	let Why = Serves(&*Held, "agentic.browse").expect_err("the ports differ");
+	assert!(Why.contains("agentic.nfsu.drive"), "{Why}");
+	assert!(Why.contains("agentic.browse"), "{Why}");
+}
+
+#[test]
 fn the_table_agrees_with_the_bytes_each_manifest_ships() {
 	// Deliberately not a count. The table grows when the workspace does, and a
 	// number here would fail on the card that adds the next module rather than
@@ -151,6 +180,7 @@ fn every_port_is_reachable_at_its_own_path() {
 	assert!(std::any::type_name::<AgenticSdk::Port::Design::Verifier>().starts_with("AgenticDesignVerification"));
 	assert!(std::any::type_name::<AgenticSdk::Port::Skill::Contract>().starts_with("AgenticSkillContract"));
 	assert!(std::any::type_name::<AgenticSdk::Port::Runtime::Error>().starts_with("AgenticRuntime"));
+	assert!(std::any::type_name::<AgenticSdk::Port::Adapter::StandIn>().starts_with("AgenticAdapter"));
 	// And the choice the crate documents: the root's `Error` is the browse
 	// port's, because open, evaluate and dispose are the calls a consumer makes
 	// first.
@@ -182,6 +212,7 @@ fn the_facade_declares_its_own_kind_and_is_not_an_entry_in_the_table() {
 		"agentic.chat.ask",
 		"agentic.verify.design",
 		"agentic.skill.validate",
+		"agentic.adapter",
 	] {
 		assert!(Required.contains(&Port), "{Port} is not declared: {Required:?}");
 	}

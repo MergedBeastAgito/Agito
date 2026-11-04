@@ -46,6 +46,35 @@ pub trait Adapter: Send + Sync {
 
 ---
 
+## The facade carries the port
+
+A third-party adapter depends on `agentic-sdk` - the workspace's facade - and on nothing else, so
+the port has to be reachable from there or a crate outside the tree cannot implement it. The facade
+re-exports `Adapter`, `Serves` and `StandIn` at its root, and the adapter's own `Error` at
+`Port::Adapter::Error`, because the root's `Error` is the browse port's - a consumer matches on that
+one first:
+
+```rust
+use std::sync::Arc;
+
+use agentic_sdk::{Adapter, Serves, StandIn};
+
+let Held:Arc<dyn Adapter> = Arc::new(StandIn::New("agentic.nfsu.drive"));
+assert!(Serves(&*Held, "agentic.nfsu.drive").is_ok());
+```
+
+`agentic-adapter` declares `kind: "capability"` and not `"adapter"`, and that is what makes the edge
+legal: the boundary rule lets a facade import any port and lets an adapter name a capability's port
+shapes, while an adapter naming another adapter is the edge it forbids. The facade is also the one
+thing a crate _inside_ the workspace must not name - it exists for the consumer outside the tree,
+and a third-party adapter is exactly that consumer.
+
+`Fixture/Sdk/Test/Port.rs` is the claim: one dependency, one trait object, one `Serves` call, and no
+substrate behind it. `Crate/Sdk/Test/Facade.rs` checks the other half - that the facade's dependency
+line is six ports and that the adapter is one of them.
+
+---
+
 ## No registry
 
 A registry is a global, and a global makes load order observable: two adapters claiming one port are
@@ -94,7 +123,7 @@ Nothing is compiled into Agentic, and nothing is registered. Two verbs read a th
 `module.json`:
 
 - `agentic manifests --adapter <dir>` lists every module under the given roots after the ones the
-  workspace ships, with the directory each was read from in the fifth column.
+  workspace ships, with the `module.json` each was read from in the fifth column.
 - `agentic verify --module <name> --adapter <dir>` reports readiness for one of them. The command
   line is the same one the workspace's own modules use.
 
@@ -158,6 +187,7 @@ decide whether it is well formed.
 | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | The trait is object-safe and usable as `Arc<dyn Adapter>`                    | `Crate/Adapter/Test/Adapter.rs`                                      |
 | A foreign implementation satisfies the trait                                 | `Crate/Adapter/Test/Adapter.rs`                                      |
+| A consumer outside the tree reaches the port through the facade alone        | `Crate/Sdk/Test/Facade.rs`, `Fixture/Sdk/Test/Port.rs`               |
 | The port a value reports matches the manifest that named it                  | `Crate/Adapter/Test/Adapter.rs`, `Crate/Agentic/Test/Composition.rs` |
 | An adapter under a root is listed with its port and its directory            | `Crate/Agentic/Test/Composition.rs`                                  |
 | An adapter under a root verifies ready, with `code: null`                    | `Crate/Agentic/Test/Composition.rs`                                  |

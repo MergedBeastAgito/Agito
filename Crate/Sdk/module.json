@@ -12,7 +12,8 @@
 			"agentic.browse",
 			"agentic.chat.ask",
 			"agentic.verify.design",
-			"agentic.skill.validate"
+			"agentic.skill.validate",
+			"agentic.adapter"
 		]
 	},
 	"artefact": {

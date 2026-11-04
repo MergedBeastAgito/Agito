@@ -380,12 +380,26 @@ fn an_adapter_root_that_does_not_exist_is_skipped_without_breaking_the_listing()
 }
 
 #[test]
+fn an_adapter_root_that_is_a_file_is_skipped_rather_than_failing_every_verb() {
+	// The same rule one step further: a path that exists but cannot hold crates
+	// is a misconfiguration, and a listing that refuses to run is a worse answer
+	// than one that says so and lists what it knows.
+	let Root = scratch("adapter-not-a-directory");
+	let File = Root.join("module.json");
+	fs::write(&File, "{}").expect("the file is writable");
+	let Text = Drive(Run(Verb::Manifests { Adapter:roots(&File) })).expect("listed");
+	assert_eq!(Text.lines().count(), 9);
+}
+
+#[test]
 fn the_adapter_path_value_is_split_the_way_a_path_is() {
+	use std::ffi::OsStr;
+
 	use Agentic::Fn::Discover;
 
-	assert_eq!(Discover::FromValue(Some("/one:/two")).len(), 2);
+	assert_eq!(Discover::FromValue(Some(OsStr::new("/one:/two"))).len(), 2);
 	assert!(Discover::FromValue(None).is_empty());
-	assert!(Discover::FromValue(Some("")).is_empty());
+	assert!(Discover::FromValue(Some(OsStr::new(""))).is_empty());
 }
 
 #[test]

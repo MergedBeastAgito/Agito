@@ -21,6 +21,7 @@
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	env,
+	ffi::OsStr,
 	fs,
 	path::{Path, PathBuf},
 };
@@ -36,7 +37,11 @@ pub fn Roots(Given:&[String]) -> Vec<PathBuf> {
 	if !Given.is_empty() {
 		return Given.iter().map(PathBuf::from).collect();
 	}
-	FromValue(env::var(Variable).ok().as_deref())
+	// `var_os` rather than `var`: a path list is a list of paths, and a path is
+	// not required to be UTF-8. A value that is not readable as text is still a
+	// value somebody set, and dropping it silently would make the listing depend
+	// on the encoding of an unrelated directory name.
+	FromValue(env::var_os(Variable).as_deref())
 }
 
 /// The directories a path-list value names.
@@ -44,7 +49,7 @@ pub fn Roots(Given:&[String]) -> Vec<PathBuf> {
 /// Separate from [`Roots`] so the parse can be exercised without setting a
 /// process-wide variable: `std::env::set_var` is unsafe, and a test that reached
 /// for it would be a test that races every other test in the binary.
-pub fn FromValue(Value:Option<&str>) -> Vec<PathBuf> {
+pub fn FromValue(Value:Option<&OsStr>) -> Vec<PathBuf> {
 	let Some(Value) = Value else {
 		return Vec::new();
 	};
@@ -61,6 +66,10 @@ pub fn Discover(Roots:&[PathBuf]) -> Result<Vec<External>, String> {
 	for Root in Roots {
 		if !Root.exists() {
 			eprintln!("agentic: the adapter root {} does not exist; skipping it", Root.display());
+			continue;
+		}
+		if !Root.is_dir() {
+			eprintln!("agentic: the adapter root {} is not a directory; skipping it", Root.display());
 			continue;
 		}
 		let Own = Root.join("module.json");

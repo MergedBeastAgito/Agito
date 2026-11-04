@@ -15,12 +15,18 @@ path = "Source/Library.rs"
 # could not depend on without depending on the substrate's choices, and the one
 # crate that names `chromiumoxide` is `agentic-browser-cdp` - two levels below
 # this one, where a consumer never has to look.
+#
+# `agentic-adapter` is here for the one consumer this crate cannot reach
+# otherwise: a substrate outside this tree. It declares `kind: "capability"`, so
+# the edge is the one the boundary rule allows, and it ships a trait, a check and
+# a stand-in - no substrate, no executor, no serialiser a consumer would inherit.
 [dependencies]
 agentic-runtime = { workspace = true }
 agentic-browser-cdp = { workspace = true }
 agentic-chat-driver = { workspace = true }
 agentic-design-verification = { workspace = true }
 agentic-skill-contract = { workspace = true }
+agentic-adapter = { workspace = true }
 
 # The facade's own test parses the manifests it embeds, which is the one place a
 # serialiser is needed and it is not needed by anything a consumer builds.

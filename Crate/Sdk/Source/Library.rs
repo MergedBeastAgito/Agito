@@ -23,13 +23,16 @@
 //!   crate, and a consumer that had named the client's types would have to
 //!   change with it. Nothing here re-exports one - [`Chrome`] is this
 //!   workspace's launcher, not the library's browser.
-//! - **The adapter seam.** `Launcher`, `Transport` and `PageWant` are how a
-//!   session is bound to a mechanism. A consumer binds a session, not a
-//!   transport; an extension point nobody extends is a second way to get the
-//!   browser wrong.
-//! - **The policy engine.** Leases, fences, per-run budgets and the local
-//!   stand-in are the composition root's business. A consumer that held a lease
-//!   would be a second authority over the same resource.
+//! - **The browser's own adapter seam.** `Launcher`, `Transport` and `PageWant`
+//!   are how a session is bound to a mechanism inside `agentic-browser-cdp`. A
+//!   consumer binds a session, not a transport; an extension point nobody
+//!   extends is a second way to get the browser wrong. That is the opposite of
+//!   [`Adapter`], which is exported: this seam is one crate's internals, while
+//!   the adapter port is the shape another crate implements.
+//! - **The policy engine.** Leases, fences, per-run budgets and the runtime's
+//!   local stand-in - a different double from the adapter's [`StandIn`] - are
+//!   the composition root's business. A consumer that held a lease would be a
+//!   second authority over the same resource.
 //! - **The script helpers.** `Escape`, `FillDeclared` and `AssertParameters` are
 //!   build-time machinery for the crates that send JavaScript, and a consumer
 //!   sends an expression string. The `script!` macro is the one exception, and it
@@ -43,16 +46,17 @@
 //!   panic inside a launch that had already succeeded, so the executor stays the
 //!   consumer's to choose and the adapter's to require.
 //!
-//! # Five ports, four `Error` types, one at the root
+//! # Six ports, five `Error` types, one at the root
 //!
-//! Four of the five crates below ship an enum called `Error`, and four ship a
+//! Five of the six crates below ship an enum called `Error`, and four ship a
 //! constructor called `Create`. Only one of each can sit at the root, so the one
 //! that does is `agentic.browse`'s: open, evaluate and dispose are the calls the
 //! required flow makes, and a failure to open a page is the failure a consumer
 //! matches on first. Every other port's copy is at its own path -
-//! [`Port::Chat::Error`], [`Port::Design::Error`], [`Port::Runtime::Error`],
-//! [`Port::Skill::Error`] - and every re-export in this file names the port it
-//! belongs to, so the choice is readable rather than remembered.
+//! [`Port::Adapter::Error`], [`Port::Chat::Error`], [`Port::Design::Error`],
+//! [`Port::Runtime::Error`], [`Port::Skill::Error`] - and every re-export in
+//! this file names the port it belongs to, so the choice is readable rather than
+//! remembered.
 //!
 //! # The flow the surface is shaped around
 //!
@@ -159,6 +163,23 @@ pub use AgenticBrowserCDP::Error;
 /// `agentic.browse` - its three codes: `browser-unavailable`,
 /// `navigation-failed`, `timeout`.
 pub use AgenticBrowserCDP::Code;
+/// `agentic.adapter` - the port a substrate this workspace did not write
+/// implements: what it serves, one request bounded by the caller's deadline, and
+/// a release that never fails.
+///
+/// It is at the root because a third-party adapter is the consumer that has
+/// nothing else: a crate outside this tree depends on this facade and on no
+/// other Agentic package, so a port it cannot name here is a port it cannot
+/// implement. Every method takes `&self`, which is what makes `Arc<dyn Adapter>`
+/// possible.
+pub use AgenticAdapter::Adapter;
+/// `agentic.adapter` - whether a value agrees with the manifest that named it.
+/// The composition root calls this once, where both halves are in hand; the
+/// manifest reader cannot, because it never constructs the value.
+pub use AgenticAdapter::Serves;
+/// `agentic.adapter` - a scripted adapter, so a consumer tests its own use of
+/// the port with no substrate behind it.
+pub use AgenticAdapter::StandIn;
 
 /// The workspace's manifest table: every module it ships, with the port each
 /// provides and the bytes of its `module.json`.

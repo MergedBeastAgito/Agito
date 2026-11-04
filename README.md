@@ -73,9 +73,11 @@ the TypeScript compiled into the JavaScript sent to a page, PascalCase module na
 - **`agentic-design-verification`** - measurement and evidence, holding no design of its own.
 - **`agentic-workflow`** - the bridge from the substrate to the consumer-owned ports, and one
   composition that uses four capabilities.
-- **`agentic-sdk`** - the facade: the five crates a consumer would otherwise name, re-exported
-  behind one dependency, with no behaviour of its own. `Crate/Sdk/Source/Library.rs` states what may
-  appear there and why the substrate, the adapter seam and the policy engine do not.
+- **`agentic-sdk`** - the facade: the six crates a consumer would otherwise name, re-exported behind
+  one dependency, with no behaviour of its own. `Crate/Sdk/Source/Library.rs` states what may appear
+  there and why the substrate, the browser's own adapter seam and the policy engine do not. The
+  sixth is the adapter port, which a substrate outside this tree implements - the one consumer the
+  facade cannot reach any other way.
 - **`agentic`** - wiring, the manifest table and the executable.
 
 **A capability's required surface stays runtime-neutral.** The four capability crates do not name
@@ -118,13 +120,15 @@ it - the Rust tests, which are now the only statement of the contract.
 
 One crate outside the workspace, and its own workspace root: `Fixture/Sdk/` depends on `agentic-sdk`
 and on nothing else this tree ships. It builds a session, opens `Page/Probe.html` and evaluates an
-expression - the whole flow the facade exists to make possible from one dependency. `tokio` is the
-only other dependency, because the browser adapter spawns its handler on it, and nothing else is
-named: the evaluated value is read with `as_str` and `Display` rather than through a serialiser the
-consumer would have to depend on.
+expression - the whole flow the facade exists to make possible from one dependency - and its `Test/`
+holds the adapter port as `Arc<dyn Adapter>`, which is the other consumer the facade exists for: a
+substrate outside this tree. `tokio` is the only other dependency, because the browser adapter
+spawns its handler on it, and nothing else is named: the evaluated value is read with `as_str` and
+`Display` rather than through a serialiser the consumer would have to depend on.
 
 ```
 cargo build --manifest-path Fixture/Sdk/Cargo.toml   # the facade alone
+cargo test --manifest-path Fixture/Sdk/Cargo.toml    # the port; no browser, no substrate
 cargo run --manifest-path Fixture/Sdk/Cargo.toml     # needs a browser; AGENTIC_BROWSER names one
 cargo tree --manifest-path Fixture/Sdk/Cargo.toml --depth 1
 ```

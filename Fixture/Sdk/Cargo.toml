@@ -25,6 +25,12 @@ tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
 name = "agentic-sdk-fixture"
 path = "Source/Main.rs"
 
+# The adapter port, from a consumer's position: one dependency, no substrate, no
+# browser. `cargo test` runs it without opening anything.
+[[test]]
+name = "Port"
+path = "Test/Port.rs"
+
 # The house style is PascalCase everywhere: locals, fields and modules. These
 # three lints are the only ones that disagree with it, and a fixture that
 # silently wrote snake_case would not look like the consumer it stands in for.
