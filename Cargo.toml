@@ -3,7 +3,7 @@ resolver = "3"
 members = ["Crate/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.88"
 # The repository ships one licence, so this field agrees with it: `LICENSE` is
@@ -21,12 +21,12 @@ publish = false
 # workflow runs so the `.crate` files ship without a registry - refuses a path
 # dependency that names no version. Nothing here is published to crates.io;
 # `publish = false` above sees to that.
-agentic-runtime = { version = "0.1.0", path = "Crate/Runtime" }
-agentic-skill-contract = { version = "0.1.0", path = "Crate/SkillContract" }
-agentic-chat-driver = { version = "0.1.0", path = "Crate/ChatDriver" }
-agentic-browser-cdp = { version = "0.1.0", path = "Crate/BrowserCDP" }
-agentic-design-verification = { version = "0.1.0", path = "Crate/DesignVerification" }
-agentic-workflow = { version = "0.1.0", path = "Crate/Workflow" }
+agentic-runtime = { version = "0.1.1", path = "Crate/Runtime" }
+agentic-skill-contract = { version = "0.1.1", path = "Crate/SkillContract" }
+agentic-chat-driver = { version = "0.1.1", path = "Crate/ChatDriver" }
+agentic-browser-cdp = { version = "0.1.1", path = "Crate/BrowserCDP" }
+agentic-design-verification = { version = "0.1.1", path = "Crate/DesignVerification" }
+agentic-workflow = { version = "0.1.1", path = "Crate/Workflow" }
 
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

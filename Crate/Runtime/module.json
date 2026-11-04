@@ -1,7 +1,7 @@
 {
 	"name": "@agentic/runtime",
 	"kind": "runtime",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"provides": {
 		"port": "agentic.runtime",
 		"errors": ["admission-refused", "lease-held", "budget-exhausted"]
