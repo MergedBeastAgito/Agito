@@ -513,7 +513,11 @@ jobs:
           set -euo pipefail
           git archive --format=tar.gz --prefix="agentic-${VERSION}/" \
             -o "dist/agentic-${VERSION}-source.tar.gz" "${GITHUB_SHA}"
-          tar tzf "dist/agentic-${VERSION}-source.tar.gz" | head -20
+          # Listed into a file, then head reads the file. `tar ... | head` dies
+          # with `tar: stdout: write error` when head closes the pipe, and
+          # `pipefail` turns that into a failed release.
+          tar tzf "dist/agentic-${VERSION}-source.tar.gz" > "${RUNNER_TEMP}/source-list.txt"
+          head -20 "${RUNNER_TEMP}/source-list.txt"
           ls -l "dist/agentic-${VERSION}-source.tar.gz"
 
       # The skill corpus is part of what this repository ships, so it travels
@@ -523,7 +527,8 @@ jobs:
         run: |
           set -euo pipefail
           tar -czf "dist/agentic-skills-${VERSION}.tar.gz" -C . Documentation/Skill
-          tar tzf "dist/agentic-skills-${VERSION}.tar.gz" | head -20
+          tar tzf "dist/agentic-skills-${VERSION}.tar.gz" > "${RUNNER_TEMP}/skills-list.txt"
+          head -20 "${RUNNER_TEMP}/skills-list.txt"
           ls -l "dist/agentic-skills-${VERSION}.tar.gz"
 
       # One list over every file that will be attached - the per-target lists
@@ -583,27 +588,14 @@ jobs:
           printf '%s\n' "${Files[@]}"
           gh release upload "${TAG}" "${Files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
 
-      # Publishing is the last act, not the first: this repository's releases are
-      # immutable, so a release published before its assets are attached can
-      # never receive them. Up to here everything landed on a draft.
-      - name: Publish the draft
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          IsDraft="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft')"
-          if [ "${IsDraft}" = "true" ]; then
-            gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
-            echo "published ${TAG}"
-          else
-            echo "${TAG} is already published - leaving it alone"
-          fi
-
       # Gate two: read the release back. The asset set must contain every
       # expected name, and every expected file must have an entry in the merged
       # checksum list. The expected list is built from the independent target
       # declaration, not from the matrix, so a deleted leg fails by name.
+      #
+      # This runs while the release is still a DRAFT on purpose: publishing is
+      # what makes the asset set final, so an incomplete set has to be caught
+      # before that, not after.
       - name: Assert the release asset set
         shell: bash
         env:
@@ -651,6 +643,24 @@ jobs:
             exit 1
           fi
           echo "All $(wc -l < "${RUNNER_TEMP}/expected-assets.txt") expected assets are attached and covered by SHA256SUMS.txt."
+
+      # Publishing is the last act, not the first: this repository's releases are
+      # immutable, so a release published before its assets are attached can
+      # never receive them. Everything above landed on a draft; this is the one
+      # step that makes the set final, and it runs only once the set is proven.
+      - name: Publish the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          IsDraft="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft')"
+          if [ "${IsDraft}" = "true" ]; then
+            gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
+            echo "published ${TAG}"
+          else
+            echo "${TAG} is already published - leaving it alone"
+          fi
 
       # Gate three: the published bytes. Download what the release actually
       # serves and verify it against the checksum list the release also serves.
