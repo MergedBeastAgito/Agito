@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agentic"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-browser-cdp",
  "agentic-chat-driver",
@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-browser-cdp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-runtime",
  "chromiumoxide",
@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-chat-driver"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-runtime",
  "oxc_allocator",
@@ -44,7 +44,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-design-verification"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-runtime",
  "serde_json",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-runtime"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde_json",
  "tokio",
@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-skill-contract"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-runtime",
  "serde",
@@ -70,7 +70,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-workflow"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-browser-cdp",
  "agentic-chat-driver",
