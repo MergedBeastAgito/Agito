@@ -5,12 +5,11 @@
 # no documented fallback: if a file cannot be attached, the release fails rather
 # than looking complete.
 #
-# The shape is the house pattern (`PlayForm/Aphrodite`,
-# `.github/workflows/Build.yml`): `Release` creates the release exactly once
-# before any matrix leg runs, each `Build` leg attaches only its own files, and
-# `Finalize` runs once afterwards - it packages what is not a per-platform
-# binary, merges the checksums, attaches them, and then reads the release back
-# to assert the asset set.
+# The shape is the house pattern (Aphrodite's `Build.yml`): `Release` creates
+# the release exactly once before any matrix leg runs, each `Build` leg attaches
+# only its own files, and `Finalize` runs once afterwards - it packages what is
+# not a per-platform binary, merges the checksums, attaches them, and then reads
+# the release back to assert the asset set.
 name: Release
 
 on:
@@ -178,10 +177,13 @@ jobs:
           restore-keys: cargo-build-${{ runner.os }}-${{ matrix.target }}-
 
       # The workspace root is the build root: `Crate/*` are the members and
-      # `.cargo/config.toml` puts every artefact under `Target/`.
+      # `.cargo/config.toml` puts every artefact under `Target/`. `--locked`
+      # because `Cargo.lock` is tracked: a lock that no longer matches the
+      # manifests is a failed release, not a different binary shipped under the
+      # same tag.
       - name: Build
         shell: bash
-        run: cargo build --release -p agentic --target ${{ matrix.target }}
+        run: cargo build --locked --release -p agentic --target ${{ matrix.target }}
 
       # The suite runs before anything is packaged, so a release cannot be cut
       # from a tree that does not pass its own tests.
@@ -192,13 +194,13 @@ jobs:
           Target="${{ matrix.target }}"
           Host="$(rustc -vV | sed -n 's/^host: //p')"
           if [ "$Host" = "$Target" ]; then
-            cargo test --release -p agentic --target "$Target"
+            cargo test --locked --release -p agentic --target "$Target"
           else
             # A cross-compiled binary cannot execute on this runner, so this leg
             # compiles the suite without running it; the native legs execute it.
             # Compiling still catches cfg-gated and link-level breaks.
             echo "cross-compiling $Target on $Host: compiling the suite, not running it"
-            cargo test --release -p agentic --target "$Target" --no-run
+            cargo test --locked --release -p agentic --target "$Target" --no-run
           fi
 
       - name: Package (Unix)
