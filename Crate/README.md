@@ -8,9 +8,19 @@ The layout follows the house style of `github.com/PlayForm/Run`: one directory p
 `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and
 contracts, PascalCase module names, and one `Target/` at the workspace root.
 
-`Source/Script/` is where the JavaScript lives that the driver and the workflow send to a page: one
-file per expression, taken whole by `include_str!` and filled at call time, so an editor and a
-linter see the expression that a `format!` used to hide.
+`Source/Script/` is where the TypeScript lives that the driver and the workflow send to a page: one
+file per expression, compiled by the crate's `build.rs` into the JavaScript a page receives and
+baked in by `script!`. A file's `declare const __PARAM_Name__: T;` lines are both the parameter
+types and the list the build holds a call site to - a parameter declared `string` is escaped into a
+JavaScript string literal, any other declared type is spliced as code - so an editor, a linter and a
+compiler see the expression that a `format!` used to hide, and the compiled bytes are the bytes the
+page was already being sent. `Build/Script.rs` is the one statement of how a script is compiled;
+both `ChatDriver` and `Workflow` include it from their `build.rs`. `Documentation/Script.md` records
+the compiler choice and the measurements behind it.
+
+The TypeScript parser is a **build-only** dependency (`[build-dependencies]` in those two crates,
+pinned exactly): nothing at run time links it, no `node_modules` is involved, and a build works
+offline once the crates are fetched.
 
 ---
 

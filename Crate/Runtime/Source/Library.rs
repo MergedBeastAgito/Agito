@@ -62,7 +62,7 @@ pub use crate::{
 		BlockOn::BlockOn,
 		Bound::Bound,
 		Race::{Either, Race},
-		Script::{AssertParameters, Escape, Fill, FillDeclared, Kind, Marker, Unfilled},
+		Script::{AssertParameters, Escape, FillDeclared, Kind, Marker, Unfilled},
 	},
 	Struct::{
 		Authority::{Admitted, Authority},

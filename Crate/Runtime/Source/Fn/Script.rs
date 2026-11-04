@@ -56,42 +56,55 @@ pub fn Marker(Name:&str) -> String {
 	format!("__PARAM_{Name}__")
 }
 
-/// Replace every marker in `Template` with the value `Values` gives it, and
-/// nothing else.
-///
-/// A parameter the template does not name is not an error - it is simply not
-/// used - because a caller may build one parameter set for several scripts. A
-/// marker no value names is left in place, deliberately: [`Unfilled`] is what
-/// reports it.
-pub fn Fill(Template:&str, Values:&[(&str, &str)]) -> String {
-	let mut Text = Template.to_string();
-	for (Name, Value) in Values {
-		Text = Text.replace(&Marker(Name), Value);
-	}
-	Text
-}
-
 /// Fill a script from the parameter contract its build wrote.
 ///
 /// `Declared` is the script's `.params` file, one `Name:kind` per line, in the
 /// order the script declares them. A `text` parameter is escaped into a
 /// JavaScript string literal; a `code` parameter is spliced as it stands.
+///
+/// One pass, left to right, over the template's own markers: a value is written
+/// into the output and never looked at again. That matters because a value can
+/// be a page's text, and a page whose question happens to contain
+/// `__PARAM_Seen__` would otherwise have a later parameter's code spliced into
+/// the middle of the string it sits in - substitution that can break the
+/// expression is exactly what escaping exists to prevent.
 pub fn FillDeclared(Template:&str, Declared:&str, Values:&[(&str, &str)]) -> String {
-	let mut Text = Template.to_string();
-	for Line in Declared.lines() {
-		let Some((Name, Kind)) = Line.split_once(':') else {
-			continue;
+	let mut Out = String::with_capacity(Template.len());
+	let mut Rest = Template;
+	while let Some(At) = Rest.find("__PARAM_") {
+		Out.push_str(&Rest[..At]);
+		let After = &Rest[At + "__PARAM_".len()..];
+		let Some(End) = After.find("__") else {
+			// An unterminated marker is not a marker: the rest is text, and
+			// `Unfilled` is what reports it.
+			Out.push_str(&Rest[At..]);
+			return Out;
 		};
-		let Some((_, Value)) = Values.iter().find(|(Given, _)| *Given == Name) else {
-			continue;
-		};
-		let Replacement = match Kind.trim() {
-			"text" => Escape(Value),
-			_ => (*Value).to_string(),
-		};
-		Text = Text.replace(&Marker(Name), &Replacement);
+		let Name = &After[..End];
+		match Substitution(Declared, Name, Values) {
+			Some(Replacement) => Out.push_str(&Replacement),
+			// No value names it: leave the marker, so the page says which
+			// parameter was missing instead of the expression quietly changing.
+			None => Out.push_str(&Rest[At..At + "__PARAM_".len() + End + 2]),
+		}
+		Rest = &After[End + 2..];
 	}
-	Text
+	Out.push_str(Rest);
+	Out
+}
+
+/// What `Name` becomes: escaped when the script declares it `text`, as it
+/// stands when it declares anything else.
+fn Substitution(Declared:&str, Name:&str, Values:&[(&str, &str)]) -> Option<String> {
+	let Kind = Declared
+		.lines()
+		.find_map(|Line| Line.split_once(':').filter(|(Declared, _)| *Declared == Name))
+		.map(|(_, Kind)| Kind.trim())?;
+	let (_, Value) = Values.iter().find(|(Given, _)| *Given == Name)?;
+	Some(match Kind {
+		"text" => Escape(Value),
+		_ => (*Value).to_string(),
+	})
 }
 
 /// `Value` as a JavaScript string literal, quotes included.
@@ -303,6 +316,18 @@ mod Tests {
 		let Filled = FillDeclared("x(__PARAM_Scroll__)", Declared, &[("Unused", "1")]);
 		assert_eq!(Unfilled(&Filled).as_deref(), Some("Scroll"));
 		assert_eq!(Unfilled("no marker here"), None);
+	}
+
+	#[test]
+	fn a_value_that_looks_like_a_marker_is_never_substituted_again() {
+		// A page's own text is data. If a question happens to contain a marker,
+		// the second pass must not splice another parameter's code into it.
+		let Filled = FillDeclared(
+			"const Text = __PARAM_Scroll__; const Seen = __PARAM_Serialise__;",
+			Declared,
+			&[("Scroll", "__PARAM_Serialise__"), ("Serialise", "() => 1")],
+		);
+		assert_eq!(Filled, "const Text = \"__PARAM_Serialise__\"; const Seen = () => 1;");
 	}
 
 	#[test]

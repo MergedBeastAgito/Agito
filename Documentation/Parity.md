@@ -276,13 +276,13 @@ two sources would find them.
   in one of the two `Names` implementations.
 
 - **`Format` is Rust-only.** `agentic chat --format markdown` reads an answer by serialising its DOM
-  (`Crate/ChatDriver/Source/Script/Extract.js`); the TypeScript half has no equivalent. Every
-  scenario is therefore a `text` scenario, and both halves still speak the same expression for it -
-  the Rust `text` expression is byte-identical to the TypeScript one, which is what lets each fake
-  recognise its own builder. A `markdown` case cannot join the differential run until the TypeScript
-  layer carries the serializer, and that layer is what `Package/` is scheduled to lose. What proves
-  the Markdown reading instead is `Crate/Agentic/Test/Extract.rs`, which drives a real page and
-  asserts the pipe table, the fence, the TeX and the nested list.
+  (`Crate/ChatDriver/Source/Script/Expressions/Extract.ts`); the TypeScript half has no equivalent.
+  Every scenario is therefore a `text` scenario, and both halves still speak the same expression for
+  it - the Rust `text` expression is byte-identical to the TypeScript one, which is what lets each
+  fake recognise its own builder. A `markdown` case cannot join the differential run until the
+  TypeScript layer carries the serializer, and that layer is what `Package/` is scheduled to lose.
+  What proves the Markdown reading instead is `Crate/Agentic/Test/Extract.rs`, which drives a real
+  page and asserts the pipe table, the fence, the TeX and the nested list.
 
 ---
 

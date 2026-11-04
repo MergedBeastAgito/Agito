@@ -63,8 +63,10 @@ starts Chromium or opens a socket.
 
 The same specification as a Cargo workspace of seven crates, in the house layout: one directory per
 crate under `Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/`
-for data and contracts, `Source/Script/` for the JavaScript sent to a page, PascalCase module names,
-and one `Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency lists.
+for data and contracts, `Source/Script/` for the TypeScript compiled into the JavaScript sent to a
+page, PascalCase module names, and one `Target/` at the workspace root. `Crate/README.md` carries
+the per-crate dependency lists, and `Documentation/Script.md` says how a script is compiled and why
+it is erased rather than transpiled.
 
 - **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
   `Bound`/`Race` combinators, and the policy engine. No dependencies.

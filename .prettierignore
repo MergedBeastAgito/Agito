@@ -12,10 +12,12 @@
 # Unanchored on purpose: every package and the workspace root can hold one.
 node_modules/
 
-# The script templates are bytes, not source to be formatted. Each one is taken
-# whole by `include_str!` and sent to a page, so a formatter that re-wraps a line
-# changes the expression; and `{{name}}` is a placeholder, which no JavaScript
-# parser accepts, so every tool that reads these files would report them broken.
+# The script sources are bytes, not source to be formatted. Each one is compiled
+# by a crate's `build.rs` and sent to a page as it stands, so a formatter that
+# re-wraps a line changes the expression a page receives - and the compiled
+# bytes are asserted against a fixture. They are also `.ts` whose identifiers
+# are parameters (`__PARAM_Scroll__`) and whose declarations are the parameter
+# contract the build reads, which is a shape only this build understands.
 Crate/*/Source/Script/
 
 # The feed tools' output. `bundle.mjs` writes `batch-NN.txt`, `tree.txt` and
