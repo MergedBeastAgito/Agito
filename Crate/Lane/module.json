@@ -1,0 +1,30 @@
+{
+	"name": "@agentic/lane",
+	"kind": "capability",
+	"version": "0.1.3",
+	"provides": {
+		"port": "agentic.lane.decide",
+		"errors": [
+			"corpus-unreadable",
+			"corpus-invalid",
+			"unknown-lane",
+			"no-match",
+			"budget-exhausted",
+			"post-failed",
+			"unparseable"
+		]
+	},
+	"requires": {},
+	"artefact": {
+		"entry": "Target/debug/libAgenticLane.rlib",
+		"hash": null,
+		"runtime": "rust>=1.88"
+	},
+	"state": "stateless",
+	"cost": {
+		"coldMs": 15,
+		"warmMs": 1,
+		"network": false
+	},
+	"verify": "agentic verify --module @agentic/lane"
+}

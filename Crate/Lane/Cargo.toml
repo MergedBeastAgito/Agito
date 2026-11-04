@@ -1,0 +1,31 @@
+[package]
+name = "agentic-lane"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "A template corpus as data: load it, select a lane by predicate, compose a decision-model request, and return typed answers with a metered budget."
+
+[lib]
+name = "AgenticLane"
+path = "Source/Library.rs"
+
+# Two dependencies, and the short list is the claim: no HTTP client, no
+# executor, no browser. The poster that reaches the endpoint is behind
+# `Struct::Port::Poster`, so the round trip is testable from a fixture and the
+# crate itself never opens a socket.
+[dependencies]
+agentic-runtime = { workspace = true }
+serde_json = { workspace = true }
+
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "Lane"
+path = "Test/Lane.rs"
