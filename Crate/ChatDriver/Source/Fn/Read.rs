@@ -84,13 +84,7 @@ pub fn DescribeText(Value:Option<&str>) -> String {
 /// The two sides must agree, which is why the count is code points rather than
 /// UTF-16 units: an answer with an emoji in it would otherwise mark differently
 /// in the driver than in the page and every read would look new.
-pub fn Mark(Text:&str) -> String {
-	format!(
-		"{}:{}",
-		Text.chars().count(),
-		Text.chars().take(48).collect::<String>()
-	)
-}
+pub fn Mark(Text:&str) -> String { format!("{}:{}", Text.chars().count(), Text.chars().take(48).collect::<String>()) }
 
 /// One read of the thread, or `None` when the page answered with something that
 /// is not one.

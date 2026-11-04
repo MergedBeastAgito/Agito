@@ -159,6 +159,18 @@ fn the_command_line_parses_every_verb() {
 		],
 		vec![
 			"agentic",
+			"chat",
+			"--url",
+			"https://chat.example/",
+			"--model",
+			"sol",
+			"--question",
+			"why",
+			"--format",
+			"markdown",
+		],
+		vec![
+			"agentic",
 			"design",
 			"--url",
 			"https://example.test/",

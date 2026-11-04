@@ -13,7 +13,19 @@ use std::{
 };
 
 use AgenticChatDriver::{
-	Answer, Chat, Code, Control, Create, DefaultSelectors, Driver, Error, Mode, Observation, Options, Question,
+	Answer,
+	Chat,
+	Code,
+	Control,
+	Create,
+	DefaultSelectors,
+	Driver,
+	Error,
+	Format,
+	Mode,
+	Observation,
+	Options,
+	Question,
 };
 use AgenticRuntime::{BlockOn, Call, Clock, Never, Signal};
 use Fake::{Answers, FakePage, Release, Script, TestPace};
@@ -25,9 +37,7 @@ fn Asked(Text:&str, Model:&str) -> Question {
 	Question { Text:Text.to_string(), Mode:Mode::Search, Model:Model.to_string() }
 }
 
-fn Built(Page:&Arc<FakePage>, Pace:&Arc<TestPace>) -> Driver {
-	BuiltWith(DefaultSelectors(), Page, Pace)
-}
+fn Built(Page:&Arc<FakePage>, Pace:&Arc<TestPace>) -> Driver { BuiltWith(DefaultSelectors(), Page, Pace) }
 
 /// The same driver, reading the page the caller's way.
 fn BuiltWith(Selectors:AgenticChatDriver::Selectors, Page:&Arc<FakePage>, Pace:&Arc<TestPace>) -> Driver {
@@ -463,4 +473,77 @@ fn the_settlement_state_resets_when_the_thread_stops_growing() {
 	Progress.Observe(Some("answer"));
 	assert!(!Progress.Observe(None), "an unchanged thread confirms nothing");
 	assert!(!Progress.Observe(Some("answer")), "the count started again");
+}
+
+#[test]
+fn the_default_reading_is_the_rendered_text_and_a_selector_file_can_ask_for_markdown() {
+	use AgenticChatDriver::Struct::Selectors::Merged;
+	assert_eq!(
+		DefaultSelectors().Format,
+		Format::Text,
+		"the recorded baselines were read as text"
+	);
+	assert_eq!(Merged(&json!({ "format": "markdown" })).Format, Format::Markdown);
+	assert_eq!(Merged(&json!({ "format": " Markdown " })).Format, Format::Markdown);
+	// A word that names no format is not a format: it keeps the default rather
+	// than capturing a thread in something the caller did not ask for.
+	assert_eq!(Merged(&json!({ "format": "md" })).Format, Format::Text);
+	// A file that says nothing about the format keeps everything else.
+	let Silent = Merged(&json!({ "answer": ".answer" }));
+	assert_eq!(Silent.Format, Format::Text);
+	assert_eq!(Silent.Answer, ".answer");
+}
+
+#[test]
+fn a_markdown_capture_settles_and_reports_more_characters_than_the_rendered_text() {
+	use AgenticChatDriver::Selectors;
+	// The same answer as a page could render it, in the two readings the driver
+	// can ask for: the rendered text, and the DOM serialised.
+	let Rendered = "Entity	Definition	Example\nTask	Versioned intent	fresh-answer@3";
+	let Serialised =
+		"| Entity | Definition | Example |\n| --- | --- | --- |\n| Task | Versioned intent | fresh-answer@3 |";
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", Serialised));
+	let Driver = BuiltWith(Selectors { Format:Format::Markdown, ..DefaultSelectors() }, &Page, &Pace);
+	let mut Seen = Vec::new();
+	let Answer = Watch(&Driver, &Pace, Asked("why", "sol"), Span(2_000), &mut |Observation| {
+		Seen.push(Observation.clone());
+		Control::Continue
+	})
+	.expect("answered");
+	assert_eq!(Answer.Text, Serialised);
+	// The completion rule compares text to text, so a longer reading settles on
+	// the same third agreement as a shorter one - it is not a length rule.
+	assert_eq!(Seen.iter().filter(|Observation| Observation.Settled).count(), 1);
+	assert_eq!(Seen.len(), 4, "one read, then three agreements");
+	let Last = Seen.last().expect("a read");
+	assert!(Last.Settled);
+	assert!(
+		Last.Text.chars().count() > Rendered.chars().count(),
+		"markdown {} vs rendered {}",
+		Last.Text.chars().count(),
+		Rendered.chars().count()
+	);
+	// The turn is still recognised as the one this question caused: the page
+	// marks what it read, and the mark is of the text it sent.
+	assert!(Seen[0].Fresh);
+	assert_eq!(Page.Reads.load(Ordering::SeqCst), 5);
+}
+
+#[test]
+fn the_two_formats_are_different_expressions_and_only_markdown_carries_the_serializer() {
+	use AgenticChatDriver::ReadAnswers;
+	let Selectors = DefaultSelectors();
+	let Text = ReadAnswers(&Selectors, Format::Text);
+	let Markdown = ReadAnswers(&Selectors, Format::Markdown);
+	assert_ne!(Text, Markdown);
+	assert!(!Text.contains("Serialise"), "the text reading carries no serializer");
+	assert!(Markdown.contains("const Serialise = (Root)"), "the markdown reading carries it");
+	assert!(Markdown.contains("annotation[encoding=\"application/x-tex\"]"));
+	// Both read the same thread, so a change of format is not a change of what
+	// is captured.
+	for Expression in [&Text, &Markdown] {
+		assert!(Expression.contains("document.querySelectorAll"));
+		assert!(!Expression.contains("{{"), "no placeholder survives the fill");
+	}
 }

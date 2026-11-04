@@ -62,9 +62,6 @@ use crate::{
 /// How long between two reads of an answer while it is being written.
 pub const DefaultPoll:Duration = Duration::from_millis(250);
 
-
-
-
 /// A release that has not finished in this long is reported, not waited on.
 pub const DefaultDisposeBudget:Duration = Duration::from_secs(5);
 
@@ -370,13 +367,7 @@ impl Driver {
 			// observer sees the read that settled the answer rather than
 			// missing the one that mattered.
 			if let Some(Sink) = Sink.as_deref_mut() {
-				let Seen = Observation {
-					Count:Read.Count,
-					Text:Read.Text.clone(),
-					Busy:Read.Busy,
-					Fresh,
-					Settled,
-				};
+				let Seen = Observation { Count:Read.Count, Text:Read.Text.clone(), Busy:Read.Busy, Fresh, Settled };
 				if Sink(&Seen) == Control::Stop {
 					break Read.Text;
 				}

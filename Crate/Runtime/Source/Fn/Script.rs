@@ -1,19 +1,19 @@
 //! Filling a script's placeholders.
 //!
 //! The expressions this workspace sends to a page are JavaScript files, not
-//! string literals assembled by `format!`. A file cannot interpolate, so a value
-//! the caller supplies is written where it belongs as a `{{name}}` placeholder
-//! and replaced at call time. That is the whole of the mechanism, and it is here
-//! rather than in either crate that uses it because both a capability and the
-//! workflow that composes it need it, and two copies of a substitution rule is
-//! two chances for the rule to differ.
+//! string literals assembled by `format!`. A file cannot interpolate, so a
+//! value the caller supplies is written where it belongs as a `{{name}}`
+//! placeholder and replaced at call time. That is the whole of the mechanism,
+//! and it is here rather than in either crate that uses it because both a
+//! capability and the workflow that composes it need it, and two copies of a
+//! substitution rule is two chances for the rule to differ.
 //!
 //! What the placeholder must not be is silent. A script whose caller forgets a
 //! parameter keeps `{{busy}}` in the expression, and a page that receives it
-//! throws a `SyntaxError` - a failure with a reason, not a selector that quietly
-//! matches nothing. [`Unfilled`] is the same check without a page: it names the
-//! placeholder a string still carries, so a test can assert that every script is
-//! filled completely and that the check itself bites.
+//! throws a `SyntaxError` - a failure with a reason, not a selector that
+//! quietly matches nothing. [`Unfilled`] is the same check without a page: it
+//! names the placeholder a string still carries, so a test can assert that
+//! every script is filled completely and that the check itself bites.
 
 /// Replace every `{{name}}` in `Template` with the value `Parameters` gives it.
 ///

@@ -1,29 +1,31 @@
 //! The Rust side of the differential run for `agentic.chat.ask`.
 //!
 //! These cases are not written here: they are read from
-//! `scenarios/chat-driver.json` and `scenarios/generated/chat-driver.timing.json`,
-//! the same files `Package/chat-driver/Test/Parity.test.ts` reads. What this
-//! file adds is only the fake, the interpreter and the assertion - the fixture,
-//! the steps, the expected result and the expected ordered effect list all come
+//! `scenarios/chat-driver.json` and
+//! `scenarios/generated/chat-driver.timing.json`, the same files
+//! `Package/chat-driver/Test/Parity.test.ts` reads. What this file adds is only
+//! the fake, the interpreter and the assertion - the fixture, the steps, the
+//! expected result and the expected ordered effect list all come
 //! from the scenario files, so the two implementations cannot drift by being
 //! tested against two hand-written suites.
 //!
 //! `effects` is the protocol the implementation spoke: every open, evaluation,
 //! write, send, release and report the fake observed, in order. Two ports that
-//! returned the same value by different routes disagree here, which is the whole
-//! point.
+//! returned the same value by different routes disagree here, which is the
+//! whole point.
 //!
 //! The fake answers by *kind*, and it decides the kind by calling the same
-//! functions the driver calls (`Expressions::ReadMode` and friends), so a change
-//! to the protocol breaks the fake rather than passing silently. What it answers
-//! is the value the page's expression would have produced - a mode label folded
-//! to lower case, a model label trimmed - because that is what the TypeScript
-//! half sees when it evaluates the same expression against a page-shaped object.
+//! functions the driver calls (`Expressions::ReadMode` and friends), so a
+//! change to the protocol breaks the fake rather than passing silently. What it
+//! answers is the value the page's expression would have produced - a mode
+//! label folded to lower case, a model label trimmed - because that is what the
+//! TypeScript half sees when it evaluates the same expression against a
+//! page-shaped object.
 //!
 //! Time is the test's: the pace below is the one `BrowserCDP/Test/Parity.rs`
 //! uses. A pace that is about to fire models a caller giving up, not time
-//! passing - it fires the signal on its first wait and never finishes that wait,
-//! so the cancellation is what ends the call and no timer is involved.
+//! passing - it fires the signal on its first wait and never finishes that
+//! wait, so the cancellation is what ends the call and no timer is involved.
 //!
 //! `Test/Chat.rs` is kept as it is: that suite is the contract, this one is the
 //! comparison. `AGENTIC_PARITY_OUT=<path>` makes this test also write what it
@@ -35,15 +37,27 @@
 use std::{
 	collections::BTreeMap,
 	sync::{
-		Arc, Mutex,
+		Arc,
+		Mutex,
 		atomic::{AtomicU64, Ordering},
 	},
 	time::{Duration, Instant},
 };
 
 use AgenticChatDriver::{
-	Chat, Create, DefaultSelectors, Error, Expressions, Failure, Format, Mode, Options, Page, Question,
-	Selectors, Target,
+	Chat,
+	Create,
+	DefaultSelectors,
+	Error,
+	Expressions,
+	Failure,
+	Format,
+	Mode,
+	Options,
+	Page,
+	Question,
+	Selectors,
+	Target,
 };
 use AgenticRuntime::{BlockOn, Call, Cancellation, Clock, FutureBox, Never, Pace, Signal};
 use serde_json::{Map, Value, json};
@@ -85,7 +99,7 @@ impl Kind {
 }
 
 /// The expression's identity, decided by the driver's own functions.
-fn KindOf(Selectors: &Selectors, Question: &str, Expression: &str) -> Kind {
+fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
 	if Expression == Expressions::ReadMode(Selectors) {
 		Kind::Mode
 	} else if Expression == Expressions::PressMode(Selectors) {
@@ -114,35 +128,35 @@ fn KindOf(Selectors: &Selectors, Question: &str, Expression: &str) -> Kind {
 /// A page, scripted by the fixture.
 ///
 /// The script is the fixture's `page` object, kept whole, so a step's `before`
-/// patch is the same one-level merge the TypeScript half applies. Every field is
-/// flat, and `answersHangFrom` / `answersFailFrom` count *every* read of the
+/// patch is the same one-level merge the TypeScript half applies. Every field
+/// is flat, and `answersHangFrom` / `answersFailFrom` count *every* read of the
 /// thread - the correlation read the driver takes before the send is read one -
 /// so both halves index the same sequence.
 struct FakePage {
-	Page: Mutex<Value>,
-	Question: String,
-	Selectors: Selectors,
-	Effects: Effects,
+	Page:Mutex<Value>,
+	Question:String,
+	Selectors:Selectors,
+	Effects:Effects,
 	/// Every expression kind the driver asked for, in order.
-	Asked: Mutex<Vec<Kind>>,
-	Opens: AtomicU64,
-	Releases: AtomicU64,
-	Presses: AtomicU64,
-	Reads: AtomicU64,
+	Asked:Mutex<Vec<Kind>>,
+	Opens:AtomicU64,
+	Releases:AtomicU64,
+	Presses:AtomicU64,
+	Reads:AtomicU64,
 }
 
 impl FakePage {
-	fn New(Fixture: &Value, Effects: Effects) -> Arc<Self> {
+	fn New(Fixture:&Value, Effects:Effects) -> Arc<Self> {
 		Arc::new(Self {
-			Page: Mutex::new(Fixture.get("page").cloned().unwrap_or_else(|| json!({}))),
-			Question: string_at(Fixture, &["question", "text"]).unwrap_or_default(),
-			Selectors: DefaultSelectors(),
+			Page:Mutex::new(Fixture.get("page").cloned().unwrap_or_else(|| json!({}))),
+			Question:string_at(Fixture, &["question", "text"]).unwrap_or_default(),
+			Selectors:DefaultSelectors(),
 			Effects,
-			Asked: Mutex::new(Vec::new()),
-			Opens: AtomicU64::new(0),
-			Releases: AtomicU64::new(0),
-			Presses: AtomicU64::new(0),
-			Reads: AtomicU64::new(0),
+			Asked:Mutex::new(Vec::new()),
+			Opens:AtomicU64::new(0),
+			Releases:AtomicU64::new(0),
+			Presses:AtomicU64::new(0),
+			Reads:AtomicU64::new(0),
 		})
 	}
 
@@ -151,7 +165,7 @@ impl FakePage {
 	fn State(&self) -> Value { self.Page.lock().unwrap().clone() }
 
 	/// Apply the `page` half of a step's `before` patch, one level deep.
-	fn Patch(&self, Values: &Value) {
+	fn Patch(&self, Values:&Value) {
 		let mut Current = self.Page.lock().unwrap();
 		let (Some(Current), Some(Patch)) = (Current.as_object_mut(), Values.as_object()) else {
 			return;
@@ -161,10 +175,10 @@ impl FakePage {
 		}
 	}
 
-	fn Note(&self, Effect: String) { self.Effects.lock().unwrap().push(Effect); }
+	fn Note(&self, Effect:String) { self.Effects.lock().unwrap().push(Effect); }
 
 	/// The thread on its `Read`th read, counting from zero.
-	fn ThreadAt(&self, State: &Value, Read: u64) -> Value {
+	fn ThreadAt(&self, State:&Value, Read:u64) -> Value {
 		if bool_at(State, &["answersStall"]).unwrap_or(false) {
 			return json!({ "count": 1, "text": format!("still writing {Read}") });
 		}
@@ -175,13 +189,13 @@ impl FakePage {
 			Some(Reads) => {
 				let At = (Read as usize).min(Reads.len() - 1);
 				Reads.get(At).cloned().unwrap_or(Value::Null)
-			}
+			},
 		}
 	}
 }
 
 impl Page for FakePage {
-	fn Open<'a>(&'a self, Url: &'a str, _Call: Call) -> FutureBox<'a, Result<Target, Failure>> {
+	fn Open<'a>(&'a self, Url:&'a str, _Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
 		let State = self.State();
 		self.Note(format!("open:{Url}"));
 		match string_at(&State, &["open"]).unwrap_or_else(|| "answer".to_string()).as_str() {
@@ -190,19 +204,19 @@ impl Page for FakePage {
 				let Message = string_at(&State, &["openFailure"]).unwrap_or_default();
 				self.Note(format!("failed:open:{Message}"));
 				return Box::pin(async move { Err(Failure::Of(Message)) });
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 		self.Opens.fetch_add(1, Ordering::SeqCst);
 		self.Note(format!("opened:{Url}"));
-		Box::pin(async move { Ok(Target { Url: Url.to_string() }) })
+		Box::pin(async move { Ok(Target { Url:Url.to_string() }) })
 	}
 
 	fn Evaluate<'a>(
 		&'a self,
-		_Target: &'a Target,
-		Expression: &'a str,
-		_Call: Call,
+		_Target:&'a Target,
+		Expression:&'a str,
+		_Call:Call,
 	) -> FutureBox<'a, Result<Value, Failure>> {
 		let State = self.State();
 		let Kind = KindOf(&self.Selectors, &self.Question, Expression);
@@ -232,35 +246,34 @@ impl Page for FakePage {
 					Some(Text) => json!(Text.to_lowercase()),
 					None => Label,
 				}
-			}
+			},
 			Kind::Press => {
 				self.Presses.fetch_add(1, Ordering::SeqCst);
 				json!(true)
-			}
-			Kind::Model => match State.get("model").and_then(Value::as_str) {
-				Some(Label) => json!(Label.trim()),
-				None => State.get("model").cloned().unwrap_or(Value::Null),
+			},
+			Kind::Model => {
+				match State.get("model").and_then(Value::as_str) {
+					Some(Label) => json!(Label.trim()),
+					None => State.get("model").cloned().unwrap_or(Value::Null),
+				}
 			},
 			Kind::Composer => {
-				if string_at(&State, &["composer"]).unwrap_or_else(|| "textarea".to_string())
-					== "missing"
-				{
+				if string_at(&State, &["composer"]).unwrap_or_else(|| "textarea".to_string()) == "missing" {
 					json!(false)
 				} else {
 					self.Note(format!("written:{}", self.Question));
 					json!(true)
 				}
-			}
+			},
 			Kind::Submit => {
-				let Outcome =
-					string_at(&State, &["submit"]).unwrap_or_else(|| "sent".to_string());
+				let Outcome = string_at(&State, &["submit"]).unwrap_or_else(|| "sent".to_string());
 				match Outcome.as_str() {
 					"sent" => self.Note("sent".to_string()),
 					"disabled" => self.Note("refused:submit:disabled".to_string()),
-					_ => {}
+					_ => {},
 				}
 				json!(Outcome)
-			}
+			},
 			Kind::Answers => {
 				let Read = self.Reads.fetch_add(1, Ordering::SeqCst);
 				let At = Read + 1;
@@ -273,11 +286,13 @@ impl Page for FakePage {
 					return Box::pin(async move { Err(Failure::Of(Message)) });
 				}
 				self.ThreadAt(&State, Read)
-			}
-			Kind::Collapse => match State.get("collapse") {
-				Some(Value::String(Label)) => json!(Label.trim()),
-				Some(Other) => Other.clone(),
-				None => Value::Null,
+			},
+			Kind::Collapse => {
+				match State.get("collapse") {
+					Some(Value::String(Label)) => json!(Label.trim()),
+					Some(Other) => Other.clone(),
+					None => Value::Null,
+				}
 			},
 			Kind::Trace => State.get("trace").cloned().unwrap_or_else(|| json!([])),
 			Kind::Sources => State.get("sources").cloned().unwrap_or_else(|| json!([])),
@@ -287,11 +302,10 @@ impl Page for FakePage {
 		Box::pin(async move { Ok(Answer) })
 	}
 
-	fn Dispose<'a>(&'a self, Target: Target) -> FutureBox<'a, ()> {
+	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()> {
 		self.Releases.fetch_add(1, Ordering::SeqCst);
 		self.Note(format!("release:{}", Target.Url));
-		let Hang = string_at(&self.State(), &["release"]).unwrap_or_else(|| "answer".to_string())
-			== "hang";
+		let Hang = string_at(&self.State(), &["release"]).unwrap_or_else(|| "answer".to_string()) == "hang";
 		Box::pin(async move {
 			if Hang {
 				std::future::pending::<()>().await;
@@ -305,18 +319,18 @@ impl Page for FakePage {
 /// A pace that is about to fire models a caller giving up, not time passing: it
 /// fires the signal on its first wait and never finishes that wait, so the
 /// cancellation is what ends the call. That is what makes `signal: "after:N"`
-/// deterministic without a real timer. The first wait a chat call reaches is the
-/// guard of the first operation that has not answered yet - every operation
+/// deterministic without a real timer. The first wait a chat call reaches is
+/// the guard of the first operation that has not answered yet - every operation
 /// before it is ready on its first poll, and a ready operation never waits.
 struct TestPace {
-	Now: Mutex<Instant>,
-	Fire: Mutex<Option<Arc<Signal>>>,
+	Now:Mutex<Instant>,
+	Fire:Mutex<Option<Arc<Signal>>>,
 }
 
 impl TestPace {
-	fn New() -> Arc<Self> { Arc::new(Self { Now: Mutex::new(Instant::now()), Fire: Mutex::new(None) }) }
+	fn New() -> Arc<Self> { Arc::new(Self { Now:Mutex::new(Instant::now()), Fire:Mutex::new(None) }) }
 
-	fn Firing(self: &Arc<Self>, Signal: Arc<Signal>) -> Arc<Self> {
+	fn Firing(self: &Arc<Self>, Signal:Arc<Signal>) -> Arc<Self> {
 		*self.Fire.lock().unwrap() = Some(Signal);
 		self.clone()
 	}
@@ -327,7 +341,7 @@ impl Clock for TestPace {
 }
 
 impl Pace for TestPace {
-	fn Sleep(&self, Span: Duration) -> FutureBox<'_, ()> {
+	fn Sleep(&self, Span:Duration) -> FutureBox<'_, ()> {
 		if let Some(Signal) = self.Fire.lock().unwrap().take() {
 			*self.Now.lock().unwrap() += Duration::from_millis(1);
 			Signal.Fire();
@@ -339,7 +353,7 @@ impl Pace for TestPace {
 }
 
 /// Read a dotted path out of a JSON value.
-fn at<'a>(Document: &'a Value, Path: &[&str]) -> Option<&'a Value> {
+fn at<'a>(Document:&'a Value, Path:&[&str]) -> Option<&'a Value> {
 	let mut Cursor = Document;
 	for Step in Path {
 		Cursor = Cursor.get(*Step)?;
@@ -347,18 +361,19 @@ fn at<'a>(Document: &'a Value, Path: &[&str]) -> Option<&'a Value> {
 	Some(Cursor)
 }
 
-fn string_at(Document: &Value, Path: &[&str]) -> Option<String> {
+fn string_at(Document:&Value, Path:&[&str]) -> Option<String> {
 	at(Document, Path).and_then(Value::as_str).map(str::to_string)
 }
 
-fn bool_at(Document: &Value, Path: &[&str]) -> Option<bool> { at(Document, Path).and_then(Value::as_bool) }
+fn bool_at(Document:&Value, Path:&[&str]) -> Option<bool> { at(Document, Path).and_then(Value::as_bool) }
 
-fn number_at(Document: &Value, Path: &[&str]) -> Option<u64> { at(Document, Path).and_then(Value::as_u64) }
+fn number_at(Document:&Value, Path:&[&str]) -> Option<u64> { at(Document, Path).and_then(Value::as_u64) }
 
-/// Merge a patch into a fixture the way `scenarios/lib/load.mjs` does: section by
-/// section, one level deep. A patch that is not an object replaces the section,
-/// and a section that is not an object is replaced rather than merged into.
-fn merge(Base: &Value, Patch: &Value) -> Value {
+/// Merge a patch into a fixture the way `scenarios/lib/load.mjs` does: section
+/// by section, one level deep. A patch that is not an object replaces the
+/// section, and a section that is not an object is replaced rather than merged
+/// into.
+fn merge(Base:&Value, Patch:&Value) -> Value {
 	if Patch.is_null() {
 		return Base.clone();
 	}
@@ -369,16 +384,12 @@ fn merge(Base: &Value, Patch: &Value) -> Value {
 	for (Key, Patched) in PatchObject {
 		let Next = match Patched.as_object() {
 			Some(Values) => {
-				let mut Section = Merged
-					.get(Key)
-					.and_then(Value::as_object)
-					.cloned()
-					.unwrap_or_default();
+				let mut Section = Merged.get(Key).and_then(Value::as_object).cloned().unwrap_or_default();
 				for (Field, Value) in Values {
 					Section.insert(Field.clone(), Value.clone());
 				}
 				Value::Object(Section)
-			}
+			},
 			None => Patched.clone(),
 		};
 		Merged.insert(Key.clone(), Next);
@@ -399,7 +410,7 @@ fn scenario_files() -> Vec<Value> {
 }
 
 /// A case this side cannot express is skipped, and the file says why.
-fn skipped_on_rust(Entry: &Value) -> bool {
+fn skipped_on_rust(Entry:&Value) -> bool {
 	Entry
 		.get("skip")
 		.and_then(Value::as_array)
@@ -407,7 +418,7 @@ fn skipped_on_rust(Entry: &Value) -> bool {
 		.unwrap_or(false)
 }
 
-fn error_of(Why: &Error) -> Value {
+fn error_of(Why:&Error) -> Value {
 	json!({
 		"kind": "error",
 		"code": Why.Code().Name(),
@@ -416,7 +427,7 @@ fn error_of(Why: &Error) -> Value {
 	})
 }
 
-fn answer_of(Answer: &AgenticChatDriver::Answer) -> Value {
+fn answer_of(Answer:&AgenticChatDriver::Answer) -> Value {
 	json!({
 		"kind": "answer",
 		"text": Answer.Text,
@@ -434,11 +445,11 @@ fn answer_of(Answer: &AgenticChatDriver::Answer) -> Value {
 	})
 }
 
-/// Run one scenario, and answer what it did: the result, the ordered effects and
-/// how many failures were reported.
-fn run_case(Fixture: &Value, Entry: &Value) -> Value {
+/// Run one scenario, and answer what it did: the result, the ordered effects
+/// and how many failures were reported.
+fn run_case(Fixture:&Value, Entry:&Value) -> Value {
 	let Fixture = merge(Fixture, Entry.get("fixture").unwrap_or(&Value::Null));
-	let Effects: Effects = Arc::new(Mutex::new(Vec::new()));
+	let Effects:Effects = Arc::new(Mutex::new(Vec::new()));
 	let Reports = Arc::new(AtomicU64::new(0));
 
 	let Page = FakePage::New(&Fixture, Effects.clone());
@@ -448,19 +459,16 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 		"aborted" => {
 			Signal.Fire();
 			TestPace::New()
-		}
+		},
 		Kind if Kind.starts_with("after:") => TestPace::New().Firing(Signal.clone()),
 		_ => TestPace::New(),
 	};
 
-	let Report: Arc<dyn Fn(&Target, &Error) + Send + Sync> = {
+	let Report:Arc<dyn Fn(&Target, &Error) + Send + Sync> = {
 		let Effects = Effects.clone();
 		let Reports = Reports.clone();
-		Arc::new(move |_Target: &Target, Why: &Error| {
-			Effects
-				.lock()
-				.unwrap()
-				.push(format!("report:{}", Why.Code().Name()));
+		Arc::new(move |_Target:&Target, Why:&Error| {
+			Effects.lock().unwrap().push(format!("report:{}", Why.Code().Name()));
 			Reports.fetch_add(1, Ordering::SeqCst);
 		})
 	};
@@ -468,26 +476,27 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 	let Driver = Create(
 		Page.clone(),
 		Options {
-			Url: string_at(&Fixture, &["url"]).unwrap_or_default(),
-			Selectors: DefaultSelectors(),
-			Poll: Duration::from_millis(number_at(&Fixture, &["driver", "pollMs"]).unwrap_or(0)),
-			DisposeBudget: Duration::from_millis(
-				number_at(&Fixture, &["driver", "disposeTimeoutMs"]).unwrap_or(40),
-			),
+			Url:string_at(&Fixture, &["url"]).unwrap_or_default(),
+			Selectors:DefaultSelectors(),
+			Poll:Duration::from_millis(number_at(&Fixture, &["driver", "pollMs"]).unwrap_or(0)),
+			DisposeBudget:Duration::from_millis(number_at(&Fixture, &["driver", "disposeTimeoutMs"]).unwrap_or(40)),
 		},
 		Pace.clone(),
 	)
 	.Reporting(Report);
 
 	let Budget = Duration::from_millis(number_at(&Fixture, &["driver", "timeoutMs"]).unwrap_or(400));
-	let Mode = match string_at(&Fixture, &["question", "mode"]).unwrap_or_else(|| "search".to_string()).as_str() {
+	let Mode = match string_at(&Fixture, &["question", "mode"])
+		.unwrap_or_else(|| "search".to_string())
+		.as_str()
+	{
 		"search" => Mode::Search,
 		Other => Mode::Other(Other.to_string()),
 	};
 	let Question = Question {
-		Text: string_at(&Fixture, &["question", "text"]).unwrap_or_default(),
+		Text:string_at(&Fixture, &["question", "text"]).unwrap_or_default(),
 		Mode,
-		Model: string_at(&Fixture, &["question", "model"]).unwrap_or_default(),
+		Model:string_at(&Fixture, &["question", "model"]).unwrap_or_default(),
 	};
 
 	let Steps = Entry.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -502,19 +511,19 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 		let Op = string_at(Step, &["op"]).unwrap_or_default();
 		assert_eq!(Op, "ask", "unknown chat step {Op}");
 
-		let Cancellation: Arc<dyn Cancellation> = match Wanted.as_str() {
+		let Cancellation:Arc<dyn Cancellation> = match Wanted.as_str() {
 			"aborted" => Signal.clone(),
 			Kind if Kind.starts_with("after:") => Signal.clone(),
 			_ => Arc::new(Never),
 		};
-		let Call = Call { Deadline: Pace.Now() + Budget, Cancellation };
+		let Call = Call { Deadline:Pace.Now() + Budget, Cancellation };
 
 		match BlockOn(Driver.Ask(Question.clone(), Call)) {
 			Ok(Answer) => Result = answer_of(&Answer),
 			Err(Why) => {
 				Result = error_of(&Why);
 				break;
-			}
+			},
 		}
 	}
 
@@ -526,11 +535,11 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 }
 
 /// What one observation got wrong, as sentences. Empty means the case agreed.
-fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
+fn mismatches(Observed:&Value, Expect:&Value) -> Vec<String> {
 	let mut Wrong = Vec::new();
 	let Want = Expect.get("result").cloned().unwrap_or(Value::Null);
 	let Got = Observed.get("result").cloned().unwrap_or(Value::Null);
-	let Kind = |Document: &Value| Document.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
+	let Kind = |Document:&Value| Document.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
 
 	if Kind(&Want) != Kind(&Got) {
 		Wrong.push(format!("result kind: wanted {}, got {}", Kind(&Want), Kind(&Got)));
@@ -540,7 +549,10 @@ fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
 		}
 		if let Some(Message) = Want.get("message").and_then(Value::as_str) {
 			if !Got.get("message").and_then(Value::as_str).unwrap_or("").contains(Message) {
-				Wrong.push(format!("result message: wanted to contain {Message:?}, got {:?}", Got.get("message")));
+				Wrong.push(format!(
+					"result message: wanted to contain {Message:?}, got {:?}",
+					Got.get("message")
+				));
 			}
 		}
 		if let Some(Token) = Want.get("observed").and_then(Value::as_str) {
@@ -550,7 +562,9 @@ fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
 				Got.get("detail").and_then(Value::as_str).unwrap_or("")
 			);
 			if !Both.contains(Token) {
-				Wrong.push(format!("result observation: wanted {Token:?} in message or detail, got {Both:?}"));
+				Wrong.push(format!(
+					"result observation: wanted {Token:?} in message or detail, got {Both:?}"
+				));
 			}
 		}
 	} else if Kind(&Want) == "answer" {
@@ -572,7 +586,10 @@ fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
 
 	if let Some(Effects) = Expect.get("effects") {
 		if Effects != Observed.get("effects").unwrap_or(&Value::Null) {
-			Wrong.push(format!("effects: wanted {Effects}, got {}", Observed.get("effects").unwrap_or(&Value::Null)));
+			Wrong.push(format!(
+				"effects: wanted {Effects}, got {}",
+				Observed.get("effects").unwrap_or(&Value::Null)
+			));
 		}
 	}
 	if let Some(Reports) = Expect.get("reports").and_then(Value::as_u64) {
@@ -587,8 +604,8 @@ fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
 /// for the differential run to compare against the TypeScript half.
 #[test]
 fn every_scenario_agrees_with_its_expectation() {
-	let mut Observed: BTreeMap<String, Value> = BTreeMap::new();
-	let mut Wrong: Vec<String> = Vec::new();
+	let mut Observed:BTreeMap<String, Value> = BTreeMap::new();
+	let mut Wrong:Vec<String> = Vec::new();
 	let mut Seen = 0usize;
 
 	for File in scenario_files() {

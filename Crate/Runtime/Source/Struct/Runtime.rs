@@ -16,14 +16,14 @@
 //! 2. **A record per resource, and a fence counter that outlives it.** The
 //!    authority's. The counter is what was ever issued, so deleting a record on
 //!    release cannot make an old number current again.
-//! 3. **An effect carries the authority it was admitted under.** `WithLease` asks
-//!    the authority to admit the effect, and hands the work the [`Ticket`] it
-//!    minted. The admission is an optimisation: it refuses doomed work early and
-//!    charges the budget. The guarantee is at the destination
-//!    ([`crate::Struct::Port::Destination`]), which re-reads the record when the
-//!    effect lands and refuses a ticket whose fence, generation, holder or expiry
-//!    is no longer current. A check in this file cannot see the instant an effect
-//!    writes; a check where it lands can.
+//! 3. **An effect carries the authority it was admitted under.** `WithLease`
+//!    asks the authority to admit the effect, and hands the work the [`Ticket`]
+//!    it minted. The admission is an optimisation: it refuses doomed work early
+//!    and charges the budget. The guarantee is at the destination
+//!    ([`crate::Struct::Port::Destination`]), which re-reads the record when
+//!    the effect lands and refuses a ticket whose fence, generation, holder or
+//!    expiry is no longer current. A check in this file cannot see the instant
+//!    an effect writes; a check where it lands can.
 //! 4. **Unsettled local futures are counted, and a takeover waits for them.**
 //!    Also the authority's, and this file cannot read the count. That is the
 //!    point: the count is accounting, not fencing, and a runner that could read
@@ -55,11 +55,7 @@ pub struct Options {
 impl Options {
 	/// A runtime with no capabilities and the wall clock.
 	pub fn New(Generation:u64) -> Self {
-		Self {
-			Generation,
-			Capabilities:Vec::new(),
-			Clock:Arc::new(crate::Struct::Call::Wall),
-		}
+		Self { Generation, Capabilities:Vec::new(), Clock:Arc::new(crate::Struct::Call::Wall) }
 	}
 
 	/// The same options, with one more registration.
@@ -76,7 +72,7 @@ impl Options {
 }
 
 /// The runner: one generation, one registration list, one clock, one authority.
-pub struct Runner<A: Authority> {
+pub struct Runner<A:Authority> {
 	Generation:u64,
 	Capabilities:BTreeMap<String, Registration>,
 	Clock:Arc<dyn Clock>,
@@ -89,11 +85,11 @@ pub struct Runner<A: Authority> {
 /// declarations of one name is a composition root disagreeing with itself and
 /// picking one silently is how a pre-warm harness prepares the wrong thing.
 ///
-/// The authority is an argument and not a default. A composition root that has a
-/// database passes the adapter that calls it; one that does not passes
-/// [`crate::Struct::StandIn::StandIn`] and is, by the name it had to type, running
-/// without the authority.
-pub fn Create<A: Authority>(Options:Options, Authority:A) -> Result<Runner<A>, String> {
+/// The authority is an argument and not a default. A composition root that has
+/// a database passes the adapter that calls it; one that does not passes
+/// [`crate::Struct::StandIn::StandIn`] and is, by the name it had to type,
+/// running without the authority.
+pub fn Create<A:Authority>(Options:Options, Authority:A) -> Result<Runner<A>, String> {
 	let mut Capabilities = BTreeMap::new();
 	for Registration in Options.Capabilities {
 		if Capabilities.contains_key(&Registration.Name) {
@@ -101,32 +97,27 @@ pub fn Create<A: Authority>(Options:Options, Authority:A) -> Result<Runner<A>, S
 		}
 		Capabilities.insert(Registration.Name.clone(), Registration);
 	}
-	Ok(Runner {
-		Generation:Options.Generation,
-		Capabilities,
-		Clock:Options.Clock,
-		Authority,
-	})
+	Ok(Runner { Generation:Options.Generation, Capabilities, Clock:Options.Clock, Authority })
 }
 
-impl<A: Authority> Runner<A> {
+impl<A:Authority> Runner<A> {
 	/// The authority this runner delegates to.
 	pub fn Authority(&self) -> &A { &self.Authority }
 }
 
-impl<A: Authority + Clone> Runner<A> {
+impl<A:Authority + Clone> Runner<A> {
 	/// A handle to the destination an effect presents its ticket to.
 	///
 	/// Cloning a handle is not cloning an authority: both handles name the same
 	/// table, which is why a destination handed to another thread still refuses
 	/// what this one would. Hand this to whatever performs an effect. An effect
-	/// that never presents its ticket leaves no record, and an unrecorded effect
-	/// is invisible to the state: the runtime cannot make the presentation happen,
-	/// but it can make the absence observable.
+	/// that never presents its ticket leaves no record, and an unrecorded
+	/// effect is invisible to the state: the runtime cannot make the
+	/// presentation happen, but it can make the absence observable.
 	pub fn Destination(&self) -> A { self.Authority.clone() }
 }
 
-impl<A: Authority> Runtime for Runner<A> {
+impl<A:Authority> Runtime for Runner<A> {
 	fn Admit<'a>(&'a self, Request:Request) -> FutureBox<'a, Admission> {
 		Box::pin(async move {
 			if Request.Generation != self.Generation {

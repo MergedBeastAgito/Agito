@@ -4,25 +4,26 @@
 //! `scenarios/skill-contract.json`, the same file
 //! `Package/skill-contract/Test/Parity.test.ts` reads. What this file adds is
 //! only the corpus builder, the interpreter and the assertion - the tree, the
-//! steps, the expected result and the expected ordered effect list all come from
-//! the scenario file, so the two implementations cannot drift by being tested
-//! against two hand-written suites.
+//! steps, the expected result and the expected ordered effect list all come
+//! from the scenario file, so the two implementations cannot drift by being
+//! tested against two hand-written suites.
 //!
-//! The capability reads a real filesystem, so the corpus is real: the fixture is
-//! materialised under `std::env::temp_dir()` exactly as the TypeScript side
+//! The capability reads a real filesystem, so the corpus is real: the fixture
+//! is materialised under `std::env::temp_dir()` exactly as the TypeScript side
 //! materialises it under `mkdtemp`, byte for byte, and removed afterwards. Only
-//! the root path differs between the two runs, and the root path is outside every
-//! observation - `directory` is excluded from the digest and no effect carries a
-//! path.
+//! the root path differs between the two runs, and the root path is outside
+//! every observation - `directory` is excluded from the digest and no effect
+//! carries a path.
 //!
 //! `effects` is what the port reported, in order: every skill a `discover`
-//! answered and every finding a `validate` reported. Two ports that answered the
-//! same findings in a different order disagree here, which is the whole point.
+//! answered and every finding a `validate` reported. Two ports that answered
+//! the same findings in a different order disagree here, which is the whole
+//! point.
 //!
-//! `Test/SkillContract.rs` is kept as it is: that suite is the contract, this one
-//! is the comparison. `AGENTIC_PARITY_OUT=<path>` makes this test also write what
-//! it observed as JSON, which is how `scenarios/run.mjs --compare` gets the Rust
-//! half of the differential run.
+//! `Test/SkillContract.rs` is kept as it is: that suite is the contract, this
+//! one is the comparison. `AGENTIC_PARITY_OUT=<path>` makes this test also
+//! write what it observed as JSON, which is how `scenarios/run.mjs --compare`
+//! gets the Rust half of the differential run.
 
 #![allow(non_snake_case, non_upper_case_globals)]
 
@@ -40,12 +41,12 @@ use serde_json::{Map, Value, json};
 
 /// Distinguishes two corpora built in the same process, which one test builds
 /// one after another.
-static Counter: AtomicU64 = AtomicU64::new(0);
+static Counter:AtomicU64 = AtomicU64::new(0);
 
 /// A corpus on disk, removed when the case is done with it.
 struct Corpus {
-	Base: PathBuf,
-	Root: PathBuf,
+	Base:PathBuf,
+	Root:PathBuf,
 }
 
 impl Drop for Corpus {
@@ -53,12 +54,10 @@ impl Drop for Corpus {
 }
 
 /// One `SKILL.md`, as the contract suite writes it.
-fn body(Name: &str, Frontmatter: &str) -> String {
-	format!("---\n{Frontmatter}\n---\n\n# {Name}\n\nA body.\n")
-}
+fn body(Name:&str, Frontmatter:&str) -> String { format!("---\n{Frontmatter}\n---\n\n# {Name}\n\nA body.\n") }
 
 /// The corpus root's index, from the skills that are cited.
-fn index(Names: &[String]) -> String {
+fn index(Names:&[String]) -> String {
 	let mut Text = Names
 		.iter()
 		.map(|Name| format!("- [{Name}/]({Name}/)"))
@@ -69,7 +68,7 @@ fn index(Names: &[String]) -> String {
 }
 
 /// The file a `touchAfterFirstValidate` hook writes, without its extension.
-fn stem(Document: &str) -> String {
+fn stem(Document:&str) -> String {
 	let Name = Path::new(Document)
 		.file_name()
 		.map(|Name| Name.to_string_lossy().into_owned())
@@ -80,7 +79,7 @@ fn stem(Document: &str) -> String {
 	}
 }
 
-fn write(Path: &Path, Text: &str) {
+fn write(Path:&Path, Text:&str) {
 	if let Some(Parent) = Path.parent() {
 		fs::create_dir_all(Parent).expect("a directory is writable");
 	}
@@ -88,12 +87,8 @@ fn write(Path: &Path, Text: &str) {
 }
 
 /// Every skill a fixture describes: the corpus, then the one linked in.
-fn skills_of(Fixture: &Value) -> Vec<Value> {
-	let mut Skills: Vec<Value> = Fixture
-		.get("corpus")
-		.and_then(Value::as_array)
-		.cloned()
-		.unwrap_or_default();
+fn skills_of(Fixture:&Value) -> Vec<Value> {
+	let mut Skills:Vec<Value> = Fixture.get("corpus").and_then(Value::as_array).cloned().unwrap_or_default();
 	if let Some(Linked) = Fixture.get("symlink").filter(|Value| !Value.is_null()) {
 		let mut One = Linked.clone();
 		if let Value::Object(Map) = &mut One {
@@ -109,12 +104,8 @@ fn skills_of(Fixture: &Value) -> Vec<Value> {
 /// The root sits one directory in from a fresh scratch directory, so the
 /// symlinked skill has somewhere to live that is genuinely outside the corpus -
 /// a link inside the corpus would prove nothing.
-fn materialise(Fixture: &Value) -> Corpus {
-	let Unique = format!(
-		"skill-parity-{}-{}",
-		std::process::id(),
-		Counter.fetch_add(1, Ordering::SeqCst)
-	);
+fn materialise(Fixture:&Value) -> Corpus {
+	let Unique = format!("skill-parity-{}-{}", std::process::id(), Counter.fetch_add(1, Ordering::SeqCst));
 	let Base = std::env::temp_dir().join(Unique);
 	let _ = fs::remove_dir_all(&Base);
 	fs::create_dir_all(&Base).expect("the scratch directory is writable");
@@ -125,7 +116,7 @@ fn materialise(Fixture: &Value) -> Corpus {
 	}
 	let Outside = Corpus.Base.join("outside");
 	fs::create_dir_all(&Corpus.Root).expect("the corpus root is writable");
-	let mut Cited: Vec<String> = Vec::new();
+	let mut Cited:Vec<String> = Vec::new();
 	for Skill in skills_of(Fixture) {
 		let Name = string_at(&Skill, &["name"]).unwrap_or_default();
 		let External = bool_at(&Skill, &["external"]).unwrap_or(false);
@@ -165,7 +156,7 @@ fn materialise(Fixture: &Value) -> Corpus {
 }
 
 /// A day forward, on every file under `Path`.
-fn touch(Path: &Path) {
+fn touch(Path:&Path) {
 	let Ok(Entries) = fs::read_dir(Path) else {
 		return;
 	};
@@ -186,12 +177,12 @@ fn touch(Path: &Path) {
 }
 
 /// One record, with the four fields the port promises and nothing else.
-fn record(Document: &Value) -> Skill {
+fn record(Document:&Value) -> Skill {
 	Skill {
-		Name: string_at(Document, &["name"]).unwrap_or_default(),
-		Directory: string_at(Document, &["directory"]).unwrap_or_default(),
-		Description: string_at(Document, &["description"]).unwrap_or_default(),
-		References: Document
+		Name:string_at(Document, &["name"]).unwrap_or_default(),
+		Directory:string_at(Document, &["directory"]).unwrap_or_default(),
+		Description:string_at(Document, &["description"]).unwrap_or_default(),
+		References:Document
 			.get("references")
 			.and_then(Value::as_array)
 			.map(|List| List.iter().filter_map(Value::as_str).map(str::to_string).collect())
@@ -201,7 +192,7 @@ fn record(Document: &Value) -> Skill {
 
 /// The records a `digest` step hands the port: a literal list, or the last
 /// discovered records with one mutation applied.
-fn digested(Step: &Value, Held: &[Skill]) -> Vec<Skill> {
+fn digested(Step:&Value, Held:&[Skill]) -> Vec<Skill> {
 	if let Some(List) = Step.get("skills").and_then(Value::as_array) {
 		return List.iter().map(record).collect();
 	}
@@ -210,27 +201,28 @@ fn digested(Step: &Value, Held: &[Skill]) -> Vec<Skill> {
 	if bool_at(&Mutate, &["reverse"]).unwrap_or(false) {
 		Records.reverse();
 	}
-	if let Some(At) = number_at(&Mutate, &["at"]) {
-		if let Some(One) = Records.get_mut(At as usize) {
-			if let Some(Name) = string_at(&Mutate, &["name"]) {
-				One.Name = Name;
-			}
-			if let Some(Directory) = string_at(&Mutate, &["directory"]) {
-				One.Directory = Directory;
-			}
-			if let Some(Description) = string_at(&Mutate, &["description"]) {
-				One.Description = Description;
-			}
-			if let Some(References) = Mutate.get("references").and_then(Value::as_array) {
-				One.References = References.iter().filter_map(Value::as_str).map(str::to_string).collect();
-			}
+	if let Some(At) = number_at(&Mutate, &["at"])
+		&& let Some(One) = Records.get_mut(At as usize)
+	{
+		if let Some(Name) = string_at(&Mutate, &["name"]) {
+			One.Name = Name;
+		}
+		if let Some(Directory) = string_at(&Mutate, &["directory"]) {
+			One.Directory = Directory;
+		}
+		if let Some(Description) = string_at(&Mutate, &["description"]) {
+			One.Description = Description;
+		}
+		if let Some(References) = Mutate.get("references").and_then(Value::as_array) {
+			One.References = References.iter().filter_map(Value::as_str).map(str::to_string).collect();
 		}
 	}
 	Records
 }
 
-/// Run one scenario, and answer what it did: the result and the ordered effects.
-fn run_case(Fixture: &Value, Entry: &Value) -> Value {
+/// Run one scenario, and answer what it did: the result and the ordered
+/// effects.
+fn run_case(Fixture:&Value, Entry:&Value) -> Value {
 	let Fixture = merge(Fixture, Entry.get("fixture").unwrap_or(&Value::Null));
 	let Corpus = materialise(&Fixture);
 	let Root = Corpus.Root.to_string_lossy().into_owned();
@@ -238,8 +230,8 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 	let Hook = string_at(&Fixture, &["touchAfterFirstValidate"]);
 	let Id = string_at(Entry, &["id"]).unwrap_or_else(|| "<unnamed>".to_string());
 
-	let mut Effects: Vec<String> = Vec::new();
-	let mut Held: Vec<Skill> = Vec::new();
+	let mut Effects:Vec<String> = Vec::new();
+	let mut Held:Vec<Skill> = Vec::new();
 	let mut Touched = false;
 	let mut Result = Value::Null;
 
@@ -256,11 +248,11 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 					"kind": "names",
 					"names": Held.iter().map(|Skill| Skill.Name.clone()).collect::<Vec<String>>(),
 				});
-			}
+			},
 			"touch" => touch(&Corpus.Root),
 			"digest" => {
 				Result = json!({ "kind": "digest", "value": Contract.Digest(&digested(Step, &Held)) });
-			}
+			},
 			"validate" | "validateDiscovered" => {
 				let Wanted = string_at(Step, &["skill"]).unwrap_or_default();
 				let One = if Op == "validate" {
@@ -283,16 +275,11 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 					"kind": "findings",
 					"rules": Findings.iter().map(|Finding| Finding.Rule.clone()).collect::<Vec<String>>(),
 				});
-				if !Touched {
-					if let Some(Hook) = &Hook {
-						Touched = true;
-						write(
-							&Path::new(&One.Directory).join(Hook),
-							&format!("# {}\n", stem(Hook)),
-						);
-					}
+				if !Touched && let Some(Hook) = &Hook {
+					Touched = true;
+					write(&Path::new(&One.Directory).join(Hook), &format!("# {}\n", stem(Hook)));
 				}
-			}
+			},
 			Other => panic!("unknown skill step {Other}"),
 		}
 	}
@@ -303,14 +290,14 @@ fn run_case(Fixture: &Value, Entry: &Value) -> Value {
 /// What one observation got wrong, as sentences. Empty means the case agreed.
 ///
 /// This is `scenarios/lib/load.mjs`'s `compare`, written out for the kinds this
-/// capability answers: a `findings` result is compared by rule, a `names` result
-/// by the names and their order, and a `digest` result by its exact constant -
-/// never by a pattern, because the constant is the evidence.
-fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
+/// capability answers: a `findings` result is compared by rule, a `names`
+/// result by the names and their order, and a `digest` result by its exact
+/// constant - never by a pattern, because the constant is the evidence.
+fn mismatches(Observed:&Value, Expect:&Value) -> Vec<String> {
 	let mut Wrong = Vec::new();
 	let Want = Expect.get("result").cloned().unwrap_or(Value::Null);
 	let Got = Observed.get("result").cloned().unwrap_or(Value::Null);
-	let Kind = |Document: &Value| Document.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
+	let Kind = |Document:&Value| Document.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
 	if Kind(&Want) != Kind(&Got) {
 		Wrong.push(format!("result kind: wanted {}, got {}", Kind(&Want), Kind(&Got)));
 	} else {
@@ -323,7 +310,7 @@ fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
 						Got.get("rules").unwrap_or(&Value::Null)
 					));
 				}
-			}
+			},
 			"names" => {
 				if Want.get("names") != Got.get("names") {
 					Wrong.push(format!(
@@ -332,33 +319,33 @@ fn mismatches(Observed: &Value, Expect: &Value) -> Vec<String> {
 						Got.get("names").unwrap_or(&Value::Null)
 					));
 				}
-			}
+			},
 			"digest" => {
-				if let Some(Equals) = Want.get("equals") {
-					if Got.get("value") != Some(Equals) {
-						Wrong.push(format!(
-							"result digest: wanted {Equals}, got {}",
-							Got.get("value").unwrap_or(&Value::Null)
-						));
-					}
+				if let Some(Equals) = Want.get("equals")
+					&& Got.get("value") != Some(Equals)
+				{
+					Wrong.push(format!(
+						"result digest: wanted {Equals}, got {}",
+						Got.get("value").unwrap_or(&Value::Null)
+					));
 				}
-			}
+			},
 			Other => Wrong.push(format!("unknown result kind {Other}")),
 		}
 	}
-	if let Some(Effects) = Expect.get("effects") {
-		if Effects != Observed.get("effects").unwrap_or(&Value::Null) {
-			Wrong.push(format!(
-				"effects: wanted {Effects}, got {}",
-				Observed.get("effects").unwrap_or(&Value::Null)
-			));
-		}
+	if let Some(Effects) = Expect.get("effects")
+		&& Effects != Observed.get("effects").unwrap_or(&Value::Null)
+	{
+		Wrong.push(format!(
+			"effects: wanted {Effects}, got {}",
+			Observed.get("effects").unwrap_or(&Value::Null)
+		));
 	}
 	Wrong
 }
 
 /// Read a dotted path out of a JSON value.
-fn at<'a>(Document: &'a Value, Path: &[&str]) -> Option<&'a Value> {
+fn at<'a>(Document:&'a Value, Path:&[&str]) -> Option<&'a Value> {
 	let mut Cursor = Document;
 	for Step in Path {
 		Cursor = Cursor.get(*Step)?;
@@ -366,17 +353,17 @@ fn at<'a>(Document: &'a Value, Path: &[&str]) -> Option<&'a Value> {
 	Some(Cursor)
 }
 
-fn string_at(Document: &Value, Path: &[&str]) -> Option<String> {
+fn string_at(Document:&Value, Path:&[&str]) -> Option<String> {
 	at(Document, Path).and_then(Value::as_str).map(str::to_string)
 }
 
-fn bool_at(Document: &Value, Path: &[&str]) -> Option<bool> { at(Document, Path).and_then(Value::as_bool) }
+fn bool_at(Document:&Value, Path:&[&str]) -> Option<bool> { at(Document, Path).and_then(Value::as_bool) }
 
-fn number_at(Document: &Value, Path: &[&str]) -> Option<u64> { at(Document, Path).and_then(Value::as_u64) }
+fn number_at(Document:&Value, Path:&[&str]) -> Option<u64> { at(Document, Path).and_then(Value::as_u64) }
 
 /// Merge a patch into a fixture, one level deep per section, recursively. A
 /// missing patch is not a patch: it leaves the fixture alone.
-fn merge(Base: &Value, Patch: &Value) -> Value {
+fn merge(Base:&Value, Patch:&Value) -> Value {
 	if Patch.is_null() {
 		return Base.clone();
 	}
@@ -391,7 +378,7 @@ fn merge(Base: &Value, Patch: &Value) -> Value {
 				Merged.insert(Key.clone(), Next);
 			}
 			Value::Object(Merged)
-		}
+		},
 		_ => Patch.clone(),
 	}
 }
@@ -399,18 +386,15 @@ fn merge(Base: &Value, Patch: &Value) -> Value {
 /// The scenario file this crate answers to.
 fn scenario_file() -> Value {
 	let Path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenarios/skill-contract.json");
-	let Text = fs::read_to_string(&Path)
-		.unwrap_or_else(|Why| panic!("{} is readable: {Why}", Path.display()));
+	let Text = fs::read_to_string(&Path).unwrap_or_else(|Why| panic!("{} is readable: {Why}", Path.display()));
 	serde_json::from_str(&Text).unwrap_or_else(|Why| panic!("{} is JSON: {Why}", Path.display()))
 }
 
 /// Every case in the file.
-fn cases(File: &Value) -> Vec<Value> {
-	File.get("cases").and_then(Value::as_array).cloned().unwrap_or_default()
-}
+fn cases(File:&Value) -> Vec<Value> { File.get("cases").and_then(Value::as_array).cloned().unwrap_or_default() }
 
 /// A case this side cannot express is skipped, and the file says why.
-fn skipped_on_rust(Entry: &Value) -> bool {
+fn skipped_on_rust(Entry:&Value) -> bool {
 	Entry
 		.get("skip")
 		.and_then(Value::as_array)
@@ -424,8 +408,8 @@ fn skipped_on_rust(Entry: &Value) -> bool {
 fn every_scenario_agrees_with_its_expectation() {
 	let File = scenario_file();
 	let Fixture = File.get("fixture").cloned().unwrap_or(Value::Null);
-	let mut Observed: BTreeMap<String, Value> = BTreeMap::new();
-	let mut Wrong: Vec<String> = Vec::new();
+	let mut Observed:BTreeMap<String, Value> = BTreeMap::new();
+	let mut Wrong:Vec<String> = Vec::new();
 	let mut Ran = 0usize;
 
 	for Entry in cases(&File) {

@@ -49,9 +49,9 @@ pub struct Selectors {
 	pub Busy:String,
 	/// The answer's own turn container, when the product has one.
 	///
-	/// Searched for as an ancestor of the answer, so a product that wraps a turn
-	/// (body, steps, duration, source chips) can be asked what the *turn* says
-	/// rather than what its body says.
+	/// Searched for as an ancestor of the answer, so a product that wraps a
+	/// turn (body, steps, duration, source chips) can be asked what the
+	/// *turn* says rather than what its body says.
 	pub Turn:String,
 	/// What the turn's text reads once the turn is over, as a pattern.
 	///
@@ -68,11 +68,11 @@ pub struct Selectors {
 	pub Done:String,
 	/// The control that returns the thread to its end.
 	///
-	/// A thread is virtualised, so the newest turn is not in the DOM while it is
-	/// off-screen: a read that does not scroll first measures whichever turns
-	/// happen to be mounted, which is how an old answer gets returned as a new
-	/// one. Pressing this is the page's own way of getting there, so it is tried
-	/// before any scrolling of our own.
+	/// A thread is virtualised, so the newest turn is not in the DOM while it
+	/// is off-screen: a read that does not scroll first measures whichever
+	/// turns happen to be mounted, which is how an old answer gets returned
+	/// as a new one. Pressing this is the page's own way of getting there,
+	/// so it is tried before any scrolling of our own.
 	pub Scroll:String,
 	/// How the answer's text is read: the page's rendered text, or the page's
 	/// DOM serialised as Markdown.
@@ -88,14 +88,17 @@ pub struct Selectors {
 pub fn DefaultSelectors() -> Selectors {
 	Selectors {
 		Mode:"[data-command-menu-control] button".to_string(),
-		Model:"[class*='composer-row'] button[aria-haspopup], [data-appearance='framed'] button[aria-haspopup]".to_string(),
+		Model:"[class*='composer-row'] button[aria-haspopup], [data-appearance='framed'] button[aria-haspopup]"
+			.to_string(),
 		Composer:"textarea, [contenteditable='true']".to_string(),
 		Submit:"[data-testid='submit-button'], button[aria-label='Submit']".to_string(),
 		Answer:".prose[data-renderer='lm'], [data-testid='answer'], [role='article']".to_string(),
 		Collapse:"button".to_string(),
 		Trace:"[data-testid='trace-step'], [role='listitem']".to_string(),
 		Sources:"a[href^='http']".to_string(),
-		Busy:"button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i], [data-in-flight='true']".to_string(),
+		Busy:"button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], \
+		      button[aria-label*='Cancel' i], [data-in-flight='true']"
+			.to_string(),
 		Turn:String::new(),
 		Done:String::new(),
 		Scroll:"button[aria-label='Scroll to end'], button[aria-label*='Scroll to' i]".to_string(),
@@ -109,9 +112,9 @@ pub fn DefaultSelectors() -> Selectors {
 /// The defaults, with whichever of these keys the caller stated replaced.
 ///
 /// A merge rather than a whole object, because a caller changing one selector
-/// should not have to restate the seven it is happy with, and because a key that
-/// is absent must keep the default instead of becoming an empty selector that
-/// matches everything.
+/// should not have to restate the seven it is happy with, and because a key
+/// that is absent must keep the default instead of becoming an empty selector
+/// that matches everything.
 ///
 /// The keys are `mode`, `model`, `composer`, `submit`, `answer`, `collapse`,
 /// `trace`, `sources`, `busy`, `turn`, `done`, `scroll` and `format`.
@@ -138,10 +141,10 @@ pub fn Merged(Overrides:&serde_json::Value) -> Selectors {
 	Read("turn", &mut Base.Turn);
 	Read("done", &mut Base.Done);
 	Read("scroll", &mut Base.Scroll);
-	if let Some(Named) = Overrides.get("format").and_then(|Value| Value.as_str()) {
-		if let Some(Format) = Format::From(Named) {
-			Base.Format = Format;
-		}
+	if let Some(Named) = Overrides.get("format").and_then(|Value| Value.as_str())
+		&& let Some(Format) = Format::From(Named)
+	{
+		Base.Format = Format;
 	}
 	Base
 }

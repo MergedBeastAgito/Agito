@@ -1,9 +1,9 @@
 //! The one table the local stand-in keeps.
 //!
 //! Two verbs mutate it: the authority issues, renews and releases leases, and
-//! the destination accepts or refuses a record. Both take the same lock over the
-//! same maps, which is what makes "the manifest it reports is the manifest it
-//! enforces" a property of the bytes rather than a convention - there is no
+//! the destination accepts or refuses a record. Both take the same lock over
+//! the same maps, which is what makes "the manifest it reports is the manifest
+//! it enforces" a property of the bytes rather than a convention - there is no
 //! second copy of a fence to drift, and no window in which the lease engine and
 //! the recorder disagree about which fence is current.
 //!
@@ -20,9 +20,7 @@ use std::{
 	time::Instant,
 };
 
-use crate::Struct::{
-	Port::{Ambiguous, Budget, Recorded, Seal},
-};
+use crate::Struct::Port::{Ambiguous, Budget, Recorded, Seal};
 
 /// What the authority knows about one live grant.
 pub(crate) struct Run {

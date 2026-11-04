@@ -1,30 +1,33 @@
 //! `agentic.runtime`, exercised against a clock the test owns.
 //!
-//! No tokio, no browser, no network and no sleeping: a lease expires because the
-//! test advances a clock, which is the whole reason the clock is a parameter of
-//! the port rather than a call to the system's.
+//! No tokio, no browser, no network and no sleeping: a lease expires because
+//! the test advances a clock, which is the whole reason the clock is a
+//! parameter of the port rather than a call to the system's.
 //!
 //! Three requirements meet in this file and they are not the same requirement:
 //!
-//! - **Authority** is decided where an effect lands. `Present` re-reads the table
-//!   at the instant the effect arrives and refuses a stale fence, a stale
-//!   generation, a released lease or an expired record. The test that proves it is
-//!   `an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_recorded_ambiguous`,
-//!   which is the counterexample from `Documentation/Review.md` executed with the write
-//!   before the record rather than after it.
-//! - **Identity** is not a number. `a_ticket_whose_numbers_match_but_whose_seal_was_never_issued_is_refused_and_records_no_ambiguity`
+//! - **Authority** is decided where an effect lands. `Present` re-reads the
+//!   table at the instant the effect arrives and refuses a stale fence, a stale
+//!   generation, a released lease or an expired record. The test that proves it
+//!   is `an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_recorded_ambiguous`,
+//!   which is the counterexample from `Documentation/Review.md` executed with
+//!   the write before the record rather than after it.
+//! - **Identity** is not a number.
+//!   `a_ticket_whose_numbers_match_but_whose_seal_was_never_issued_is_refused_and_records_no_ambiguity`
 //!   presents a ticket with the right generation, resource, lease id, fence and
 //!   expiry, and is refused, because the destination compares the holder it
 //!   recorded and not the numbers it can be told.
-//! - **Accounting** is decided by the unsettled-future count, which says a local
-//!   future has not settled. `a_takeover_waits_for_an_unsettled_local_future`
-//!   encodes that and only that. It does not say authority survives a settled
-//!   future, and it is not the guarantee.
+//! - **Accounting** is decided by the unsettled-future count, which says a
+//!   local future has not settled.
+//!   `a_takeover_waits_for_an_unsettled_local_future` encodes that and only
+//!   that. It does not say authority survives a settled future, and it is not
+//!   the guarantee.
 //!
-//! The three run against `StandIn`, which is the local stand-in for the reducer.
-//! That is the point of the split: the runner under test holds no lease state, so
-//! every assertion about a fence is an assertion about the double, and the double
-//! is pinned to the reducer by the mirror test in `Package/spacetime-catalog`.
+//! The three run against `StandIn`, which is the local stand-in for the
+//! reducer. That is the point of the split: the runner under test holds no
+//! lease state, so every assertion about a fence is an assertion about the
+//! double, and the double is pinned to the reducer by the mirror test in
+//! `Package/spacetime-catalog`.
 
 use std::{
 	sync::{
@@ -104,9 +107,7 @@ fn Claimed(System:&Runner<StandIn>, Resource:&str, Ttl:Duration) -> Lease {
 
 /// Present a ticket to the destination, which is the only place it can be
 /// refused for being late.
-fn Present(Place:&StandIn, Ticket:Ticket, Name:&str) -> Result<Recorded, Error> {
-	BlockOn(Place.Present(Ticket, Name))
-}
+fn Present(Place:&StandIn, Ticket:Ticket, Name:&str) -> Result<Recorded, Error> { BlockOn(Place.Present(Ticket, Name)) }
 
 fn Span(Milliseconds:u64) -> Duration { Duration::from_millis(Milliseconds) }
 
@@ -140,10 +141,7 @@ struct Waiting(Arc<AtomicBool>);
 impl std::future::Future for Waiting {
 	type Output = ();
 
-	fn poll(
-		self:std::pin::Pin<&mut Self>,
-		_Context:&mut std::task::Context<'_>,
-	) -> std::task::Poll<()> {
+	fn poll(self: std::pin::Pin<&mut Self>, _Context:&mut std::task::Context<'_>) -> std::task::Poll<()> {
 		if self.0.load(Ordering::SeqCst) {
 			std::task::Poll::Ready(())
 		} else {
@@ -298,22 +296,23 @@ fn a_lease_that_expires_mid_run_refuses_the_next_write() {
 
 #[test]
 fn an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_recorded_ambiguous() {
-	// `Documentation/Review.md`, executed step for step, with the write where the review
-	// put it - before the record, not after it:
+	// `Documentation/Review.md`, executed step for step, with the write where
+	// the review put it - before the record, not after it:
 	//
 	//   lease is live
 	//   WithLease admits the callback
 	//   callback waits
 	//   lease expires
-	//   callback performs the external write      <- the bytes are in the page now
-	//   the ticket is presented                   <- only now can anything refuse
-	//   WithLease returns success                 <- what must no longer happen
+	//   callback performs the external write      <- the bytes are in the page
+	// now   the ticket is presented                   <- only now can
+	// anything refuse   WithLease returns success                 <- what
+	// must no longer happen
 	//
-	// The admission happened while the lease was live and cannot be un-made, and
-	// the write cannot be un-sent. The only party that can notice is the one the
-	// record is presented to, and the only honest answer it can give is "this
-	// effect was authorised, it ran, and I will not count it" - an ambiguity, not
-	// a silence.
+	// The admission happened while the lease was live and cannot be un-made,
+	// and the write cannot be un-sent. The only party that can notice is
+	// the one the record is presented to, and the only honest answer it can
+	// give is "this effect was authorised, it ran, and I will not count it"
+	// - an ambiguity, not a silence.
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Place = Engine.Destination();
@@ -326,9 +325,10 @@ fn an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_recorded_ambi
 		let Place = Place.clone();
 		Box::pin(async move {
 			Wait.await;
-			// The external action, first and unconditional. Nothing here consults
-			// the lease, because a real effect does not: by the time it writes, the
-			// only copy of its authority is the ticket it is about to present.
+			// The external action, first and unconditional. Nothing here
+			// consults the lease, because a real effect does not:
+			// by the time it writes, the only copy of its authority
+			// is the ticket it is about to present.
 			Wrote.store(true, Ordering::SeqCst);
 			Place.Present(Ticket, "write").await
 		})
@@ -371,14 +371,15 @@ fn an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_recorded_ambi
 
 #[test]
 fn an_effect_that_presents_before_it_writes_never_writes_and_is_still_unknown() {
-	// The other ordering, and the reason the port says "present first if you can":
-	// an effect that records before it acts cannot act once its authority ended,
-	// because the record is refused before the external call is made.
+	// The other ordering, and the reason the port says "present first if you
+	// can": an effect that records before it acts cannot act once its
+	// authority ended, because the record is refused before the external
+	// call is made.
 	//
-	// It is still recorded as ambiguous, and that is not a defect in the rule: the
-	// destination cannot know whether the caller wrote before or after presenting,
-	// so the honest record is "unknown". A resolver turns it into `Absent`, and
-	// then nothing claims the effect at all.
+	// It is still recorded as ambiguous, and that is not a defect in the rule:
+	// the destination cannot know whether the caller wrote before or after
+	// presenting, so the honest record is "unknown". A resolver turns it
+	// into `Absent`, and then nothing claims the effect at all.
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Place = Engine.Destination();
@@ -403,7 +404,11 @@ fn an_effect_that_presents_before_it_writes_never_writes_and_is_still_unknown() 
 	assert!(Outcome.is_err(), "the record was accepted after the lease ended");
 	assert!(!Wrote.load(Ordering::SeqCst), "the write happened after the record was refused");
 	assert!(Place.Records().is_empty());
-	assert_eq!(Place.Ambiguities().len(), 1, "an effect that may have acted is unknown, not absent");
+	assert_eq!(
+		Place.Ambiguities().len(),
+		1,
+		"an effect that may have acted is unknown, not absent"
+	);
 	Place.Resolve("page", Resolution::Absent).expect("the resource is quarantined");
 	assert_eq!(Place.Ambiguities()[0].Resolution, Some(Resolution::Absent));
 	assert!(Place.Records().is_empty(), "an absent effect is never recorded");
@@ -413,9 +418,9 @@ fn an_effect_that_presents_before_it_writes_never_writes_and_is_still_unknown() 
 #[test]
 fn an_effect_whose_lease_was_released_while_it_ran_is_refused_and_recorded_ambiguous() {
 	// Release is the other way authority ends, and it has the same consequence:
-	// the effect was admitted, the holder gave the authority back, and the write
-	// arrives afterwards. The row survives the release precisely so this case can
-	// still be attributed to somebody.
+	// the effect was admitted, the holder gave the authority back, and the
+	// write arrives afterwards. The row survives the release precisely so
+	// this case can still be attributed to somebody.
 	let Clock = TestClock::New();
 	let Engine = Engine(Clock.clone());
 	let Place = Engine.Destination();
@@ -475,7 +480,14 @@ fn a_ticket_from_another_generation_is_refused_where_it_lands() {
 	let Engine = Engine(TestClock::New());
 	let Place = Engine.Destination();
 	let Lease = Claimed(&Engine, "page", Span(1_000));
-	let Forged = Ticket::Restore(8, Lease.Resource.clone(), Lease.Id.clone(), Lease.Fence, Lease.ExpiresAt, Lease.Seal);
+	let Forged = Ticket::Restore(
+		8,
+		Lease.Resource.clone(),
+		Lease.Id.clone(),
+		Lease.Fence,
+		Lease.ExpiresAt,
+		Lease.Seal,
+	);
 	let Error = Present(&Place, Forged, "forged").expect_err("the destination refused it");
 	assert_eq!(Error.Code(), Code::AdmissionRefused);
 	assert!(Error.Message().contains("generation 8"), "{}", Error.Message());
@@ -484,10 +496,10 @@ fn a_ticket_from_another_generation_is_refused_where_it_lands() {
 
 #[test]
 fn a_ticket_whose_numbers_match_but_whose_seal_was_never_issued_is_refused_and_records_no_ambiguity() {
-	// The review's first gap, as a test. Generation, resource, lease id, fence and
-	// expiry are all correct - a caller that observed the lease and reconstructed
-	// every number it could see - and the ticket is still refused, because the
-	// numbers are not the identity.
+	// The review's first gap, as a test. Generation, resource, lease id, fence
+	// and expiry are all correct - a caller that observed the lease and
+	// reconstructed every number it could see - and the ticket is still
+	// refused, because the numbers are not the identity.
 	let Engine = Engine(TestClock::New());
 	let Place = Engine.Destination();
 	let Lease = Claimed(&Engine, "page", Span(1_000));
@@ -503,22 +515,34 @@ fn a_ticket_whose_numbers_match_but_whose_seal_was_never_issued_is_refused_and_r
 	assert_eq!(Error.Code(), Code::AdmissionRefused);
 	assert!(Error.Message().contains("was not the one issued"), "{}", Error.Message());
 	assert!(Place.Records().is_empty());
-	// Nothing was admitted for this caller, so there is no external action to be
-	// ambiguous about. Recording one would let a stranger quarantine a resource.
-	assert!(Place.Ambiguities().is_empty(), "a caller that was never admitted has no effect to be ambiguous about");
+	// Nothing was admitted for this caller, so there is no external action to
+	// be ambiguous about. Recording one would let a stranger quarantine a
+	// resource.
+	assert!(
+		Place.Ambiguities().is_empty(),
+		"a caller that was never admitted has no effect to be ambiguous about"
+	);
 	assert!(Place.Quarantined().is_empty());
 }
 
 #[test]
 fn a_ticket_restored_from_the_row_the_authority_issued_is_accepted() {
-	// `Restore` is the adapter's door, and it works: a ticket rebuilt from the row
-	// the authority wrote, carrying the seal that row holds, is the same authority
-	// as the one the runner handed out. That is what makes the production path - a
-	// ticket read back out of the database - the same path this test exercises.
+	// `Restore` is the adapter's door, and it works: a ticket rebuilt from the
+	// row the authority wrote, carrying the seal that row holds, is the
+	// same authority as the one the runner handed out. That is what makes
+	// the production path - a ticket read back out of the database - the
+	// same path this test exercises.
 	let Engine = Engine(TestClock::New());
 	let Place = Engine.Destination();
 	let Lease = Claimed(&Engine, "page", Span(1_000));
-	let Restored = Ticket::Restore(7, Lease.Resource.clone(), Lease.Id.clone(), Lease.Fence, Lease.ExpiresAt, Lease.Seal);
+	let Restored = Ticket::Restore(
+		7,
+		Lease.Resource.clone(),
+		Lease.Id.clone(),
+		Lease.Fence,
+		Lease.ExpiresAt,
+		Lease.Seal,
+	);
 	let Receipt = Present(&Place, Restored, "restored").expect("the row the authority issued");
 	assert_eq!(Receipt.Name, "restored");
 	assert_eq!(Receipt.Fence, Lease.Fence);
@@ -538,8 +562,8 @@ fn a_ticket_for_a_resource_this_authority_never_claimed_is_refused_without_an_am
 
 #[test]
 fn a_ticket_never_prints_the_seal_it_carries() {
-	// A ticket is a bearer token. A debug line that prints it is a debug line that
-	// hands it to whoever reads the log.
+	// A ticket is a bearer token. A debug line that prints it is a debug line
+	// that hands it to whoever reads the log.
 	let Engine = Engine(TestClock::New());
 	let Lease = Claimed(&Engine, "page", Span(1_000));
 	let Ticket = BlockOn(Engine.WithLease(Lease.clone(), |Ticket| Box::pin(async move { Ticket })))

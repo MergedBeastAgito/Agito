@@ -10,20 +10,20 @@
 //! - **The destination is the guarantee; the admission is the optimisation.**
 //!   `WithLease` checks the lease so doomed work does not start, but that check
 //!   ran before the effect did any work and cannot say anything about the
-//!   instant it writes. The effect presents its ticket to the place that records
-//!   it - the reducer, or the local stand-in for one - and that place refuses a
-//!   stale fence, a stale generation, a released lease or an expired record. A
-//!   design where only the caller checks is a design where an effect admitted
-//!   while a lease was live can still land after the lease ended.
+//!   instant it writes. The effect presents its ticket to the place that
+//!   records it - the reducer, or the local stand-in for one - and that place
+//!   refuses a stale fence, a stale generation, a released lease or an expired
+//!   record. A design where only the caller checks is a design where an effect
+//!   admitted while a lease was live can still land after the lease ended.
 //! - **The numbers are not the identity.** A ticket a caller can reconstruct
 //!   from what it observed is a ticket any caller can present. The reducer's
 //!   identity is `ctx.sender`, which its transport authenticates; this port's
 //!   equivalent is a [`Seal`], which the authority records and a caller cannot
-//!   derive. Matching generation, resource, lease and fence authorise nothing on
-//!   their own.
-//! - **A refusal is not an undo.** Rejecting an effect's record does not retract
-//!   its external action. A write that landed in a page is still in the page
-//!   when the record of it is refused, so the destination records it as
+//!   derive. Matching generation, resource, lease and fence authorise nothing
+//!   on their own.
+//! - **A refusal is not an undo.** Rejecting an effect's record does not
+//!   retract its external action. A write that landed in a page is still in the
+//!   page when the record of it is refused, so the destination records it as
 //!   [`Ambiguous`] and quarantines the resource instead of pretending nothing
 //!   happened.
 //! - **A fence is a number, and expiry is a clock.** A monotonically increasing
@@ -41,14 +41,14 @@
 //!   path by definition, so it cannot be the step that turns a handled failure
 //!   into an unhandled one.
 //!
-//! Two shapes can carry these rules, and they are not interchangeable. A **local
-//! stand-in** keeps the lease table in this process and decides here; it is a
-//! test double, and in production it is a second authority however correct its
-//! fencing. A **thin effect runner** keeps no lease state at all: it takes a
-//! ticket the authority issued, runs the work, and presents the ticket back. This
-//! crate is the runner. [`crate::Struct::StandIn`] is the double, it is named as
-//! one, and [`crate::Struct::Authority::Authority`] is the seam a reducer adapter
-//! replaces it through.
+//! Two shapes can carry these rules, and they are not interchangeable. A
+//! **local stand-in** keeps the lease table in this process and decides here;
+//! it is a test double, and in production it is a second authority however
+//! correct its fencing. A **thin effect runner** keeps no lease state at all:
+//! it takes a ticket the authority issued, runs the work, and presents the
+//! ticket back. This crate is the runner. [`crate::Struct::StandIn`] is the
+//! double, it is named as one, and [`crate::Struct::Authority::Authority`] is
+//! the seam a reducer adapter replaces it through.
 //!
 //! One port shape changed in the port: `claim(resource, ttl, budget?)` and
 //! `now()`/`reflect()` are on this one trait instead of a separate extension
@@ -112,12 +112,12 @@ pub const States:[StateClass; 4] = StateClass::All();
 ///
 /// The reducer's identity is `ctx.sender`: its transport authenticates the
 /// caller, so a rule compares that value and never accepts it as an argument. A
-/// single process has no transport, so the rendering here is 128 bits drawn from
-/// a key the operating system seeds per process. A caller can observe every
-/// number a ticket carries - generation, resource, lease id, fence, expiry - and
-/// still not present a seal, because those numbers are not the identity. That is
-/// the whole answer to "a caller that guesses the right numbers is not the caller
-/// that was admitted".
+/// single process has no transport, so the rendering here is 128 bits drawn
+/// from a key the operating system seeds per process. A caller can observe
+/// every number a ticket carries - generation, resource, lease id, fence,
+/// expiry - and still not present a seal, because those numbers are not the
+/// identity. That is the whole answer to "a caller that guesses the right
+/// numbers is not the caller that was admitted".
 ///
 /// It is not a cryptographic commitment and this doc does not claim one. It is
 /// unguessable, which is the property the check needs, and it is redacted from
@@ -134,11 +134,12 @@ impl Seal {
 	/// produce.
 	///
 	/// Two halves from a hasher the standard library keys from the operating
-	/// system's entropy, mixed with a per-process counter so two seals minted in
-	/// the same nanosecond still differ. A restart produces new keys, so a seal
-	/// from before a restart is not accepted by the authority after it - which is
-	/// the honest answer to "can an identifier be reused across a restart": it
-	/// cannot, because the authority that would recognise it did not survive.
+	/// system's entropy, mixed with a per-process counter so two seals minted
+	/// in the same nanosecond still differ. A restart produces new keys, so
+	/// a seal from before a restart is not accepted by the authority after
+	/// it - which is the honest answer to "can an identifier be reused
+	/// across a restart": it cannot, because the authority that would
+	/// recognise it did not survive.
 	pub(crate) fn Mint() -> Seal {
 		use std::collections::hash_map::RandomState;
 		static Counter:AtomicU64 = AtomicU64::new(0);
@@ -156,9 +157,9 @@ impl Seal {
 
 	/// Read a seal back from the text an adapter stored.
 	///
-	/// This is the adapter's door, not the caller's: it rebuilds a seal that was
-	/// issued, and confers nothing, because the authority accepts only the seals
-	/// it recorded.
+	/// This is the adapter's door, not the caller's: it rebuilds a seal that
+	/// was issued, and confers nothing, because the authority accepts only
+	/// the seals it recorded.
 	pub fn Parse(Text:&str) -> Option<Seal> {
 		if Text.len() != 32 {
 			return None;
@@ -226,9 +227,9 @@ impl fmt::Debug for Lease {
 /// numbers that admitted it are the only thing that can still be compared when
 /// it arrives.
 ///
-/// The fields are private on purpose. A caller can clone a ticket it was given -
-/// that is what holding authority is - but it cannot build one out of numbers it
-/// observed, because the numbers are not what the destination compares. Only
+/// The fields are private on purpose. A caller can clone a ticket it was given
+/// - that is what holding authority is - but it cannot build one out of numbers
+/// it observed, because the numbers are not what the destination compares. Only
 /// [`Ticket::Restore`] constructs one from outside, and that is the adapter's
 /// door for a ticket read back out of the database, not a caller's.
 #[derive(Clone, PartialEq, Eq)]
@@ -242,8 +243,8 @@ pub struct Ticket {
 }
 
 impl Ticket {
-	/// Mint the ticket for one admitted effect, from the record rather than from
-	/// the caller's copy of the lease.
+	/// Mint the ticket for one admitted effect, from the record rather than
+	/// from the caller's copy of the lease.
 	pub(crate) fn Mint(Generation:u64, Lease:&Lease, ExpiresAt:Instant) -> Ticket {
 		Ticket {
 			Generation,
@@ -259,8 +260,8 @@ impl Ticket {
 	///
 	/// The adapter's constructor. It confers nothing: the destination accepts
 	/// only the seals it recorded for the current epoch, so a restored ticket
-	/// with the right numbers and the wrong seal is refused exactly as a guessed
-	/// one is.
+	/// with the right numbers and the wrong seal is refused exactly as a
+	/// guessed one is.
 	pub fn Restore(
 		Generation:u64,
 		Resource:impl Into<String>,
@@ -269,7 +270,14 @@ impl Ticket {
 		ExpiresAt:Instant,
 		Holder:Seal,
 	) -> Ticket {
-		Ticket { Generation, Resource:Resource.into(), LeaseId:LeaseId.into(), Fence, ExpiresAt, Seal:Holder }
+		Ticket {
+			Generation,
+			Resource:Resource.into(),
+			LeaseId:LeaseId.into(),
+			Fence,
+			ExpiresAt,
+			Seal:Holder,
+		}
 	}
 
 	/// The generation the effect was admitted under.
@@ -410,8 +418,8 @@ pub enum Resolution {
 ///
 /// This is the handover rule's record. Rejecting an effect's eventual result
 /// does not undo its external effect, so the refusal is not allowed to be the
-/// only trace of it: the effect is named, the epoch it belonged to is named, and
-/// the resource stays quarantined until a resolver states which of the two
+/// only trace of it: the effect is named, the epoch it belonged to is named,
+/// and the resource stays quarantined until a resolver states which of the two
 /// outcomes it was.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ambiguous {
@@ -436,28 +444,29 @@ pub struct Ambiguous {
 
 /// Where an effect is recorded: the one place that decides whether it may be.
 ///
-/// One verb, because a destination that offered a second way to write would be a
-/// destination with a second rule. It is a future rather than a call because
+/// One verb, because a destination that offered a second way to write would be
+/// a destination with a second rule. It is a future rather than a call because
 /// reaching the authority is not free: the production implementation is a
 /// reducer call over a connection, and a trait that forced it to block would
 /// have decided which transport the database gets.
 ///
-/// The production implementation calls the reducer. `StandIn` implements it over
-/// a local table so the port can be exercised without a database, and it is a
-/// test double rather than the authority: a build with no database has no
+/// The production implementation calls the reducer. `StandIn` implements it
+/// over a local table so the port can be exercised without a database, and it
+/// is a test double rather than the authority: a build with no database has no
 /// decision to make and says so by having no implementation wired. The reads a
 /// stand-in needs - which effects landed, which are ambiguous, which resources
-/// are quarantined - are that stand-in's own surface, because a database exposes
-/// them as rows and a subscription, not as a method on the port.
+/// are quarantined - are that stand-in's own surface, because a database
+/// exposes them as rows and a subscription, not as a method on the port.
 pub trait Destination: Send + Sync {
 	/// Record one effect at the place it lands, or refuse it.
 	///
 	/// A refusal is a value. A panic would turn a lost lease into a lost
 	/// process, and a lost lease is the expected outcome of a slow worker.
 	///
-	/// A refusal is also not an undo: an effect that ran before it presented may
-	/// have changed the world, so the destination records it as [`Ambiguous`]
-	/// and quarantines the resource rather than reporting nothing happened.
+	/// A refusal is also not an undo: an effect that ran before it presented
+	/// may have changed the world, so the destination records it as
+	/// [`Ambiguous`] and quarantines the resource rather than reporting
+	/// nothing happened.
 	fn Present<'a>(&'a self, Ticket:Ticket, Name:&'a str) -> FutureBox<'a, Result<Recorded, Error>>;
 }
 

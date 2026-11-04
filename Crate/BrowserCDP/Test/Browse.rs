@@ -16,7 +16,6 @@ use std::{
 
 use AgenticBrowserCDP::{
 	Browse,
-	PageWant,
 	Code,
 	Create,
 	Error,
@@ -24,6 +23,7 @@ use AgenticBrowserCDP::{
 	OpenOptions,
 	Options,
 	Ownership,
+	PageWant,
 	Report,
 	Session,
 	Target,

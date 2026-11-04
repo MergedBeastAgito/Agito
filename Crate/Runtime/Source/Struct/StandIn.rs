@@ -1,18 +1,19 @@
 //! The local stand-in for the reducer: the same checks, over a local table.
 //!
-//! This module is a **test double**. It exists so the port can be exercised with
-//! no database, no socket and no clock it did not choose; it is not the authority
-//! in production, and the shape of the crate says so: the runner holds an
-//! `Authority` and knows nothing else, so a composition root that wants the real
-//! authority substitutes a reducer adapter and this type is never constructed.
+//! This module is a **test double**. It exists so the port can be exercised
+//! with no database, no socket and no clock it did not choose; it is not the
+//! authority in production, and the shape of the crate says so: the runner
+//! holds an `Authority` and knows nothing else, so a composition root that
+//! wants the real authority substitutes a reducer adapter and this type is
+//! never constructed.
 //!
 //! What it is not: a wrapper around [`crate::Runtime::WithLease`]. `WithLease`
 //! admits an effect when the work starts; this refuses a record when the work
-//! ends. Between those two moments the lease can expire, be released, or be taken
-//! over by a newer fence, and the admission that already happened cannot say
-//! anything about any of it. Only the party the record is presented to can. That
-//! is why the check lives here, and why moving it back into the caller is a
-//! regression a test catches rather than a refactor.
+//! ends. Between those two moments the lease can expire, be released, or be
+//! taken over by a newer fence, and the admission that already happened cannot
+//! say anything about any of it. Only the party the record is presented to can.
+//! That is why the check lives here, and why moving it back into the caller is
+//! a regression a test catches rather than a refactor.
 //!
 //! # The decision, and its mirror
 //!
@@ -44,30 +45,31 @@
 //! # The honest limit, and where the rule puts the rest
 //!
 //! A refusal is *ambiguous* only when the ticket's identity matches the current
-//! epoch - the authority can then say "this effect was admitted and its authority
-//! has ended". A ticket whose fence has already been superseded names an epoch
-//! the row no longer describes, so it is refused without an ambiguity entry. That
-//! is not a gap in the rule, it is where the rule puts the decision: the claim
-//! that superseded the epoch is the accounting point for it, and the reconciler
-//! that granted the new fence is the party that knew the old one had ended. This
-//! stand-in refuses such a takeover while a local future is unsettled, which is
-//! the same accounting done eagerly instead of on inspection.
+//! epoch - the authority can then say "this effect was admitted and its
+//! authority has ended". A ticket whose fence has already been superseded names
+//! an epoch the row no longer describes, so it is refused without an ambiguity
+//! entry. That is not a gap in the rule, it is where the rule puts the
+//! decision: the claim that superseded the epoch is the accounting point for
+//! it, and the reconciler that granted the new fence is the party that knew the
+//! old one had ended. This stand-in refuses such a takeover while a local
+//! future is unsettled, which is the same accounting done eagerly instead of on
+//! inspection.
 //!
 //! A local check also cannot un-send bytes that already left the process. What
 //! the destination guarantees is that a stale effect is never *recorded* as a
-//! success, and that one which may have landed is recorded as unknown rather than
-//! as nothing.
+//! success, and that one which may have landed is recorded as unknown rather
+//! than as nothing.
 //!
 //! # What a restart does, and why that is the argument for the database
 //!
 //! The table lives in this process, so a restart discards it: the fence counter
-//! starts again, and a seal minted before the restart is not recognised after it.
-//! A fence that restarts at one is a fence a late worker can satisfy, and that is
-//! exactly why this type is not the authority. In the database the fence is a row
-//! that no process owns, so it survives every restart, and the seal is a column of
-//! that row rather than a value in memory. The stand-in's restart behaviour is not
-//! a defect to fix here - it is the measurement that says the table belongs to the
-//! reducer.
+//! starts again, and a seal minted before the restart is not recognised after
+//! it. A fence that restarts at one is a fence a late worker can satisfy, and
+//! that is exactly why this type is not the authority. In the database the
+//! fence is a row that no process owns, so it survives every restart, and the
+//! seal is a column of that row rather than a value in memory. The stand-in's
+//! restart behaviour is not a defect to fix here - it is the measurement that
+//! says the table belongs to the reducer.
 
 use std::{
 	sync::{
@@ -89,20 +91,20 @@ use crate::Struct::{
 /// Distinguishes one stand-in's leases from another's in the same process.
 ///
 /// Lease ids are built from this token, so a lease issued by one stand-in reads
-/// differently from one issued by a second that happens to have counted the same
-/// fence for the same resource name. The id is for reading, not for deciding: the
-/// decision is the seal, because an id is a string a caller can construct and a
-/// seal is not.
+/// differently from one issued by a second that happens to have counted the
+/// same fence for the same resource name. The id is for reading, not for
+/// deciding: the decision is the seal, because an id is a string a caller can
+/// construct and a seal is not.
 static Instances:AtomicU64 = AtomicU64::new(0);
 
 /// Accounts for one admitted local future, however it ends.
 ///
 /// The row survives a release, so settling only decrements: the epoch stays
 /// described, which is what lets a late effect from a released epoch be
-/// attributed to the holder that had it. `Drop` is what makes the count true for
-/// an abandoned future as well as a completed one - there is no `finally` in
-/// Rust, and a cancellation that leaked the count would hold a resource until the
-/// process ended.
+/// attributed to the holder that had it. `Drop` is what makes the count true
+/// for an abandoned future as well as a completed one - there is no `finally`
+/// in Rust, and a cancellation that leaked the count would hold a resource
+/// until the process ended.
 struct Settling {
 	Inner:Arc<Mutex<Inner>>,
 	Resource:String,
@@ -122,8 +124,8 @@ impl Drop for Settling {
 
 /// The local stand-in: one generation, one clock, one table.
 ///
-/// Cloning one is cloning a handle to the same table, so a destination handed to
-/// another thread is still the table the lease verbs are fencing against.
+/// Cloning one is cloning a handle to the same table, so a destination handed
+/// to another thread is still the table the lease verbs are fencing against.
 #[derive(Clone)]
 pub struct StandIn {
 	Generation:u64,
@@ -147,8 +149,8 @@ impl StandIn {
 	/// Every effect this destination accepted, in the order it accepted them.
 	///
 	/// A refused effect is absent: it was never recorded, so as far as anything
-	/// reading the state is concerned it did not happen. What the world saw is in
-	/// [`StandIn::Ambiguities`].
+	/// reading the state is concerned it did not happen. What the world saw is
+	/// in [`StandIn::Ambiguities`].
 	pub fn Records(&self) -> Vec<Recorded> { State::Lock(&self.Inner).Records.clone() }
 
 	/// Every effect that was admitted and refused, and whose external action is
@@ -169,14 +171,14 @@ impl StandIn {
 		Names
 	}
 
-	/// State what happened to the effects that made a resource ambiguous, and lift
-	/// the quarantine.
+	/// State what happened to the effects that made a resource ambiguous, and
+	/// lift the quarantine.
 	///
-	/// The epoch is marked released rather than deleted, so the fence survives and
-	/// the next claim advances past it. The ambiguity entries keep the answer, and
-	/// stay: the record of an effect that landed under an authority that had ended
-	/// is the evidence a later reader needs, and a resolution that erased it would
-	/// be the retraction the rule forbids.
+	/// The epoch is marked released rather than deleted, so the fence survives
+	/// and the next claim advances past it. The ambiguity entries keep the
+	/// answer, and stay: the record of an effect that landed under an
+	/// authority that had ended is the evidence a later reader needs, and a
+	/// resolution that erased it would be the retraction the rule forbids.
 	pub fn Resolve(&self, Resource:&str, Resolution:Resolution) -> Result<(), Error> {
 		let mut Inner = State::Lock(&self.Inner);
 		let Some(Run) = Inner.Runs.get_mut(Resource) else {
@@ -199,32 +201,37 @@ impl StandIn {
 	///
 	/// 1. **No record** - nothing is held under that name any more.
 	/// 2. **Fence mismatch** - the caller's authority was superseded.
-	///    `lease-held`: somebody else holds it, and the caller's copy is history.
-	///    Checked before the seal, because a superseded caller would fail both and
-	///    "you were superseded" is the fact it needs.
+	///    `lease-held`: somebody else holds it, and the caller's copy is
+	///    history. Checked before the seal, because a superseded caller would
+	///    fail both and "you were superseded" is the fact it needs.
 	/// 3. **Seal mismatch** - the fence is current but the caller is not the
 	///    holder that was admitted. This is the check a guessable identifier
 	///    cannot pass.
 	/// 4. **Released** - the holder gave the authority back.
-	/// 5. **Expired** - the fence matches, the caller is the holder, and authority
-	///    ended anyway.
+	/// 5. **Expired** - the fence matches, the caller is the holder, and
+	///    authority ended anyway.
 	///
-	/// This is the caller's check, and it answers a question about *now*: may this
-	/// work start? It is deliberately not the destination's check, which answers a
-	/// different question - may this effect be recorded? - at a later moment, and
-	/// answers it with an ambiguity when the answer is no. Sharing one function
-	/// between the two would reintroduce exactly the defect the destination exists
-	/// to close, so [`Destination::Present`] has its own.
+	/// This is the caller's check, and it answers a question about *now*: may
+	/// this work start? It is deliberately not the destination's check,
+	/// which answers a different question - may this effect be recorded? -
+	/// at a later moment, and answers it with an ambiguity when the answer
+	/// is no. Sharing one function between the two would reintroduce
+	/// exactly the defect the destination exists to close, so
+	/// [`Destination::Present`] has its own.
 	fn Held<'a>(Inner:&'a mut Inner, Resource:&str, Holder:Seal, Fence:u64, Now:Instant) -> Result<&'a mut Run, Error> {
 		let Some(Run) = Inner.Runs.get_mut(Resource) else {
 			return Err(Error::Refused(format!("no lease is live for {Resource}")));
 		};
 		if Run.Fence != Fence {
-			return Err(Error::Held(format!("{Resource} is held under fence {}, not fence {Fence}", Run.Fence)));
+			return Err(Error::Held(format!(
+				"{Resource} is held under fence {}, not fence {Fence}",
+				Run.Fence
+			)));
 		}
 		if Run.Seal != Holder {
 			return Err(Error::Refused(format!(
-				"the lease presented for {Resource} was not the one issued: the caller is not the holder that was admitted"
+				"the lease presented for {Resource} was not the one issued: the caller is not the holder that was \
+				 admitted"
 			)));
 		}
 		if Run.Released {
@@ -242,9 +249,10 @@ impl StandIn {
 	/// Spend one operation of the run's allowance.
 	///
 	/// Charged before the effect, not after: an effect that fails was still
-	/// attempted, and a count that only moved on success would let a run that fails
-	/// in a loop spend nothing. The charge happens under the same lock as the fence
-	/// check, so two effects cannot both read the last operation.
+	/// attempted, and a count that only moved on success would let a run that
+	/// fails in a loop spend nothing. The charge happens under the same
+	/// lock as the fence check, so two effects cannot both read the last
+	/// operation.
 	fn Charge(Run:&mut Run, Now:Instant) -> Result<(), Error> {
 		let Some(Budget) = Run.Budget.as_mut() else {
 			return Ok(());
@@ -252,7 +260,9 @@ impl StandIn {
 		if let Some(Deadline) = Budget.Deadline
 			&& Now >= Deadline
 		{
-			return Err(Error::Spent(format!("the run's deadline passed at {Deadline:?}, and the clock reads {Now:?}")));
+			return Err(Error::Spent(format!(
+				"the run's deadline passed at {Deadline:?}, and the clock reads {Now:?}"
+			)));
 		}
 		if Budget.Operations == 0 {
 			return Err(Error::Spent("the run has spent every operation it was granted"));
@@ -263,10 +273,10 @@ impl StandIn {
 
 	/// Record an effect as ambiguous and quarantine its resource.
 	///
-	/// Called only after the ticket's identity matched the current epoch, because
-	/// that match is what makes the refusal mean "this effect was admitted": a
-	/// guessed ticket is refused without an ambiguity, since nothing was ever
-	/// authorised for it to have landed.
+	/// Called only after the ticket's identity matched the current epoch,
+	/// because that match is what makes the refusal mean "this effect was
+	/// admitted": a guessed ticket is refused without an ambiguity, since
+	/// nothing was ever authorised for it to have landed.
 	fn Quarantine(Inner:&mut Inner, Ticket:&Ticket, Name:&str, Now:Instant, Reason:String) -> Error {
 		Inner.Ambiguities.push(Ambiguous {
 			Name:Name.to_string(),
@@ -282,7 +292,8 @@ impl StandIn {
 			Run.Quarantined = true;
 		}
 		Error::Refused(format!(
-			"{Reason}. The effect may have landed, so it is recorded as ambiguous and {} is quarantined until a resolver states whether it did.",
+			"{Reason}. The effect may have landed, so it is recorded as ambiguous and {} is quarantined until a \
+			 resolver states whether it did.",
 			Ticket.Resource()
 		))
 	}
@@ -321,7 +332,8 @@ impl Authority for StandIn {
 				}
 				if Current.Quarantined {
 					return Err(Error::Held(format!(
-						"{Resource} is quarantined: an effect admitted under fence {} was refused when it landed, and no holder is assigned until a resolver states whether it landed",
+						"{Resource} is quarantined: an effect admitted under fence {} was refused when it landed, and \
+						 no holder is assigned until a resolver states whether it landed",
 						Current.Fence
 					)));
 				}
@@ -410,16 +422,14 @@ impl Authority for StandIn {
 				let Run = Self::Held(&mut Inner, &Lease.Resource, Lease.Seal, Lease.Fence, Now)?;
 				Self::Charge(Run, Now)?;
 				Run.Unsettled += 1;
-				// The record's expiry, not the copy the caller presented: a lease
-				// renewed after it was handed out is still the same grant, and the
-				// caller's copy is the older number.
+				// The record's expiry, not the copy the caller presented: a
+				// lease renewed after it was handed out is
+				// still the same grant, and the caller's copy
+				// is the older number.
 				Ticket::Mint(self.Generation, &Lease, Run.ExpiresAt)
 			};
-			let Settle:Box<dyn Send> = Box::new(Settling {
-				Inner:self.Inner.clone(),
-				Resource:Lease.Resource.clone(),
-				Fence:Lease.Fence,
-			});
+			let Settle:Box<dyn Send> =
+				Box::new(Settling { Inner:self.Inner.clone(), Resource:Lease.Resource.clone(), Fence:Lease.Fence });
 			Ok(Admitted { Ticket, Settle })
 		})
 	}
@@ -440,16 +450,23 @@ impl Destination for StandIn {
 					self.Generation
 				)));
 			}
-			let Some((Granted, Seal, Fence, Released, Quarantined, ExpiresAt)) = Inner
-				.Runs
-				.get(Ticket.Resource())
-				.map(|Run| (Run.Generation, Run.Seal, Run.Fence, Run.Released, Run.Quarantined, Run.ExpiresAt))
+			let Some((Granted, Seal, Fence, Released, Quarantined, ExpiresAt)) =
+				Inner.Runs.get(Ticket.Resource()).map(|Run| {
+					(
+						Run.Generation,
+						Run.Seal,
+						Run.Fence,
+						Run.Released,
+						Run.Quarantined,
+						Run.ExpiresAt,
+					)
+				})
 			else {
 				return Err(Error::Refused(format!("no lease is live for {}", Ticket.Resource())));
 			};
 			// The reducer's `lease["generation"] !== generation`: a lease never
-			// adopts a later generation, so a ticket naming one it was not granted
-			// under is not this epoch's ticket.
+			// adopts a later generation, so a ticket naming one it was not
+			// granted under is not this epoch's ticket.
 			if Granted != Ticket.Generation() {
 				return Err(Error::Refused(format!(
 					"the lease on {} was granted under generation {Granted}, not {}",
@@ -458,9 +475,10 @@ impl Destination for StandIn {
 				)));
 			}
 			// The fence before the seal, for the same reason the caller's check
-			// does: a superseded ticket fails both, and "the epoch you were in has
-			// ended" is the fact it needs. A superseded epoch is where the
-			// takeover, not this destination, does the accounting.
+			// does: a superseded ticket fails both, and "the epoch you were in
+			// has ended" is the fact it needs. A superseded epoch
+			// is where the takeover, not this destination, does the
+			// accounting.
 			if Fence != Ticket.Fence() {
 				return Err(Error::Held(format!(
 					"{} is held under fence {Fence}, not fence {}",
@@ -471,14 +489,16 @@ impl Destination for StandIn {
 			// The identity: the numbers matching is not the caller matching.
 			if Seal != Ticket.Seal() {
 				return Err(Error::Refused(format!(
-					"the ticket presented for fence {Fence} of {} was not the one issued: the numbers match and the identity does not",
+					"the ticket presented for fence {Fence} of {} was not the one issued: the numbers match and the \
+					 identity does not",
 					Ticket.Resource()
 				)));
 			}
 			// From here the ticket names the current epoch, so it is one this
 			// authority issued and the effect it carries was authorised. Any
-			// refusal now means an authorised effect may have landed, and that is
-			// what makes it ambiguous rather than merely refused.
+			// refusal now means an authorised effect may have landed, and that
+			// is what makes it ambiguous rather than merely
+			// refused.
 			if Quarantined {
 				return Err(Self::Quarantine(
 					&mut Inner,
@@ -504,7 +524,8 @@ impl Destination for StandIn {
 					Name,
 					Now,
 					format!(
-						"the effect outlived its authority: the lease on {} ended at {ExpiresAt:?}, the ticket was minted for {:?}, and the clock reads {Now:?}",
+						"the effect outlived its authority: the lease on {} ended at {ExpiresAt:?}, the ticket was \
+						 minted for {:?}, and the clock reads {Now:?}",
 						Ticket.Resource(),
 						Ticket.ExpiresAt()
 					),

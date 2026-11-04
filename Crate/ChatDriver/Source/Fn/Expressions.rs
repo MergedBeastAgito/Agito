@@ -20,9 +20,9 @@
 //!
 //! Not in this file. Each expression is one file under `Source/Script/`, taken
 //! whole by `include_str!` and sent as it stands, so an editor, a linter and a
-//! compiler can see it - which a `format!` never let them do. A value the caller
-//! supplies is written where it belongs as a `{{name}}` placeholder and filled
-//! by `AgenticRuntime::Fill`; the parameters a function declares are the
+//! compiler can see it - which a `format!` never let them do. A value the
+//! caller supplies is written where it belongs as a `{{name}}` placeholder and
+//! filled by `AgenticRuntime::Fill`; the parameters a function declares are the
 //! parameters its file names, and the test at the bottom of this module holds
 //! that agreement to the bytes.
 //!
@@ -73,9 +73,7 @@ const ReadSourcesScript:&str = include_str!("../Script/ReadSources.js");
 /// `null` when there is no toggle, when none is pressed, or when several are -
 /// a page that cannot say which mode it is in has not said it is in search
 /// mode.
-pub fn ReadMode(Selectors:&Selectors) -> String {
-	Fill(ReadModeScript, &[("mode", &Literal(&Selectors.Mode))])
-}
+pub fn ReadMode(Selectors:&Selectors) -> String { Fill(ReadModeScript, &[("mode", &Literal(&Selectors.Mode))]) }
 
 /// Press the mode toggle.
 ///
@@ -83,14 +81,10 @@ pub fn ReadMode(Selectors:&Selectors) -> String {
 /// button per mode is switched rather than cycled; a single cycling toggle is
 /// the fallback. Pressing is not verifying - the caller reads the mode again
 /// and decides - so this returns whether anything was there to press.
-pub fn PressMode(Selectors:&Selectors) -> String {
-	Fill(PressModeScript, &[("mode", &Literal(&Selectors.Mode))])
-}
+pub fn PressMode(Selectors:&Selectors) -> String { Fill(PressModeScript, &[("mode", &Literal(&Selectors.Mode))]) }
 
 /// The model label the composer will send to, as the page shows it.
-pub fn ReadModel(Selectors:&Selectors) -> String {
-	Fill(ReadModelScript, &[("model", &Literal(&Selectors.Model))])
-}
+pub fn ReadModel(Selectors:&Selectors) -> String { Fill(ReadModelScript, &[("model", &Literal(&Selectors.Model))]) }
 
 /// Put the question in the composer.
 ///
@@ -102,7 +96,10 @@ pub fn ReadModel(Selectors:&Selectors) -> String {
 /// `input`, because a composer that never saw one keeps that control disabled
 /// and the question would sit there looking sent.
 pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
-	Fill(TypeQuestionScript, &[("composer", &Literal(&Selectors.Composer)), ("text", &Literal(Text))])
+	Fill(
+		TypeQuestionScript,
+		&[("composer", &Literal(&Selectors.Composer)), ("text", &Literal(Text))],
+	)
 }
 
 /// Press the send control, and say what stopped it when it could not be
@@ -114,9 +111,9 @@ pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 ///
 /// The composer is read back first, because an editor can keep its own model
 /// while the DOM shows something else - an insert that reported success over a
-/// draft still holding the previous question. Sending that is worse than sending
-/// nothing: the answer would be to a question nobody asked, and nothing in the
-/// result would say so. So a composer that does not hold the question is
+/// draft still holding the previous question. Sending that is worse than
+/// sending nothing: the answer would be to a question nobody asked, and nothing
+/// in the result would say so. So a composer that does not hold the question is
 /// `mismatch`, and no click happens.
 pub fn PressSubmit(Selectors:&Selectors, Expected:&str) -> String {
 	Fill(
@@ -193,7 +190,10 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 pub fn ReadCollapse(Selectors:&Selectors) -> String {
 	Fill(
 		ReadCollapseScript,
-		&[("answer", &Literal(&Selectors.Answer)), ("collapse", &Literal(&Selectors.Collapse))],
+		&[
+			("answer", &Literal(&Selectors.Answer)),
+			("collapse", &Literal(&Selectors.Collapse)),
+		],
 	)
 }
 
@@ -203,7 +203,10 @@ pub fn ReadCollapse(Selectors:&Selectors) -> String {
 /// thread holds every turn's steps, and a document-wide read would hand back
 /// the trace of a question the caller did not ask. No answer yet is no steps.
 pub fn ReadTrace(Selectors:&Selectors) -> String {
-	Fill(ReadTraceScript, &[("answer", &Literal(&Selectors.Answer)), ("trace", &Literal(&Selectors.Trace))])
+	Fill(
+		ReadTraceScript,
+		&[("answer", &Literal(&Selectors.Answer)), ("trace", &Literal(&Selectors.Trace))],
+	)
 }
 
 /// The sources the newest answer cites.
@@ -212,39 +215,50 @@ pub fn ReadTrace(Selectors:&Selectors) -> String {
 /// turn's: an answer that cites nothing is a different fact from an answer
 /// whose thread happens to contain citations elsewhere.
 pub fn ReadSources(Selectors:&Selectors) -> String {
-	Fill(ReadSourcesScript, &[("answer", &Literal(&Selectors.Answer)), ("sources", &Literal(&Selectors.Sources))])
+	Fill(
+		ReadSourcesScript,
+		&[
+			("answer", &Literal(&Selectors.Answer)),
+			("sources", &Literal(&Selectors.Sources)),
+		],
+	)
 }
 
 #[cfg(test)]
 mod Tests {
-	use super::*;
 	use AgenticRuntime::Unfilled;
+
+	use super::*;
 	use crate::Struct::Selectors::DefaultSelectors;
 
 	/// Every script this module sends, and the placeholders its function
 	/// declares.
 	///
 	/// The list is the contract between the two halves: a placeholder a file
-	/// gains without the function declaring it reaches the page as `{{name}}` and
-	/// throws there, and a parameter a function passes without the file naming it
-	/// is a value that silently goes nowhere. Neither is caught by a test that
-	/// only inspects the expression the driver builds - a placeholder left in
-	/// place is still a string, and the fake answers by kind rather than by
-	/// compiling the JavaScript.
+	/// gains without the function declaring it reaches the page as `{{name}}`
+	/// and throws there, and a parameter a function passes without the file
+	/// naming it is a value that silently goes nowhere. Neither is caught
+	/// by a test that only inspects the expression the driver builds - a
+	/// placeholder left in place is still a string, and the fake answers by
+	/// kind rather than by compiling the JavaScript.
 	const Scripts:[(&str, &str, &[&str]); 9] = [
 		("ReadMode", ReadModeScript, &["mode"]),
 		("PressMode", PressModeScript, &["mode"]),
 		("ReadModel", ReadModelScript, &["model"]),
 		("TypeQuestion", TypeQuestionScript, &["composer", "text"]),
 		("PressSubmit", PressSubmitScript, &["composer", "expected", "submit"]),
-		("ReadAnswers", ReadAnswersScript, &["serialise", "scroll", "answer", "busy", "pattern", "turn", "seen"]),
+		(
+			"ReadAnswers",
+			ReadAnswersScript,
+			&["serialise", "scroll", "answer", "busy", "pattern", "turn", "seen"],
+		),
 		("ReadCollapse", ReadCollapseScript, &["answer", "collapse"]),
 		("ReadTrace", ReadTraceScript, &["answer", "trace"]),
 		("ReadSources", ReadSourcesScript, &["answer", "sources"]),
 	];
 
-	/// Every expression the driver builds, with the two optional selector fields
-	/// set, so no parameter is exercised only in its empty form.
+	/// Every expression the driver builds, with the two optional selector
+	/// fields set, so no parameter is exercised only in its empty form.
 	fn Built() -> Vec<(&'static str, String)> {
 		let Selectors = Selectors {
 			Done:"^\\s*done\\s*$".to_string(),
@@ -269,8 +283,8 @@ mod Tests {
 	/// A script is filled completely, and the check that says so bites.
 	///
 	/// The second half is the one that matters: `Unfilled` answering `None` for
-	/// every expression proves nothing unless it answers `Some` for a string that
-	/// still carries a placeholder, and the raw script is that string.
+	/// every expression proves nothing unless it answers `Some` for a string
+	/// that still carries a placeholder, and the raw script is that string.
 	#[test]
 	fn every_expression_is_filled_and_no_script_is_left_with_a_placeholder() {
 		for (Name, Raw, Parameters) in Scripts {
@@ -288,7 +302,11 @@ mod Tests {
 		}
 
 		for (Name, Text) in Built() {
-			assert_eq!(Unfilled(&Text), None, "{Name} left a placeholder unsubstituted in the expression it sends");
+			assert_eq!(
+				Unfilled(&Text),
+				None,
+				"{Name} left a placeholder unsubstituted in the expression it sends"
+			);
 		}
 	}
 }

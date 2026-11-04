@@ -11,13 +11,7 @@
 use std::sync::Arc;
 
 use AgenticBrowserCDP::{Browse, Chrome, ChromeOptions, Create as CreateSession, Options, Report, Tokio};
-use AgenticChatDriver::{
-	Create as CreateChat,
-	Driver,
-	Options as ChatOptions,
-	Page as ChatPort,
-	Selectors,
-};
+use AgenticChatDriver::{Create as CreateChat, Driver, Options as ChatOptions, Page as ChatPort, Selectors};
 use AgenticDesignVerification::{Create as CreateVerify, Verifier};
 use AgenticWorkflow::Struct::Binding::{Measure, Page};
 
@@ -52,8 +46,8 @@ pub struct ChatSpec {
 
 /// A chat driver over a browser, with the workflow's page binding installed.
 ///
-/// Three cases, stated rather than inferred: no endpoint launches a browser this
-/// session owns; an endpoint with no bind opens a page in somebody else's
+/// Three cases, stated rather than inferred: no endpoint launches a browser
+/// this session owns; an endpoint with no bind opens a page in somebody else's
 /// browser; an endpoint with a bind drives the page that is already there.
 pub fn Chat(Browse:Arc<dyn Browse>, Spec:ChatSpec) -> Driver {
 	let Page = match &Spec.Attach {

@@ -9,10 +9,10 @@
 //! that matches nothing is `present: false` with a `null` value, which is the
 //! wire shape the capability's port asks for.
 //!
-//! The JavaScript is `Source/Script/Measure.js`, taken whole. The one value this
-//! function supplies - the selector list, already a JSON array - is written where
-//! it belongs as `{{selectors}}` and filled at call time, so the file is the
-//! expression and this function is only its parameter.
+//! The JavaScript is `Source/Script/Measure.js`, taken whole. The one value
+//! this function supplies - the selector list, already a JSON array - is
+//! written where it belongs as `{{selectors}}` and filled at call time, so the
+//! file is the expression and this function is only its parameter.
 
 use AgenticRuntime::Fill;
 use serde_json::Value;
@@ -37,8 +37,9 @@ pub fn MeasurementSelectors(Expression:&str) -> Option<Value> {
 
 #[cfg(test)]
 mod Tests {
-	use super::*;
 	use AgenticRuntime::Unfilled;
+
+	use super::*;
 
 	/// The script is filled completely, the check that says so bites, and what
 	/// the expression was built from can still be read back out of it.
@@ -52,7 +53,11 @@ mod Tests {
 		let Selectors = vec!["#main".to_string(), "body > p".to_string()];
 		let Built = MeasurementExpression(&Selectors);
 		assert_eq!(Unfilled(&Built), None, "the expression still carries a placeholder");
-		assert_eq!(Unfilled(MeasureScript).as_deref(), Some("selectors"), "the script carries no placeholder, so nothing proves the fill ran");
+		assert_eq!(
+			Unfilled(MeasureScript).as_deref(),
+			Some("selectors"),
+			"the script carries no placeholder, so nothing proves the fill ran"
+		);
 		assert_eq!(MeasurementSelectors(&Built), Some(serde_json::json!(["#main", "body > p"])));
 	}
 }

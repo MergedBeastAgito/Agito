@@ -58,9 +58,6 @@ pub struct Chrome {
 }
 
 impl Chrome {
-	/// A launcher with the caller's configuration.
-	pub fn New(Options:ChromeOptions) -> Arc<Self> { Arc::new(Self { Options }) }
-
 	/// How long an attach waits for the browser to hand over the sessions of
 	/// pages that were already open.
 	///
@@ -69,6 +66,9 @@ impl Chrome {
 	/// the browser: it is bounded so a browser that really does not hold the
 	/// page is reported rather than waited on.
 	pub const PageGrace:std::time::Duration = std::time::Duration::from_secs(2);
+
+	/// A launcher with the caller's configuration.
+	pub fn New(Options:ChromeOptions) -> Arc<Self> { Arc::new(Self { Options }) }
 
 	/// The page an attach binds to, chosen by target id first and by URL
 	/// prefix second.
@@ -94,10 +94,12 @@ impl Chrome {
 		}
 		match Fallback {
 			Some(Page) => Ok(Page),
-			None => Err(Error::Navigation(
-				"the browser holds no page matching the one asked for",
-				format!("no target id or URL starts with {Key}; it holds [{}]", Seen.join(" | ")),
-			)),
+			None => {
+				Err(Error::Navigation(
+					"the browser holds no page matching the one asked for",
+					format!("no target id or URL starts with {Key}; it holds [{}]", Seen.join(" | ")),
+				))
+			},
 		}
 	}
 

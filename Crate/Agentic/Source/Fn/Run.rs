@@ -105,22 +105,31 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			}))
 			.unwrap_or_else(|_| "{}".to_string()))
 		},
-		Verb::Chat { Url, Model, Question: Text, Attach, Bind, Selectors: Overrides, Format: Wanted, Observe, Timeout } => {
+		Verb::Chat {
+			Url,
+			Model,
+			Question: Text,
+			Attach,
+			Bind,
+			Selectors: Overrides,
+			Format: Wanted,
+			Observe,
+			Timeout,
+		} => {
 			let mut Selectors = match &Overrides {
 				Some(Path) => {
-					let Text = std::fs::read_to_string(Path).map_err(|Why| {
-						format!("the selector file {Path} could not be read: {Why}")
-					})?;
-					let Parsed:serde_json::Value = serde_json::from_str(&Text).map_err(|Why| {
-						format!("the selector file {Path} is not JSON: {Why}")
-					})?;
+					let Text = std::fs::read_to_string(Path)
+						.map_err(|Why| format!("the selector file {Path} could not be read: {Why}"))?;
+					let Parsed:serde_json::Value = serde_json::from_str(&Text)
+						.map_err(|Why| format!("the selector file {Path} is not JSON: {Why}"))?;
 					AgenticChatDriver::Struct::Selectors::Merged(&Parsed)
 				},
 				None => AgenticChatDriver::DefaultSelectors(),
 			};
-			// The file is a statement about the product; the flag is a statement
-			// about this call. The call wins, because a caller who typed it meant
-			// it - and a flag that silently lost to a file would capture a whole
+			// The file is a statement about the product; the flag is a
+			// statement about this call. The call wins, because a
+			// caller who typed it meant it - and a flag that
+			// silently lost to a file would capture a whole
 			// thread in a format they had already ruled out.
 			if let Some(Named) = &Wanted {
 				match AgenticChatDriver::Format::From(Named) {
@@ -136,15 +145,13 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				}
 			}
 			let Reading = Selectors.Format.Name();
-			let Driver = ChatOver(
-				Browser(Headless()),
-				ChatSpec { Url:Url.clone(), Attach, Bind, Selectors },
-			);
+			let Driver = ChatOver(Browser(Headless()), ChatSpec { Url:Url.clone(), Attach, Bind, Selectors });
 			let Call = Budget(Timeout);
-			// An observer is a sink and a stop, the way a mutation observer is a
-			// callback and a disconnect: the driver pushes every read here and
-			// this decides when it has seen enough. `--observe` writes each one
-			// to stderr, so stdout stays the answer a caller is parsing.
+			// An observer is a sink and a stop, the way a mutation observer is
+			// a callback and a disconnect: the driver pushes every
+			// read here and this decides when it has seen enough.
+			// `--observe` writes each one to stderr, so stdout
+			// stays the answer a caller is parsing.
 			let mut Seen = |Observation:&AgenticChatDriver::Observation| {
 				if Observe {
 					eprintln!(
