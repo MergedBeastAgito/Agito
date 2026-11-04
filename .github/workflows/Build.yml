@@ -501,7 +501,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo metadata --no-deps --format-version 1 \
+          cargo metadata --no-deps --offline --format-version 1 \
             | jq -r '.packages[] | "\(.name) \(.version) \(.manifest_path)"' \
             | LC_ALL=C sort > "${RUNNER_TEMP}/crates.txt"
           if [ ! -s "${RUNNER_TEMP}/crates.txt" ]; then
