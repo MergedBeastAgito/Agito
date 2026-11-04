@@ -1,0 +1,41 @@
+[package]
+name = "agentic-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "One dependency for a consumer: the workspace's stable surface, re-exported and nothing else."
+
+[lib]
+name = "AgenticSdk"
+path = "Source/Library.rs"
+
+# Only the ports. A facade that named a substrate would be a facade a consumer
+# could not depend on without depending on the substrate's choices, and the one
+# crate that names `chromiumoxide` is `agentic-browser-cdp` - two levels below
+# this one, where a consumer never has to look.
+[dependencies]
+agentic-runtime = { workspace = true }
+agentic-browser-cdp = { workspace = true }
+agentic-chat-driver = { workspace = true }
+agentic-design-verification = { workspace = true }
+agentic-skill-contract = { workspace = true }
+
+# The facade's own test parses the manifests it embeds, which is the one place a
+# serialiser is needed and it is not needed by anything a consumer builds.
+[dev-dependencies]
+serde_json = { workspace = true }
+
+# The house style is PascalCase everywhere: functions, modules, fields and
+# constants. These three lints are the only ones that disagree with it.
+[lints.rust]
+non_snake_case = "allow"
+non_upper_case_globals = "allow"
+
+[lints.clippy]
+upper_case_acronyms = "allow"
+
+[[test]]
+name = "Facade"
+path = "Test/Facade.rs"

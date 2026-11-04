@@ -1,0 +1,30 @@
+{
+	"name": "@agentic/sdk",
+	"kind": "facade",
+	"version": "0.1.3",
+	"provides": {
+		"port": null,
+		"errors": []
+	},
+	"requires": {
+		"ports": [
+			"agentic.runtime",
+			"agentic.browse",
+			"agentic.chat.ask",
+			"agentic.verify.design",
+			"agentic.skill.validate"
+		]
+	},
+	"artefact": {
+		"entry": "Target/debug/libAgenticSdk.rlib",
+		"hash": null,
+		"runtime": "rust>=1.88"
+	},
+	"state": "stateless",
+	"cost": {
+		"coldMs": 5,
+		"warmMs": 1,
+		"network": false
+	},
+	"verify": "cargo test -p agentic-sdk"
+}
