@@ -47,4 +47,3 @@ __pycache__/
 # The agent instruction file is source, not scratch: a global ignore for
 # `AGENTS.md` must not take it out of this tree.
 !AGENTS.md
-Cargo.lock

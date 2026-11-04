@@ -18,6 +18,9 @@ The skills this repository ships, and the contract that keeps them loadable.
   to infer, and the scoping that makes each one correct.
 - `Bounded-Sequences/` - several operations in order: one budget per step, a stop on the first
   refusal, and verification by server-side state rather than by a click.
+- `Research-Conduct/` - weighing a research answer rather than trusting it: over-supply the
+  inventory, read only where the verdict lands, and open the line the answer names before acting on
+  it.
 
 ---
 
