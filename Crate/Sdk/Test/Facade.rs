@@ -117,7 +117,10 @@ fn a_session_is_built_and_bounded_from_the_facade_alone() {
 
 #[test]
 fn the_table_agrees_with_the_bytes_each_manifest_ships() {
-	assert_eq!(All.len(), 8, "the workspace ships eight modules with a port");
+	// Deliberately not a count. The table grows when the workspace does, and a
+	// number here would fail on the card that adds the next module rather than
+	// on a defect - which is the wrong reason for a test to be red.
+	assert!(!All.is_empty(), "the table carries the workspace's modules");
 	for One in All {
 		let Parsed:serde_json::Value = serde_json::from_str(One.JSON)
 			.unwrap_or_else(|Why| panic!("{} ships a manifest that is not JSON: {Why}", One.Name));
@@ -181,5 +184,13 @@ fn the_facade_declares_its_own_kind_and_is_not_an_entry_in_the_table() {
 		"agentic.skill.validate",
 	] {
 		assert!(Required.contains(&Port), "{Port} is not declared: {Required:?}");
+	}
+	// A port this crate says it re-exports must be a port some module in the
+	// table provides, or the surface promises something nothing answers for.
+	for Port in &Required {
+		assert!(
+			All.iter().any(|One| One.Port == *Port),
+			"{Port} is declared by the facade but no module in the table provides it"
+		);
 	}
 }

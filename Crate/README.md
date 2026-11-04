@@ -1,8 +1,8 @@
 # Rust workspace
 
-Nine crates: the port shapes and the failure classification this workspace settled on, and now the
-only statement of them. The TypeScript packages they were ported from were deleted once the page
-expressions were compiled at build time and every scenario was answered here -
+Every crate here is a statement of the port shapes and the failure classification this workspace
+settled on, and now the only statement of them. The TypeScript packages they were ported from were
+deleted once the page expressions were compiled at build time and every scenario was answered here -
 `Documentation/Parity.md` records what the comparison established while it existed, and what
 replaced it.
 
@@ -32,6 +32,12 @@ offline once the crates are fetched.
 `Cancellation`, `Clock`, `Pace`, the `Bound`/`Race` combinators, the std `BlockOn`, and the policy
 engine (admission, leases with a fence, per-run budgets, release that never fails). Dependencies:
 none. An optional `tokio` feature adds a `Pace` implementation and is off by default.
+
+**`agentic-adapter`** - `Crate/Adapter/`. The port a third-party substrate implements: `Adapter`
+(`Port`, `Call`, `Dispose`), `Serves`, and a scripted `StandIn` for a consumer's own tests. It ships
+no implementation - the workspace already has one substrate - and declares no error codes, because a
+code belongs to the adapter that reports it rather than to the shape it implements. Dependencies:
+`agentic-runtime`, `serde_json`.
 
 **`agentic-spacetime-catalog`** - `Crate/SpacetimeCatalog/`, library `AgenticSpacetimeCatalog`. The
 database model as data and rules: six tables described as records, seven reducers over a five-member
@@ -65,7 +71,9 @@ Dependencies: `agentic-runtime`, `agentic-browser-cdp`, `agentic-chat-driver`,
 `agentic-design-verification`, `agentic-skill-contract`.
 
 **`agentic`** - `Crate/Agentic/`. Wiring, the manifest table and the executable. Dependencies: all
-seven above, `clap`, `tokio`, `serde_json`.
+eight above, `clap`, `tokio`, `serde_json`, and `agentic-adapter` in its tests only - the binary
+holds no adapter, because `agentic verify` decides whether a manifest is well formed without running
+the code behind it.
 
 ---
 
@@ -79,7 +87,11 @@ deadline and a cancellation) and a `Pace` (a clock and a wait) supplied by the c
 **No capability imports an adapter.** `agentic-chat-driver` declares its own `Page` trait and
 `agentic-design-verification` its own `Browse`; `agentic-workflow` owns the bindings that implement
 them over `agentic-browser-cdp`'s `Browse`. There is no shared ports crate, and the translations are
-deliberately not factored into a "universal browser request" type.
+deliberately not factored into a "universal browser request" type. The one shared trait in the tree,
+`agentic-adapter`'s `Adapter`, is not a capability's port: it is the shape a substrate _outside_
+this workspace implements, so that a third party's driver can be held as `Arc<dyn Adapter>` without
+the composition root naming the crate that implements it. `Documentation/Adapter.md` is the
+contract.
 
 **A facade names ports and nothing else.** `agentic-sdk`'s dependency list is five crates and no
 substrate, no executor and no serialiser, and the direction is one-way: the facade may import any
@@ -106,10 +118,10 @@ cargo fmt --check
 
 The tests are fake-based: a page is a scripted responder, a browser is a scripted launcher, and a
 deadline passes because the test advanced a clock it owns. `cargo test` never starts Chromium and
-never opens a socket. The one thing that does open a real browser is `Fixture/Sdk/`, and it is run by
-hand rather than by the suite: it exists to prove that a consumer naming one dependency can perform
-the whole flow, and a machine without Brave should fail that by name rather than turn every other
-test red.
+never opens a socket. The one thing that does open a real browser is `Fixture/Sdk/`, and it is run
+by hand rather than by the suite: it exists to prove that a consumer naming one dependency can
+perform the whole flow, and a machine without Brave should fail that by name rather than turn every
+other test red.
 
 Two of those tests are the gates that used to be Node scripts: `Test/Boundaries.rs` reads every
 crate's manifest and dependency list and fails on an edge the design does not allow, and
@@ -118,4 +130,7 @@ workspace README.
 
 `agentic verify --module <name>` is the manifest check: it compares the errors a manifest names
 against the codes its crate's own type declares, so a manifest that has drifted from its code fails
-rather than being read by a harness.
+rather than being read by a harness. A module the binary does not carry - a third-party adapter - is
+read from a `module.json` under `--adapter` or `AGENTIC_ADAPTER_PATH`, and its report says
+`code: null` because there is no code here to compare against. `Documentation/Adapter.md` states
+what that report does check.

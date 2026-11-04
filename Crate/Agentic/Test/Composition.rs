@@ -117,8 +117,7 @@ fn the_manifests_verb_lists_every_module() {
 #[test]
 fn the_verify_verb_answers_ready_for_every_module() {
 	for Manifest in All {
-		let Text = Drive(Run(Verb::Verify { Module:Manifest.Name.to_string(), Adapter:Vec::new() }))
-			.expect("ready");
+		let Text = Drive(Run(Verb::Verify { Module:Manifest.Name.to_string(), Adapter:Vec::new() })).expect("ready");
 		assert!(Text.contains("\"ready\": true"), "{}", Manifest.Name);
 	}
 }
@@ -164,7 +163,18 @@ fn the_skills_verb_can_answer_json() {
 fn the_command_line_parses_every_verb() {
 	let Cases = vec![
 		vec!["agentic", "manifests"],
+		vec!["agentic", "manifests", "--adapter", "/tmp/adapters"],
 		vec!["agentic", "verify", "--module", "@agentic/runtime"],
+		vec![
+			"agentic",
+			"verify",
+			"--module",
+			"@agentic/runtime",
+			"--adapter",
+			"/tmp/adapters",
+			"--adapter",
+			"/tmp/others",
+		],
 		vec!["agentic", "skills", "/tmp"],
 		vec!["agentic", "skills", "/tmp", "--json"],
 		vec!["agentic", "browse", "--url", "https://example.test/"],
@@ -395,8 +405,11 @@ fn the_composition_root_holds_an_adapter_as_a_port_and_the_two_agree() {
 		"agentic.nfsu.drive",
 		&["agentic.browse"],
 	);
-	let Readiness = VerifyModule("@agentic/nfsu-driver", &roots(&Root).iter().map(PathBuf::from).collect::<Vec<_>>())
-		.expect("the adapter is known");
+	let Readiness = VerifyModule(
+		"@agentic/nfsu-driver",
+		&roots(&Root).iter().map(PathBuf::from).collect::<Vec<_>>(),
+	)
+	.expect("the adapter is known");
 	let Held:Arc<dyn Adapter> = Arc::new(StandIn::New("agentic.nfsu.drive"));
 	assert!(Serves(Held.as_ref(), &Readiness.Port).is_ok());
 	let Wrong:Arc<dyn Adapter> = Arc::new(StandIn::New("agentic.browse"));

@@ -8,8 +8,8 @@ product consumes this workspace and supplies its own composition root.
 
 ## The shape of it
 
-One tree and one specification. `Crate/` is a Cargo workspace of nine crates: the specification and
-the implementation are the same artifact, and the scenarios under `scenarios/` are the evidence that
+One tree and one specification. `Crate/` is a Cargo workspace where the specification and the
+implementation are the same artifact, and the scenarios under `scenarios/` are the evidence that
 each crate answers the contract its file states. `Documentation/` records the decisions the tree
 makes and why.
 
@@ -54,15 +54,17 @@ warm pool starts returning wrong answers quickly.
 
 ## Crate/
 
-A Cargo workspace of nine crates, in the house layout: one directory per crate under `Crate/`,
-`Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and contracts,
-`Source/Script/` for the TypeScript compiled into the JavaScript sent to a page, PascalCase module
-names, and one `Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency
-lists, and `Documentation/Script.md` says how a script is compiled and why it is erased rather than
-transpiled.
+A Cargo workspace in the house layout: one directory per crate under `Crate/`, `Source/Library.rs`
+as the library root, `Fn/` for operations and `Struct/` for data and contracts, `Source/Script/` for
+the TypeScript compiled into the JavaScript sent to a page, PascalCase module names, and one
+`Target/` at the workspace root. `Crate/README.md` carries the per-crate dependency lists, and
+`Documentation/Script.md` says how a script is compiled and why it is erased rather than transpiled.
 
 - **`agentic-runtime`** - the execution core: `Call`, `Cancellation`, `Clock`, `Pace`, the
   `Bound`/`Race` combinators, and the policy engine. No dependencies.
+- **`agentic-adapter`** - the port shape a substrate this workspace did not write implements: the
+  `Adapter` trait, the claim check its manifest needs, and a scripted stand-in. No behaviour, and no
+  substrate of its own.
 - **`agentic-spacetime-catalog`** - the database model as data: six tables, seven rules, and no
   dependency at all, not even the server SDK. No dependencies.
 - **`agentic-skill-contract`** - corpus discovery, validation and a stable digest.
