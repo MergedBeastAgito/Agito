@@ -33,6 +33,15 @@ pub struct Answers {
 	/// that offers no such signal answers `false`, which is the honest reading
 	/// ("nothing says it is still working") and leaves the text rule in charge.
 	pub Busy:bool,
+	/// One identifier per answer in the thread, in document order.
+	///
+	/// An identifier is the text's length and its first characters, which is
+	/// enough to tell one turn from another without carrying every turn's text
+	/// through the port. It exists so "is this answer new" is answered by
+	/// membership rather than by position: a virtualised thread can reorder or
+	/// unmount its turns, and a newest-by-position read then hands back an
+	/// answer that was already there.
+	pub Marks:Vec<String>,
 }
 
 /// A value as text: as it is when it is text, rendered when it is not.
@@ -69,6 +78,20 @@ pub fn DescribeText(Value:Option<&str>) -> String {
 	}
 }
 
+/// An answer's identifier, computed the way the page computes it: its length in
+/// code points and its opening.
+///
+/// The two sides must agree, which is why the count is code points rather than
+/// UTF-16 units: an answer with an emoji in it would otherwise mark differently
+/// in the driver than in the page and every read would look new.
+pub fn Mark(Text:&str) -> String {
+	format!(
+		"{}:{}",
+		Text.chars().count(),
+		Text.chars().take(48).collect::<String>()
+	)
+}
+
 /// One read of the thread, or `None` when the page answered with something that
 /// is not one.
 pub fn AsAnswers(Value:&Value) -> Option<Answers> {
@@ -78,6 +101,11 @@ pub fn AsAnswers(Value:&Value) -> Option<Answers> {
 		Count,
 		Text:TextOf(Object.get("text")),
 		Busy:Object.get("busy").and_then(Value::as_bool).unwrap_or(false),
+		Marks:Object
+			.get("marks")
+			.and_then(Value::as_array)
+			.map(|Marks| Marks.iter().map(|Mark| TextOf(Some(Mark))).collect())
+			.unwrap_or_default(),
 	})
 }
 

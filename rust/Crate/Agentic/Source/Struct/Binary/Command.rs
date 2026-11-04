@@ -75,6 +75,10 @@ pub enum Verb {
 		/// A JSON file of selector overrides, merged over the defaults.
 		#[arg(long)]
 		Selectors:Option<String>,
+		/// Report every read of the thread as a JSON line on stderr while the
+		/// answer is being produced, instead of only the settled answer.
+		#[arg(long)]
+		Observe:bool,
 		/// The whole call's budget, in milliseconds.
 		#[arg(long, default_value_t = 120_000)]
 		Timeout:u64,

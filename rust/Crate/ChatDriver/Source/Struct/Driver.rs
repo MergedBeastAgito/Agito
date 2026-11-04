@@ -49,11 +49,11 @@ use crate::{
 			ReadTrace,
 			TypeQuestion,
 		},
-		Read::{Answers, AsAnswers, AsSources, AsSteps, Describe, DescribeText, Normalise, TextOf},
+		Read::{Answers, AsAnswers, AsSources, AsSteps, Describe, DescribeText, Mark, Normalise, TextOf},
 	},
 	Struct::{
 		Error::Error,
-		Port::{Answer, Chat, Page, Question, Target},
+		Port::{Answer, Chat, Control, Observation, Page, Question, Target},
 		Selectors::{DefaultSelectors, Selectors},
 		Settlement::Settlement,
 	},
@@ -249,7 +249,14 @@ impl Driver {
 	}
 
 	/// Everything between an open page and a released one.
-	async fn Body(&self, Question:&Question, Call:&Call, Budget:Duration, Target:&Target) -> Result<Answer, Error> {
+	async fn Body<'a>(
+		&'a self,
+		Question:&Question,
+		Call:&Call,
+		Budget:Duration,
+		Target:&Target,
+		mut Sink:Option<&'a mut (dyn FnMut(&Observation) -> Control + Send)>,
+	) -> Result<Answer, Error> {
 		let Selectors = &self.Options.Selectors;
 
 		// The mode is a precondition, not a preference.
@@ -281,6 +288,15 @@ impl Driver {
 
 		// Correlate the turn: what is already in the thread is not this answer.
 		let Before = self.ReadAnswers("answers", Target, Call, Budget).await?;
+		// A page that is already producing an answer is not a page this call
+		// may type into: the question would land in a turn that is still being
+		// written, and the answer read back would belong to neither.
+		if Before.Busy {
+			return Err(Error::NotReady(
+				"the page was already producing an answer",
+				"the busy control was visible before the question was typed",
+			));
+		}
 
 		let Typed = self
 			.Probe("composer", TypeQuestion(Selectors, &Question.Text), Target, Call, Budget)
@@ -292,9 +308,17 @@ impl Driver {
 			));
 		}
 
-		let Sent = self.Probe("submit", PressSubmit(Selectors), Target, Call, Budget).await?;
+		let Sent = self
+			.Probe("submit", PressSubmit(Selectors, &Question.Text), Target, Call, Budget)
+			.await?;
 		match Sent.as_str() {
 			Some("sent") => {},
+			Some("mismatch") => {
+				return Err(Error::NotReady(
+					"the composer does not hold the question",
+					"the editor kept a different text than the one that was typed, so nothing was sent",
+				));
+			},
 			Some("disabled") => {
 				return Err(Error::NotReady(
 					"the question could not be sent",
@@ -322,21 +346,41 @@ impl Driver {
 				));
 			}
 			let Read = self.ReadAnswers("answer", Target, Call, Budget).await?;
-			// A new turn is recognised by identity, not only by count: a long
-			// thread is virtualised, so the oldest turn unmounts as the newest
-			// arrives and the count stops growing while the answer is plainly
-			// there. A text that differs from the one the thread held before
-			// the question is the same fact read a more durable way.
-			let Fresh = Read.Count > Before.Count || Read.Text != Before.Text;
+			// A new turn is recognised by membership, not by position: a
+			// virtualised thread reorders and unmounts its turns, so the last
+			// element in document order is not reliably the newest turn, and a
+			// count is not reliably growing. An answer whose identity was not
+			// in the thread before the question is the only reading that
+			// survives both.
+			let Fresh = !Read.Text.is_empty() && !Before.Marks.contains(&Mark(&Read.Text));
 			let Current = if Fresh { Some(Read.Text.as_str()) } else { None };
 			// A page that says it is still producing the answer has not
 			// finished, whatever its text is doing: a pause between tokens, a
 			// reasoning step and a slow code block all leave the text unchanged
 			// while the answer is demonstrably incomplete. So a busy read
 			// resets the confirmations instead of advancing them.
-			if Read.Busy {
+			let Settled = if Read.Busy {
 				Progress = Settlement::Empty;
-			} else if Progress.Observe(Current) {
+				false
+			} else {
+				Progress.Observe(Current)
+			};
+			// The observation is pushed before the loop acts on it, so an
+			// observer sees the read that settled the answer rather than
+			// missing the one that mattered.
+			if let Some(Sink) = Sink.as_deref_mut() {
+				let Seen = Observation {
+					Count:Read.Count,
+					Text:Read.Text.clone(),
+					Busy:Read.Busy,
+					Fresh,
+					Settled,
+				};
+				if Sink(&Seen) == Control::Stop {
+					break Read.Text;
+				}
+			}
+			if Settled {
 				break Progress.Text().unwrap_or_default().to_string();
 			}
 			let Wait = self.Options.Poll.min(Call.Remaining(self.Pace.as_ref()));
@@ -382,7 +426,12 @@ impl Driver {
 	}
 
 	/// The whole call, with the release guaranteed on every path.
-	async fn Perform(&self, Question:Question, Call:Call) -> Result<Answer, Error> {
+	async fn Perform<'a>(
+		&'a self,
+		Question:Question,
+		Call:Call,
+		Sink:Option<&'a mut (dyn FnMut(&Observation) -> Control + Send)>,
+	) -> Result<Answer, Error> {
 		let Budget = self.Budget(&Call);
 
 		// The port is defined for search mode, so a question that asks for
@@ -401,7 +450,7 @@ impl Driver {
 		}
 
 		let Target = self.Open(&Call, Budget).await?;
-		let Outcome = self.Body(&Question, &Call, Budget, &Target).await;
+		let Outcome = self.Body(&Question, &Call, Budget, &Target, Sink).await;
 		self.Release(&Target).await;
 		Outcome
 	}
@@ -409,6 +458,15 @@ impl Driver {
 
 impl Chat for Driver {
 	fn Ask<'a>(&'a self, Question:Question, Call:Call) -> FutureBox<'a, Result<Answer, Error>> {
-		Box::pin(async move { self.Perform(Question, Call).await })
+		Box::pin(async move { self.Perform(Question, Call, None).await })
+	}
+
+	fn Observe<'a>(
+		&'a self,
+		Question:Question,
+		Call:Call,
+		Sink:&'a mut (dyn FnMut(&Observation) -> Control + Send),
+	) -> FutureBox<'a, Result<Answer, Error>> {
+		Box::pin(async move { self.Perform(Question, Call, Some(Sink)).await })
 	}
 }

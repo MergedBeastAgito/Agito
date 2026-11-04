@@ -105,7 +105,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			}))
 			.unwrap_or_else(|_| "{}".to_string()))
 		},
-		Verb::Chat { Url, Model, Question: Text, Attach, Bind, Selectors: Overrides, Timeout } => {
+		Verb::Chat { Url, Model, Question: Text, Attach, Bind, Selectors: Overrides, Observe, Timeout } => {
 			let Selectors = match &Overrides {
 				Some(Path) => {
 					let Text = std::fs::read_to_string(Path).map_err(|Why| {
@@ -123,8 +123,28 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				ChatSpec { Url:Url.clone(), Attach, Bind, Selectors },
 			);
 			let Call = Budget(Timeout);
+			// An observer is a sink and a stop, the way a mutation observer is a
+			// callback and a disconnect: the driver pushes every read here and
+			// this decides when it has seen enough. `--observe` writes each one
+			// to stderr, so stdout stays the answer a caller is parsing.
+			let mut Seen = |Observation:&AgenticChatDriver::Observation| {
+				if Observe {
+					eprintln!(
+						"{}",
+						serde_json::to_string(&json!({
+							"count": Observation.Count,
+							"chars": Observation.Text.chars().count(),
+							"busy": Observation.Busy,
+							"fresh": Observation.Fresh,
+							"settled": Observation.Settled,
+						}))
+						.unwrap_or_else(|_| "{}".to_string())
+					);
+				}
+				AgenticChatDriver::Control::Continue
+			};
 			let Answer = Driver
-				.Ask(Question { Text, Mode:Mode::Search, Model }, Call)
+				.Observe(Question { Text, Mode:Mode::Search, Model }, Call, &mut Seen)
 				.await
 				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
 			Ok(serde_json::to_string_pretty(&json!({

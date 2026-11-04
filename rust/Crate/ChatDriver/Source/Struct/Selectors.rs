@@ -63,6 +63,14 @@ pub struct Selectors {
 	/// to prevent. Enable it only after watching a live turn and confirming the
 	/// text appears at the end rather than the start.
 	pub Done:String,
+	/// The control that returns the thread to its end.
+	///
+	/// A thread is virtualised, so the newest turn is not in the DOM while it is
+	/// off-screen: a read that does not scroll first measures whichever turns
+	/// happen to be mounted, which is how an old answer gets returned as a new
+	/// one. Pressing this is the page's own way of getting there, so it is tried
+	/// before any scrolling of our own.
+	pub Scroll:String,
 }
 
 /// A chat product whose composer footer names its mode and its model.
@@ -76,9 +84,10 @@ pub fn DefaultSelectors() -> Selectors {
 		Collapse:"button".to_string(),
 		Trace:"[data-testid='trace-step'], [role='listitem']".to_string(),
 		Sources:"a[href^='http']".to_string(),
-		Busy:"button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i]".to_string(),
+		Busy:"button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i], [data-in-flight='true']".to_string(),
 		Turn:String::new(),
 		Done:String::new(),
+		Scroll:"button[aria-label='Scroll to end'], button[aria-label*='Scroll to' i]".to_string(),
 	}
 }
 
@@ -90,7 +99,7 @@ pub fn DefaultSelectors() -> Selectors {
 /// matches everything.
 ///
 /// The keys are `mode`, `model`, `composer`, `submit`, `answer`, `collapse`,
-/// `trace`, `sources`, `busy`, `turn` and `done`.
+/// `trace`, `sources`, `busy`, `turn`, `done` and `scroll`.
 pub fn Merged(Overrides:&serde_json::Value) -> Selectors {
 	let mut Base = DefaultSelectors();
 	let Read = |Key:&str, Field:&mut String| {
@@ -109,6 +118,7 @@ pub fn Merged(Overrides:&serde_json::Value) -> Selectors {
 	Read("busy", &mut Base.Busy);
 	Read("turn", &mut Base.Turn);
 	Read("done", &mut Base.Done);
+	Read("scroll", &mut Base.Scroll);
 	Base
 }
 

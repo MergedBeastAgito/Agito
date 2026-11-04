@@ -74,10 +74,16 @@ that it is still producing - a visible stop or cancel control. The rule is:
 `busy` is read in the same expression as the text, not in a probe of its own: a separate read
 describes a different instant, and the two disagree exactly when it matters.
 
-**The new turn is identified by identity, not by count.** A long thread is virtualised, so the
-oldest turn unmounts as the newest arrives and the answer count stops growing while the answer is
-plainly there. The newest answer counts as new when the count grew **or** its text differs from what
-the thread held before the question was typed.
+**The new turn is identified by membership, not by position or count.** A long thread is
+virtualised, so the oldest turn unmounts as the newest arrives and the count stops growing while the
+answer is plainly there; and the last element in document order is not reliably the newest turn.
+Each read carries one identifier per answer - its length in code points and its opening - so "is
+this answer new" is answered by membership: an answer whose identifier was not in the thread before
+the question is the only reading that survives unmounting and reordering.
+
+A page that is **already** producing when the call begins is refused rather than typed into: the
+question would land in a turn that is still being written, and the answer read back would belong to
+neither.
 
 The honest limit: `busy` false is not proof of success. A cancelled or failed turn also stops
 generating. The driver's own turn identity and deadline are what distinguish those, and a caller
@@ -94,13 +100,45 @@ leaves the send control disabled, because no edit happened - the symptom is
 `TypeQuestion` therefore performs a real edit: focus, select the contents, and
 `document.execCommand('insertText', …)`, falling back to a written `innerText` plus an `input` event
 only when the browser refuses. A `textarea` or `input` is set through its prototype's own value
-setter, so a framework tracking the value sees the change.
+setter, so a framework tracking the value sees the change. An existing draft is replaced through the
+editor as well - select, `execCommand('delete')`, then insert - because overwriting the DOM under an
+editor that already holds a question leaves its model holding the old one.
+
+**The composer is read back before the send, and a mismatch sends nothing.** `PressSubmit` compares
+the composer's text with the question, normalised, and returns `mismatch` instead of clicking. An
+editor can report a successful insert while keeping the previous draft; sending that asks a question
+nobody wrote, and nothing in the result would say so. That is the one failure worse than sending
+nothing, so it is refused as `not-ready` with the cause in the detail.
 
 The CDP-native alternative is `Input.insertText` after focusing the editable host. It is the better
 primitive for an editor that resists `execCommand`, and it is the next step this substrate does not
 yet expose.
 
 ---
+
+## Observing instead of only asking
+
+`Ask` is `Observe` with the inside hidden. `Observe` runs the same preconditions, turn correlation
+and completion rule, and pushes one `Observation` to a sink for every read it takes:
+
+```rust
+let mut Sink = |Seen:&Observation| {
+    // count, text, busy, fresh, settled
+    Control::Continue
+};
+Driver.Observe(Question, Call, &mut Sink).await
+```
+
+`Control::Stop` is a mutation observer's `disconnect()`: it ends the wait and the answer so far
+comes back, because stopping is not failing. The `Call`'s cancellation is the abort from the
+outside, and it is also not an error. The `--observe` flag prints one JSON line per read on stderr,
+which is how a stalled or flickering completion signal becomes visible instead of being averaged
+into a single result.
+
+**A read returns to the end of the thread first.** A virtualised thread does not mount what is
+off-screen, so a read taken with the page scrolled to the top measures whichever turns happen to be
+mounted — and an old answer is read as a new one. The page's own scroll control is pressed first,
+and scrolling the last answer into view is the fallback for a product that has none.
 
 ## Ask, then weigh
 
@@ -149,4 +187,6 @@ answer cannot weigh it.
 | A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                       |
 | A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                     |
 | A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM |
+| A stale draft is replaced, not appended          | type question A, abandon it, then ask B: the answer is to B, and the composer never sends A                                                         |
+| A composer that kept the old draft is refused    | with a draft present, ask a different question: the call exits non-zero as `not-ready` naming `mismatch`, and no turn is added                      |
 | A settled answer equals the page's               | compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                       |

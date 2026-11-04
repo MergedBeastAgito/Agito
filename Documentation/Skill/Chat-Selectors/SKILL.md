@@ -49,6 +49,7 @@ matches everything.
 | `busy`     | the control that means the page is still producing, searched **across the page**                   | text stability alone settles partial answers                                         |
 | `turn`     | the answer's turn container, searched for as an **ancestor** of the answer                         | the turn-scoped checks below have nothing to read                                    |
 | `done`     | a pattern the turn's text matches **once the turn is over**                                        | completion stays on text stability alone                                             |
+| `scroll`   | the control that returns the thread to its end                                                     | the newest turn is never mounted, so reads measure old turns                         |
 
 ---
 

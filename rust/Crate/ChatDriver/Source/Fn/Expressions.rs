@@ -85,7 +85,7 @@ pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 		 Composer.dispatchEvent(new Event(\"change\", {{ bubbles: true }}));\n		return true;\n	}}\n	const \
 		 Range = document.createRange();\n	Range.selectNodeContents(Composer);\n	const Selection = \
 		 window.getSelection();\n	Selection.removeAllRanges();\n	Selection.addRange(Range);\n	if \
-		 (document.execCommand(\"insertText\", false, Text)) return true;\n	Composer.innerText = Text;\n	\
+		 (((Composer.innerText || \"\").trim() === \"\" || document.execCommand(\"delete\")) && document.execCommand(\"insertText\", false, Text)) return true;\n	Composer.innerText = Text;\n	\
 		 Composer.dispatchEvent(new InputEvent(\"input\", {{ bubbles: true, inputType: \"insertText\", data: Text \
 		 }}));\n	return true;\n}})()",
 		Literal(&Selectors.Composer),
@@ -99,10 +99,21 @@ pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 /// A disabled control is not clicked: the click would land on nothing, the page
 /// would look sent, and the caller would wait out its whole deadline for an
 /// answer that was never asked for.
-pub fn PressSubmit(Selectors:&Selectors) -> String {
+///
+/// The composer is read back first, because an editor can keep its own model
+/// while the DOM shows something else - an insert that reported success over a
+/// draft still holding the previous question. Sending that is worse than sending
+/// nothing: the answer would be to a question nobody asked, and nothing in the
+/// result would say so. So a composer that does not hold the question is
+/// `mismatch`, and no click happens.
+pub fn PressSubmit(Selectors:&Selectors, Expected:&str) -> String {
 	format!(
-		"(() => {{\n\tconst Submit = document.querySelector({});\n\tif (Submit === null) return \"missing\";\n\tif \
-		 (Submit.disabled === true) return \"disabled\";\n\tSubmit.click();\n\treturn \"sent\";\n}})()",
+		"(() => {{\n	const Composer = document.querySelector({});\n	const Strip = (Text) => (Text || \"\").replace(/\\s+/g, \" \").trim();\n	const \
+		 Wanted = Strip({});\n	const Held = Composer === null ? null : Strip(Composer.innerText || Composer.value || \"\");\n	if (Held !== null && Held !== Wanted) \
+		 return \"mismatch\";\n	const Submit = document.querySelector({});\n	if (Submit === null) return \"missing\";\n	if (Submit.disabled === true) return \
+		 \"disabled\";\n	Submit.click();\n	return \"sent\";\n}})()",
+		Literal(&Selectors.Composer),
+		Literal(Expected),
 		Literal(&Selectors.Submit)
 	)
 }
@@ -129,11 +140,15 @@ pub fn ReadAnswers(Selectors:&Selectors) -> String {
 		format!("new RegExp({})", Literal(&Selectors.Done))
 	};
 	format!(
-		"(() => {{\n	const Answers = [...document.querySelectorAll({})];\n	const Stopping = [...document.querySelectorAll({})].some((Control) => \
+		"(() => {{\n	// A virtualised thread does not mount what is off-screen, so a read that\n	// does not return to the end measures whichever turns happen to be\n	// mounted - which is how an old answer gets read as a new one. The page's\n	// own control is tried first; scrolling the last answer into view is the\n	// fallback for a page that has no such control.\n	const End = document.querySelector({});\n	if (End !== null && End.getClientRects().length > 0) End.click();\n	const Answers = [...document.querySelectorAll({})];\n	const Tail = Answers[Answers.length - 1];\n	if (Tail !== undefined && Tail.getBoundingClientRect().bottom > window.innerHeight) \
+		 Tail.scrollIntoView({{block: \"end\", behavior: \"instant\" }});\n	const Stopping = [...document.querySelectorAll({})].some((Control) => \
 		 Control.getClientRects().length > 0 && Control.disabled !== true);\n	const Pattern = {};\n	const Unfinished = (Answer) => {{\n		if \
 		 (Pattern === null) return false;\n		const Turn = {} === '' ? Answer : Answer.closest({});\n		if (Turn === null) return true;\n		return !Pattern.test((Turn.innerText || \
-		 \"\").trim());\n	}};\n	if (Answers.length === 0) return {{ count: 0, text: \"\", busy: Stopping }};\n	const Last = \
-		 Answers[Answers.length - 1];\n	return {{ count: Answers.length, text: (Last.innerText || \"\").trim(), busy: Stopping || Unfinished(Last) }};\n}})()",
+		 \"\").trim());\n	}};\n	const Seen = (Answer) => (Answer.innerText || \"\").trim();\n	const Mark = (Text) => [...Text].length + \":\" + \
+		 [...Text].slice(0, 48).join(\"\");\n	if (Answers.length === 0) return {{ count: 0, text: \"\", marks: [], busy: Stopping }};\n	const Last = \
+		 Answers[Answers.length - 1];\n	return {{ count: Answers.length, text: Seen(Last), marks: Answers.map((Answer) => Mark(Seen(Answer))), busy: \
+		 Stopping || Unfinished(Last) }};\n}})()",
+		Literal(&Selectors.Scroll),
 		Literal(&Selectors.Answer),
 		Literal(&Selectors.Busy),
 		Pattern,

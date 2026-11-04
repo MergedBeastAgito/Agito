@@ -169,4 +169,51 @@ pub trait Page: Send + Sync {
 pub trait Chat: Send + Sync {
 	/// Ask one question and return the answer once the page has settled.
 	fn Ask<'a>(&'a self, Question:Question, Call:Call) -> FutureBox<'a, Result<Answer, crate::Struct::Error::Error>>;
+	/// Ask one question, and report the thread on every read until it settles.
+	///
+	/// This is `Ask` with its inside exposed: the same preconditions, the same
+	/// turn correlation and the same completion rule, plus one [`Observation`]
+	/// pushed to the sink for every read the driver takes.
+	///
+	/// The sink is the observer and the [`Call`] is the abort: returning
+	/// [`Control::Stop`] disconnects it the way a `MutationObserver`'s
+	/// `disconnect()` does, and the call's cancellation ends the wait from the
+	/// outside. Both end the observation, neither is an error - the answer so
+	/// far comes back either way, so a caller that stopped early can still read
+	/// what was there.
+	fn Observe<'a>(
+		&'a self,
+		Question:Question,
+		Call:Call,
+		Sink:&'a mut (dyn FnMut(&Observation) -> Control + Send),
+	) -> FutureBox<'a, Result<Answer, crate::Struct::Error::Error>>;
+}
+
+/// One look at the thread, as the driver saw it.
+///
+/// It carries what was read and not what to do about it: a consumer deciding
+/// "still working" from `Busy` and `Settled` is the consumer's business, and a
+/// driver that returned a verdict would be answering its own question.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Observation {
+	/// How many answers the thread holds.
+	pub Count:f64,
+	/// The newest answer's text, trimmed.
+	pub Text:String,
+	/// Whether the page says it is still producing that answer.
+	pub Busy:bool,
+	/// Whether this answer was not in the thread before the question.
+	pub Fresh:bool,
+	/// Whether the text has held still long enough, with the page idle, to be
+	/// read as settled.
+	pub Settled:bool,
+}
+
+/// What an observer says back to the driver.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Control {
+	/// Keep observing.
+	Continue,
+	/// Stop observing now; the answer so far is returned.
+	Stop,
 }

@@ -38,7 +38,7 @@ pub use crate::{
 	Struct::{
 		Driver::{Create, Driver, Options},
 		Error::{Code, Error},
-		Port::{Answer, Chat, Failure, Mode, Page, Question, Source, Step, Target},
+		Port::{Answer, Chat, Control, Failure, Mode, Observation, Page, Question, Source, Step, Target},
 		Selectors::{DefaultSelectors, Selectors},
 		Settlement::{Confirmations, Settlement, StableReads},
 	},

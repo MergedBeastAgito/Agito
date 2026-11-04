@@ -12,7 +12,9 @@ use std::{
 	time::Duration,
 };
 
-use AgenticChatDriver::{Answer, Chat, Code, Create, DefaultSelectors, Driver, Error, Mode, Options, Question};
+use AgenticChatDriver::{
+	Answer, Chat, Code, Control, Create, DefaultSelectors, Driver, Error, Mode, Observation, Options, Question,
+};
 use AgenticRuntime::{BlockOn, Call, Clock, Never, Signal};
 use Fake::{Answers, FakePage, Release, Script, TestPace};
 use serde_json::json;
@@ -139,6 +141,60 @@ fn matches_the_label_across_case_and_whitespace_and_reports_what_it_read() {
 	let Driver = Built(&Page, &Pace);
 	let Answer = Ask(&Driver, &Pace, Asked("why", "gpt-6.1 sol"), Span(2_000)).expect("answered");
 	assert_eq!(Answer.Model, "GPT-6.1   SOL");
+}
+
+/// Observe with a sink that stops at the first read, so the wait ends on the
+/// observer's word rather than on the page's.
+fn Watch(
+	Driver:&Driver,
+	Pace:&TestPace,
+	Question:Question,
+	Budget:Duration,
+	Sink:&mut (dyn FnMut(&Observation) -> Control + Send),
+) -> Result<Answer, Error> {
+	let Call = Call::Within(Budget, Pace, Arc::new(Never));
+	BlockOn(Driver.Observe(Question, Call, Sink))
+}
+
+#[test]
+fn observe_reports_every_read_and_stops_when_the_observer_disconnects() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "answer"));
+	let Driver = Built(&Page, &Pace);
+	let mut Seen = Vec::new();
+	let Answer = Watch(&Driver, &Pace, Asked("why", "sol"), Span(2_000), &mut |Observation| {
+		Seen.push(Observation.clone());
+		Control::Stop
+	})
+	.expect("answered");
+	// The observer saw the read that was taken, and the answer came back
+	// anyway: stopping is not failing.
+	assert_eq!(Seen.len(), 1);
+	assert_eq!(Seen[0].Text, "answer");
+	assert!(Seen[0].Fresh);
+	assert_eq!(Answer.Text, "answer");
+	// One correlation read and one answer read: the sink ended it there.
+	assert_eq!(Page.Reads.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn observe_that_continues_sees_the_answer_settle() {
+	let Pace = TestPace::New();
+	let Page = FakePage::New(Script::New("why", "sol", "answer"));
+	let Driver = Built(&Page, &Pace);
+	let mut Settled = 0;
+	let mut Reads = 0;
+	Watch(&Driver, &Pace, Asked("why", "sol"), Span(2_000), &mut |Observation| {
+		Reads += 1;
+		if Observation.Settled {
+			Settled += 1;
+		}
+		Control::Continue
+	})
+	.expect("answered");
+	// Every read is reported, and exactly one of them is the one that settled.
+	assert_eq!(Reads, 4);
+	assert_eq!(Settled, 1);
 }
 
 #[test]

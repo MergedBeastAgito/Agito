@@ -115,7 +115,7 @@ pub fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
 		Kind::Model
 	} else if Expression == Expressions::TypeQuestion(Selectors, Question) {
 		Kind::Composer
-	} else if Expression == Expressions::PressSubmit(Selectors) {
+	} else if Expression == Expressions::PressSubmit(Selectors, Question) {
 		Kind::Submit
 	} else if Expression == Expressions::ReadAnswers(Selectors) {
 		Kind::Answers

@@ -88,6 +88,40 @@ as well, which survives the unmounting.
 
 ---
 
+## The scroll control and the in-flight flag
+
+Two things on the page carry the state a driver needs, and neither is the one a naive read would
+pick.
+
+**`button[aria-label="Scroll to end"]`** is how the thread returns to its end, and it is visible
+whenever the newest turn is off-screen. Measured on a long thread: the last answer sat at y = 25,910
+in a 779 px viewport, so a read taken there measured older turns. Pressing it (or
+`scrollIntoView(false)` on the last answer) puts the newest answer's bottom exactly at the viewport
+edge. Note that `window.scrollY` stays 0 — the app scrolls an inner container, so a driver that
+checks `window.scrollY` to decide "am I at the end" always thinks it is not.
+
+**`[data-in-flight]`** on the scroll-to-end icon is the page's own "still producing" flag: `"true"`
+while generating, `"false"` when idle, always present and always visible. It is a better busy signal
+than the stop control because it exists for the whole turn rather than flickering, and it costs one
+attribute read in the same expression that reads the text.
+
+## A composer that keeps its draft
+
+`document.execCommand('insertText')` reports `true` over a draft that the editor still holds.
+Measured here: a question was typed over a 642-character leftover, the call reported success, and
+the answer came back to the _leftover_ question - 7,133 characters of confident answer to something
+nobody asked.
+
+Two rules follow, and both are in the driver now:
+
+- replace an existing draft through the editor (`execCommand('delete')` after selecting), not by
+  writing the DOM under it;
+- read the composer back before clicking send, and refuse with `mismatch` rather than sending a
+  question that is not the one that was typed.
+
+An empty composer is the easy case and it hides this: every early probe passed because the composer
+started empty. The failure only appears on the second consecutive call in the same tab.
+
 ## The cold-start race on a newly opened page
 
 `chat` without `--bind` opens a page and probes it immediately. On a fresh page the composer can be
