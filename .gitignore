@@ -16,6 +16,13 @@
 # Negated explicitly rather than left unmentioned: a global ignore file for every
 # repository under `~/Developer` lists `Cargo.lock`, and a rule that is merely
 # absent here inherits that global answer. This line is the one that decides.
+#
+# It also has to be the LAST rule in this file. Git applies the last matching
+# pattern, so a later `Cargo.lock` line silently re-ignores the file and the
+# negation above stops working - which is exactly what happened: the file was
+# committed, then dropped from the index while this list still said it belonged,
+# and every `--locked` job would have failed on a fresh checkout with "cannot
+# create the lock file ... because --locked was passed to prevent this".
 !Cargo.lock
 
 # Scratch: probes and throwaway trees. The archive of everything this workspace

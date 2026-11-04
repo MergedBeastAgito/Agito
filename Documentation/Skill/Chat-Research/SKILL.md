@@ -1,6 +1,6 @@
 ---
 name: chat-research
-description: Use when a web chat UI must answer a research question from Rust. Ask, settle, read.
+description: Use when a chat page must be asked, settled and read.
 version: 1.0.0
 license: MIT
 platforms: [macos, linux]
@@ -164,29 +164,24 @@ off-screen, so a read taken with the page scrolled to the top measures whichever
 mounted - and an old answer is read as a new one. The page's own scroll control is pressed first,
 and scrolling the last answer into view is the fallback for a product that has none.
 
-## Ask, then weigh
+---
 
-- **Over-supply, under-read.** Send the real inventory - names, paths, counts - and read only the
-  part where the verdict lands. The remote model's context is cheap; yours is not.
-- **A long answer is not a truncated one.** The tell is the text, not a `Read more` control, which
-  is a display clamp over text already in the DOM.
-- **Ask for the answer, not a format.** Impose a shape only for status you will act on mechanically.
-- **An answer is a hypothesis until the line it names is read.** A chat product sees the web and
-  other repositories, not your working tree or your commits.
-- **Make it argue against itself.** Paste the artefact rather than a description, ask for the
-  strongest case against its own advice, and ask where the design is worse. A concession with no
-  downside is a sales pitch.
+## Weighing what comes back
+
+The conduct of the research - what to send, what to read of the answer, and how much of it to
+trust - is `Research-Conduct/`, because those rules hold for whatever product answered and this
+skill holds for one product.
 
 ---
 
-## One question per thread, and say which tab answered
+## The result names the model and the mode
 
-A follow-up in an existing thread carries that thread's history, so it does not have to restate
-facts a fresh thread would need. A second question dropped into a saturated thread comes back
-truncated, because the answer budget is shared with everything already in it.
+The result carries `mode` and `model`. The page that answered is whichever tab `--bind` held or
+whichever page the call opened, so a caller recording provenance takes it from the call rather than
+from the answer text.
 
-Report the mode, the model and the tab. A reader who cannot tell which of the three produced an
-answer cannot weigh it.
+A follow-up in a bound tab carries that tab's thread, which is what makes a second question cheaper
+and what makes it compete with everything already there for the answer budget.
 
 ---
 
