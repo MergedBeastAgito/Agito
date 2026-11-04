@@ -10,9 +10,10 @@
 # hold one.
 node_modules/
 
-# The resolution artefact. A clone resolves its own versions, and a committed
-# lock made the tree fight `cargo update` for no benefit.
-Cargo.lock
+# The resolution artefact. Committed on purpose: the release builds with
+# `--locked`, so the same tag has to produce the same bytes, and `--locked`
+# needs the lock file in the tree. Updating dependencies is then a commit of its
+# own rather than a silent difference between two builds of one tag.
 
 # Scratch: probes and throwaway trees. The archive of everything this workspace
 # worked from is tracked - `.hermes/research/`, `.hermes/bundle/` and

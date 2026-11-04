@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "Measure a built page and judge the measurements against invariants the caller supplies. Holds no design of its own."
 
 [lib]

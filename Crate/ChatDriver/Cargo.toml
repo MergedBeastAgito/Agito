@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "Ask a chat product one question and return the answer once the page has settled. Declares its own Page port; depends on no browser and no executor."
 
 [lib]

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "The composition root: wiring, executable entry points, and the manifest table."
 
 [lib]

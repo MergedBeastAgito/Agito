@@ -1,0 +1,105 @@
+name: Publish
+
+concurrency:
+  # Under `workflow_run` github.ref is the default branch, not the tag - key the
+  # group on the triggering Build run's tag so a faster release can never cancel
+  # an in-flight publish of an older one.
+  group: Publish-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+# Publish runs only after Build.yml's run for the same tag completed successfully
+# (workflow_run chaining), and every checkout is pinned to that tag, so whatever
+# this workflow reads is exactly the code Build tested.
+#
+# The crates.io namespace is NOT ours yet, so the publish job below is present
+# and refusing. Two guards hold it shut, and they are deliberately of different
+# kinds: `publish = false` in `[workspace.package]` travels with the tree and
+# makes cargo reject the command from any crate, while the input that would arm
+# the step defaults to false. A job that is absent gets re-added by the next
+# person; a job that is present and skipping says why.
+on:
+  workflow_dispatch:
+    inputs:
+      publish_crates:
+        description: "Publish to crates.io. Refused while the namespace is not ours."
+        type: boolean
+        default: false
+  workflow_run:
+    # This matches Build.yml's `name:` metadata, not its file name - a file name
+    # here silently never fires the event.
+    workflows: ["Build"]
+    types: [completed]
+
+env:
+  CARGO_TERM_COLOR: always
+  DO_NOT_TRACK: 1
+
+jobs:
+  Test:
+    name: Test the tagged tree
+    # Only a SUCCESSFUL Build run that was triggered by an Agentic release tag may
+    # start this chain.
+    if:
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'Agentic/v')
+    runs-on: ubuntu-latest
+    # Read-only: this job runs the suite against the tag and stops there.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Pin to the exact tag Build ran - the suite must test the same code,
+          # not whatever the default branch happens to be at.
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            Target/
+          key: cargo-publish-test-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-publish-test-${{ runner.os }}-
+
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+  Publish:
+    name: Publish to crates.io
+    needs: [Test]
+    # Present, named, and skipped. `!cancelled()` rather than the implicit
+    # "needs succeeded" so that the skipped Test job under a dispatch does not
+    # itself become the thing holding this job shut - the input and the manifest
+    # are, and both of them are readable.
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.publish_crates }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+
+      # `cargo publish` is here on purpose and cannot run: `publish = false` in
+      # `[workspace.package]` is inherited by every member, so cargo answers
+      # "`agentic` cannot be published" even with the input above set to true.
+      # That is the guard that survives somebody editing this file.
+      - name: Publish to crates.io (refused while the namespace is not ours)
+        run: cargo publish -p agentic --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

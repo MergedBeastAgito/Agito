@@ -28,13 +28,37 @@ Target/debug/agentic chat \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
   [--bind <target-id>] \
   [--selectors <file.json>] \
+  [--format markdown|text] \
   --question '<text>' \
   --timeout 300000
 ```
 
-The result is `{"url", "text", "model", "mode", "trace", "sources"}`. `--bind` drives the tab a
-person is already looking at; without it the call opens a page of its own. Use a bind for research
-that belongs in an existing thread, and a new page for a probe you intend to throw away.
+The result is `{"url", "format", "text", "model", "mode", "trace", "sources"}`. `--bind` drives the
+tab a person is already looking at; without it the call opens a page of its own. Use a bind for
+research that belongs in an existing thread, and a new page for a probe you intend to throw away.
+
+---
+
+## Two readings of the same answer
+
+`--format` decides what `text` is, and it is the only thing it decides: the same element, the same
+scroll, the same busy control, the same turn correlation.
+
+- **`text`** is `innerText`, trimmed. It is the default because every recorded baseline was read
+  with it.
+- **`markdown`** is the answer's DOM serialised by the page. Tables keep their columns, `pre > code`
+  becomes a fenced block with its language, a formula is its TeX from
+  `annotation[encoding="application/x-tex"]` instead of hundreds of positioned glyphs, lists keep
+  their nesting and a link is `[text](href)`.
+
+Ask for `markdown` when the answer is going into a note, a report or a diff - anywhere its
+_structure_ is part of what was said. `innerText` is not wrong, it is unformatted: on a thread whose
+answer carries three tables it returns every cell as a tab-separated run with no pipes, and a table
+whose rows do not share a tab count cannot be recovered from it at all.
+
+The completion rule is unaffected, because it compares text to text and never length to length: a
+Markdown capture is longer, settles on the same third agreement, and its turn marks are computed
+from the same reading the answer came from.
 
 ---
 
@@ -137,7 +161,7 @@ into a single result.
 
 **A read returns to the end of the thread first.** A virtualised thread does not mount what is
 off-screen, so a read taken with the page scrolled to the top measures whichever turns happen to be
-mounted — and an old answer is read as a new one. The page's own scroll control is pressed first,
+mounted - and an old answer is read as a new one. The page's own scroll control is pressed first,
 and scrolling the last answer into view is the fallback for a product that has none.
 
 ## Ask, then weigh
@@ -176,17 +200,19 @@ answer cannot weigh it.
 
 ## Claim → test
 
-| Claim                                            | Test                                                                                                                                                |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A question is answered and read back             | `agentic chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                   |
-| The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                           |
-| The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                    |
-| A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                               |
-| Typing produces a real edit                      | after a failed send, the composer holds the question text and the send control is enabled                                                           |
-| A settled answer is the answer, not the question | the returned `text` is not equal to `--question`                                                                                                    |
-| A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                       |
-| A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                     |
-| A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM |
-| A stale draft is replaced, not appended          | type question A, abandon it, then ask B: the answer is to B, and the composer never sends A                                                         |
-| A composer that kept the old draft is refused    | with a draft present, ask a different question: the call exits non-zero as `not-ready` naming `mismatch`, and no turn is added                      |
-| A settled answer equals the page's               | compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                       |
+| Claim                                            | Test                                                                                                                                                                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A question is answered and read back             | `agentic chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                 |
+| The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                                                                                         |
+| The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                                                                                  |
+| A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                                                                                             |
+| Typing produces a real edit                      | after a failed send, the composer holds the question text and the send control is enabled                                                                                                                         |
+| A settled answer is the answer, not the question | the returned `text` is not equal to `--question`                                                                                                                                                                  |
+| A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                                                                                     |
+| A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                                                                                   |
+| A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM                                                               |
+| A stale draft is replaced, not appended          | type question A, abandon it, then ask B: the answer is to B, and the composer never sends A                                                                                                                       |
+| A composer that kept the old draft is refused    | with a draft present, ask a different question: the call exits non-zero as `not-ready` naming `mismatch`, and no turn is added                                                                                    |
+| A settled answer equals the page's               | with the default `--format text`, compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                                                   |
+| A Markdown capture keeps the answer's structure  | `--format markdown` on a page holding a table, a fence, a formula and a nested list returns a pipe table with one line per row, a fence carrying the code's language, and `$…$` equal to the formula's annotation |
+| A citation is not a link                         | a numeric citation anchor inside the answer comes back as the number the page showed, not as `[1](https://…)`                                                                                                     |

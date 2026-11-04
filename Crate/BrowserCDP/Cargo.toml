@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "The concrete browser substrate: attach or launch, bounded evaluation, and disposal that closes only what it launched."
 
 [lib]

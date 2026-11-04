@@ -1,0 +1,239 @@
+name: Build
+
+concurrency:
+  group: Build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["Agentic/v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  DO_NOT_TRACK: 1
+
+jobs:
+  Release:
+    name: Release
+    # A dispatch has no tag to hang a release on, so this job skips and the
+    # matrix still runs: a pipeline that cannot be dry-run is a pipeline nobody
+    # exercises before the tag that matters.
+    if: startsWith(github.ref, 'refs/tags/Agentic/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Created exactly once, before any matrix leg attaches a file, so five
+      # concurrent `action-gh-release` invocations do not race to create it.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  Build:
+    name: Build ${{ matrix.target }}
+    needs: Release
+    if: always() && (needs.Release.result == 'success' || needs.Release.result == 'skipped')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Every leg finishes and attaches its own archive even when a sibling leg is
+      # slow or red - Windows is the long pole. `Finalize` then fails loudly on an
+      # incomplete matrix, so a partial upload is caught instead of shipped.
+      fail-fast: false
+      matrix:
+        include:
+          # Linux ships musl, not gnu: the release is static, and a gnu binary
+          # binds whatever glibc the runner happened to have.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+          - os: macos-14
+            target: aarch64-apple-darwin
+          # Cross-compiled from arm64. macos-13 (a real Intel host) queues
+          # indefinitely on GitHub-hosted runners; `--target` alone is enough.
+          - os: macos-14
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the musl toolchains
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+
+      # rustc ships its own musl libc for musl targets, so the cross gcc only has
+      # to be the linker driver - but it has to be told, or the build reaches for
+      # a host `cc` that cannot emit aarch64 objects.
+      - name: Point the aarch64-musl linker at the cross gcc
+        if: ${{ matrix.target == 'aarch64-unknown-linux-musl' }}
+        run: |
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            Target/
+          key: cargo-build-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-build-${{ runner.os }}-${{ matrix.target }}-
+
+      # `--locked`: a lock file that no longer matches the manifests is a failed
+      # build, not a different binary shipped under the same tag.
+      - name: Build
+        run: cargo build --locked --release -p agentic --target ${{ matrix.target }}
+
+      # A tag names the version; a dispatch has to read it out of the manifest, so
+      # the dry run exercises the same packaging path with the same name shape.
+      - name: Resolve the version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            Version="${GITHUB_REF_NAME#Agentic/v}"
+          else
+            Version="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+          fi
+          echo "version=${Version}" >> "$GITHUB_OUTPUT"
+          echo "packaging agentic ${Version} for ${{ matrix.target }}"
+
+      - name: Package (Unix)
+        if: ${{ !contains(matrix.target, 'windows') }}
+        shell: bash
+        env:
+          Version: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          Target="${{ matrix.target }}"
+          Name="agentic-${Version}-${Target}"
+          cp "Target/${Target}/release/agentic" agentic
+          tar czf "${Name}.tar.gz" agentic LICENSE
+          ls -lh "${Name}.tar.gz"
+          tar tzf "${Name}.tar.gz"
+
+      # PowerShell rather than Git Bash: MSYS rewrites a single-slash argument
+      # into a filesystem path, which is the class of bug that silently produced
+      # broken Windows assets in the reference pipeline.
+      - name: Package (Windows)
+        if: ${{ contains(matrix.target, 'windows') }}
+        shell: pwsh
+        env:
+          Version: ${{ steps.version.outputs.version }}
+        run: |
+          $Target = "${{ matrix.target }}"
+          $Name = "agentic-$env:Version-$Target"
+          Copy-Item "Target/$Target/release/agentic.exe" "agentic.exe"
+          Compress-Archive -Path "agentic.exe", "LICENSE" -DestinationPath "$Name.zip" -CompressionLevel Optimal
+          Get-ChildItem "$Name.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agentic-${{ matrix.target }}
+          path: agentic-*.*
+          retention-days: 30
+          if-no-files-found: error
+
+      # The Release job already created the release; each leg only attaches its
+      # own archive here. `agentic-*.*` cannot match the bare `agentic.exe` the
+      # Windows leg stages - the hyphen is what keeps the binary out of the
+      # asset list.
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/Agentic/v')
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: agentic-*.*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  Finalize:
+    name: Finalize release assets
+    needs: [Build]
+    # `always()` so an incomplete matrix is reported as the missing archive it
+    # is, instead of the job that would have said so being skipped silently.
+    if: always() && startsWith(github.ref, 'refs/tags/Agentic/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Fail when the matrix did not finish
+        if: needs.Build.result != 'success'
+        run: |
+          echo "::error::the build matrix did not succeed (result: ${{ needs.Build.result }}) - fix the leg and cut a new tag; re-running a half-built release leaves one tag whose assets came from two trees"
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download every attached asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p Assets
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir Assets --clobber
+          ls -l Assets
+
+      - name: Assert the matrix is complete
+        run: |
+          set -euo pipefail
+          Version="${GITHUB_REF_NAME#Agentic/v}"
+          Missing=0
+          for Target in x86_64-unknown-linux-musl aarch64-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin; do
+            Asset="agentic-${Version}-${Target}.tar.gz"
+            if [ ! -f "Assets/${Asset}" ]; then
+              echo "::error::missing ${Asset}"
+              Missing=1
+            fi
+          done
+          Asset="agentic-${Version}-x86_64-pc-windows-msvc.zip"
+          if [ ! -f "Assets/${Asset}" ]; then
+            echo "::error::missing ${Asset}"
+            Missing=1
+          fi
+          if [ "${Missing}" -ne 0 ]; then
+            echo "::error::the release matrix is incomplete - this release is not done"
+            exit 1
+          fi
+          echo "all five archives are attached"
+
+      - name: Build SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          cd Assets
+          # The five archives and nothing else: a checksum list cannot hash
+          # itself, and hashing an asset the release page does not show is noise.
+          sha256sum agentic-*.tar.gz agentic-*.zip | sort -k2 > ../SHA256SUMS.txt
+          Count="$(wc -l < ../SHA256SUMS.txt)"
+          if [ "${Count}" -ne 5 ]; then
+            echo "::error::expected 5 checksums, wrote ${Count}"
+            exit 1
+          fi
+          cat ../SHA256SUMS.txt
+
+      - name: Upload SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber

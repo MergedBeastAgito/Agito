@@ -65,6 +65,9 @@ use serde_json::{Map, Value, json};
 /// Where every observation the fake made is written, in order.
 type Effects = Arc<Mutex<Vec<String>>>;
 
+/// What a failed call reports to: the target it was asked about, and why.
+type Reporter = Arc<dyn Fn(&Target, &Error) + Send + Sync>;
+
 /// Which of the driver's expressions the fake was handed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
@@ -464,7 +467,7 @@ fn run_case(Fixture:&Value, Entry:&Value) -> Value {
 		_ => TestPace::New(),
 	};
 
-	let Report:Arc<dyn Fn(&Target, &Error) + Send + Sync> = {
+	let Report:Reporter = {
 		let Effects = Effects.clone();
 		let Reports = Reports.clone();
 		Arc::new(move |_Target:&Target, Why:&Error| {
@@ -503,10 +506,10 @@ fn run_case(Fixture:&Value, Entry:&Value) -> Value {
 	let mut Result = json!({ "kind": "void" });
 
 	for Step in &Steps {
-		if let Some(Before) = Step.get("before") {
-			if let Some(Values) = Before.get("page") {
-				Page.Patch(Values);
-			}
+		if let Some(Before) = Step.get("before")
+			&& let Some(Values) = Before.get("page")
+		{
+			Page.Patch(Values);
 		}
 		let Op = string_at(Step, &["op"]).unwrap_or_default();
 		assert_eq!(Op, "ask", "unknown chat step {Op}");
@@ -547,13 +550,13 @@ fn mismatches(Observed:&Value, Expect:&Value) -> Vec<String> {
 		if Want.get("code") != Got.get("code") {
 			Wrong.push(format!("result code: wanted {:?}, got {:?}", Want.get("code"), Got.get("code")));
 		}
-		if let Some(Message) = Want.get("message").and_then(Value::as_str) {
-			if !Got.get("message").and_then(Value::as_str).unwrap_or("").contains(Message) {
-				Wrong.push(format!(
-					"result message: wanted to contain {Message:?}, got {:?}",
-					Got.get("message")
-				));
-			}
+		if let Some(Message) = Want.get("message").and_then(Value::as_str)
+			&& !Got.get("message").and_then(Value::as_str).unwrap_or("").contains(Message)
+		{
+			Wrong.push(format!(
+				"result message: wanted to contain {Message:?}, got {:?}",
+				Got.get("message")
+			));
 		}
 		if let Some(Token) = Want.get("observed").and_then(Value::as_str) {
 			let Both = format!(
@@ -569,33 +572,33 @@ fn mismatches(Observed:&Value, Expect:&Value) -> Vec<String> {
 		}
 	} else if Kind(&Want) == "answer" {
 		for Field in ["text", "model", "mode"] {
-			if let Some(Wanted) = Want.get(Field) {
-				if Got.get(Field) != Some(Wanted) {
-					Wrong.push(format!("result {Field}: wanted {Wanted}, got {:?}", Got.get(Field)));
-				}
+			if let Some(Wanted) = Want.get(Field)
+				&& Got.get(Field) != Some(Wanted)
+			{
+				Wrong.push(format!("result {Field}: wanted {Wanted}, got {:?}", Got.get(Field)));
 			}
 		}
 		for Field in ["trace", "sources"] {
-			if let Some(Wanted) = Want.get(Field) {
-				if Got.get(Field) != Some(Wanted) {
-					Wrong.push(format!("result {Field}: wanted {Wanted}, got {:?}", Got.get(Field)));
-				}
+			if let Some(Wanted) = Want.get(Field)
+				&& Got.get(Field) != Some(Wanted)
+			{
+				Wrong.push(format!("result {Field}: wanted {Wanted}, got {:?}", Got.get(Field)));
 			}
 		}
 	}
 
-	if let Some(Effects) = Expect.get("effects") {
-		if Effects != Observed.get("effects").unwrap_or(&Value::Null) {
-			Wrong.push(format!(
-				"effects: wanted {Effects}, got {}",
-				Observed.get("effects").unwrap_or(&Value::Null)
-			));
-		}
+	if let Some(Effects) = Expect.get("effects")
+		&& Effects != Observed.get("effects").unwrap_or(&Value::Null)
+	{
+		Wrong.push(format!(
+			"effects: wanted {Effects}, got {}",
+			Observed.get("effects").unwrap_or(&Value::Null)
+		));
 	}
-	if let Some(Reports) = Expect.get("reports").and_then(Value::as_u64) {
-		if Some(Reports) != Observed.get("reports").and_then(Value::as_u64) {
-			Wrong.push(format!("reports: wanted {Reports}, got {:?}", Observed.get("reports")));
-		}
+	if let Some(Reports) = Expect.get("reports").and_then(Value::as_u64)
+		&& Some(Reports) != Observed.get("reports").and_then(Value::as_u64)
+	{
+		Wrong.push(format!("reports: wanted {Reports}, got {:?}", Observed.get("reports")));
 	}
 	Wrong
 }

@@ -1,0 +1,161 @@
+name: Check
+
+# One job per concern: a formatting slip, a clippy lint and a failing test are
+# three different answers, and a single job stops at the first one and hides the
+# other two behind it.
+concurrency:
+  group: Check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  DO_NOT_TRACK: 1
+
+jobs:
+  Check:
+    name: cargo check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The tree inherits `rustfmt.toml` from its parent directory, and that file
+      # sets `unstable_features = true` with nightly-only options
+      # (`space_after_colon = false`, `imports_granularity`, `format_strings`,
+      # ...). Stable rustfmt drops them silently instead of failing, which turns
+      # the format gate into a false positive - so nightly is the one toolchain
+      # in every job here, and `cargo fmt` is a real gate rather than a guess.
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      # `.cargo/config.toml` puts the build directory at `Target` (capital), not
+      # the default `target`, so that is the path worth caching.
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            Target/
+          key: cargo-check-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-check-${{ runner.os }}-
+
+      # `--locked` because the release builds with it: a lock file that no longer
+      # matches the manifests has to fail on the push, not on the tag.
+      - name: cargo check
+        run: cargo check --workspace --locked
+
+  Clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            Target/
+          key: cargo-clippy-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-clippy-${{ runner.os }}-
+
+      # `--all-targets` on purpose: the differential suites under `Crate/*/Test/`
+      # are where the fakes live, and a lint that only sees the libraries would
+      # let them rot.
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  Format:
+    name: cargo fmt --check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+  Test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            Target/
+          key: cargo-test-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-test-${{ runner.os }}-
+
+      # No browser is launched: every port in these suites is a fake, which is
+      # what makes the differential run reproducible on a bare runner.
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+  Skills:
+    name: skill corpus gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            Target/
+          key: cargo-skills-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-skills-${{ runner.os }}-
+
+      # `agentic skills` reports findings and exits 0 - the corpus is data, not
+      # an assertion - so the gate reads the sentence rather than the status
+      # code. A finding has to fail the push, not annotate it.
+      - name: Skill corpus gate
+        run: |
+          set -euo pipefail
+          Output="$(cargo run --locked -p agentic --release -- skills Documentation/Skill)"
+          printf '%s\n' "${Output}"
+          if ! printf '%s\n' "${Output}" | grep -qF ', 0 finding(s),'; then
+            echo "::error::the skill corpus under Documentation/Skill has findings"
+            exit 1
+          fi

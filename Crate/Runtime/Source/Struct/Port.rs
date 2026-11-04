@@ -228,7 +228,7 @@ impl fmt::Debug for Lease {
 /// it arrives.
 ///
 /// The fields are private on purpose. A caller can clone a ticket it was given
-/// - that is what holding authority is - but it cannot build one out of numbers
+/// (that is what holding authority is) but it cannot build one out of numbers
 /// it observed, because the numbers are not what the destination compares. Only
 /// [`Ticket::Restore`] constructs one from outside, and that is the adapter's
 /// door for a ticket read back out of the database, not a caller's.

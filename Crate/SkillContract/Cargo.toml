@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "Corpus discovery, validation and packaging: a stateless contract over a directory of skills."
 
 [lib]

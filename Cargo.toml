@@ -9,14 +9,24 @@ rust-version = "1.88"
 # The repository ships one licence, so this field agrees with it: `LICENSE` is
 # CC0 1.0 Universal. A crate cannot claim a licence the tree does not carry.
 license = "CC0-1.0"
+# Publishing is disabled at the root and inherited by every member (each crate
+# carries `publish.workspace = true`). The crates.io namespace is not ours yet,
+# so a stray `cargo publish` from any crate must fail here rather than depend on
+# a workflow remembering not to run it.
+publish = false
 
 [workspace.dependencies]
-agentic-runtime = { path = "Crate/Runtime" }
-agentic-skill-contract = { path = "Crate/SkillContract" }
-agentic-chat-driver = { path = "Crate/ChatDriver" }
-agentic-browser-cdp = { path = "Crate/BrowserCDP" }
-agentic-design-verification = { path = "Crate/DesignVerification" }
-agentic-workflow = { path = "Crate/Workflow" }
+# A path dependency carries a version beside its path, and that version must
+# track `[workspace.package] version` above: `cargo package` - which the release
+# workflow runs so the `.crate` files ship without a registry - refuses a path
+# dependency that names no version. Nothing here is published to crates.io;
+# `publish = false` above sees to that.
+agentic-runtime = { version = "0.1.0", path = "Crate/Runtime" }
+agentic-skill-contract = { version = "0.1.0", path = "Crate/SkillContract" }
+agentic-chat-driver = { version = "0.1.0", path = "Crate/ChatDriver" }
+agentic-browser-cdp = { version = "0.1.0", path = "Crate/BrowserCDP" }
+agentic-design-verification = { version = "0.1.0", path = "Crate/DesignVerification" }
+agentic-workflow = { version = "0.1.0", path = "Crate/Workflow" }
 
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

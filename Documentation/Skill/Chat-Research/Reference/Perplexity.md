@@ -92,7 +92,7 @@ as well, which survives the unmounting.
 
 The model button has been observed with `aria-haspopup="dialog"` and, on a later build,
 `aria-haspopup="menu"`. A selector pinned to `dialog` reads `null` on the build that uses `menu`,
-and the driver then refuses the call as `wrong-model` with `the page reads nothing` — a correct
+and the driver then refuses the call as `wrong-model` with `the page reads nothing` - a correct
 refusal about a selector that aged out.
 
 Select on the attribute's presence, not its value, and scope it to the composer:
@@ -108,7 +108,7 @@ pick.
 whenever the newest turn is off-screen. Measured on a long thread: the last answer sat at y = 25,910
 in a 779 px viewport, so a read taken there measured older turns. Pressing it (or
 `scrollIntoView(false)` on the last answer) puts the newest answer's bottom exactly at the viewport
-edge. Note that `window.scrollY` stays 0 — the app scrolls an inner container, so a driver that
+edge. Note that `window.scrollY` stays 0 - the app scrolls an inner container, so a driver that
 checks `window.scrollY` to decide "am I at the end" always thinks it is not.
 
 **`[data-in-flight]`** on the scroll-to-end icon is the page's own "still producing" flag: `"true"`
@@ -143,3 +143,21 @@ page still arriving, not a different model; the selector is fine (the same selec
 
 Bind an already-open tab for research, and treat that particular `wrong-model` whose detail says the
 page reads nothing as "retry", not as "wrong model".
+
+## Finding a thread whose id was never recorded
+
+A project page (`/projects/<uuid>`) lists its threads in a sidebar whose anchors carry the question
+as `aria-label` and the thread as `href`. Both attributes are readable, and the row's own text is
+not: `innerText` of the row answers only "Recents", because the title is drawn elsewhere.
+
+```js
+[...document.querySelectorAll("a[href*='/search/']")].map((Anchor) => ({
+	href: Anchor.href,
+	question: Anchor.getAttribute("aria-label"),
+}));
+```
+
+That is how a capture whose note recorded the bare origin (`https://www.perplexity.ai/`) is re-read:
+find the thread by the opening of its question, then open `/search/<id>` in a background tab
+(`Target.createTarget` with `background: true` on the browser-level socket) so the person's focus
+stays where it was.
