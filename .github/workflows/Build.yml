@@ -1,6 +1,27 @@
+# Build - the only distribution channel this repository has.
+#
+# `agentic` is not published to crates.io, so a file this workflow does not
+# build and attach does not exist for anyone. There is no manual upload step and
+# no documented fallback: if a file cannot be attached, the release fails rather
+# than looking complete.
+#
+# The shape is the house pattern (Aphrodite's `Build.yml`): `Release` creates the
+# release exactly once before any matrix leg runs, each `Build` leg attaches only
+# its own files, and `Finalize` runs once afterwards - it packages what is not a
+# per-platform binary, merges the checksums, attaches them, and then reads the
+# release back to assert the asset set.
+#
+# This file is the ONLY workflow that reacts to `Agentic/v*`. A second workflow
+# on the same tag would race to create the same release and clobber the same
+# `SHA256SUMS.txt` with an asset assertion the other pipeline cannot satisfy, so
+# the tag has exactly one owner by construction.
 name: Build
 
 concurrency:
+  # A tag is immutable, so the only way two runs of this workflow share a ref is
+  # a `workflow_dispatch` re-run - and cancelling the older dry run is the point
+  # of a dry run. A release that is already attaching assets is never displaced
+  # by a different ref.
   group: Build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
@@ -16,6 +37,14 @@ env:
   CARGO_TERM_COLOR: always
   DO_NOT_TRACK: 1
 
+  # The five targets this release ships. DELIBERATELY a second, independent
+  # declaration beside the matrix below: `Finalize` has to know what a complete
+  # release is without asking the matrix, so that deleting a leg from the matrix
+  # fails the release by name instead of quietly shrinking what "complete" means.
+  # Do not generate this from the matrix.
+  EXPECTED_TARGETS: >-
+    x86_64-unknown-linux-musl aarch64-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc
+
 jobs:
   Release:
     name: Release
@@ -27,13 +56,124 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The tag names the version, and the manifest has to agree with it: a
+      # release whose tag says 0.1.0 while the binary reports 0.1.1 is a release
+      # nobody can name. Checked before the release exists, not after.
+      - name: Guard the tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            Agentic/v[0-9]*) ;;
+            *)
+              echo "::error::'${GITHUB_REF_NAME}' is not a release tag of the form Agentic/v<semver>"
+              exit 1
+              ;;
+          esac
+          Version="${GITHUB_REF_NAME#Agentic/v}"
+          ManifestVersion="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+          if [ "${Version}" != "${ManifestVersion}" ]; then
+            echo "::error::tag says ${Version} but [workspace.package] version is ${ManifestVersion}"
+            exit 1
+          fi
+          {
+            echo "TAG=${GITHUB_REF_NAME}"
+            echo "VERSION=${Version}"
+          } >> "${GITHUB_ENV}"
+          echo "releasing agentic ${Version} from ${GITHUB_REF_NAME}"
+
+      # The body is written by this step, not typed by hand, and it is rewritten
+      # on every run: it names the commit, the targets and where the checksums
+      # are, so it cannot drift from what was actually built.
+      - name: Write the release body
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          # A QUOTED heredoc: the backticks below are Markdown code spans, and
+          # quoting the delimiter is what stops the shell reading them as command
+          # substitution. The `@NAME@` tokens are filled in afterwards with bash
+          # parameter expansion - no `sed`, so nothing here can rewrite a line it
+          # did not mean to.
+          Body="$(cat <<'BODY'
+          ## agentic @VERSION@
+
+          Built by `.github/workflows/Build.yml` from commit `@SHA@` on tag `@TAG@`.
+          Every asset below was built, hashed and attached by that workflow - nothing is uploaded by hand.
+
+          ### Targets built
+
+          @TARGETS@
+          The Linux targets are musl, so the binaries are static; the macOS targets are built
+          on an arm64 runner and the Intel leg is a `--target` cross build.
+          Each archive holds the `agentic` binary with `LICENSE` and `README.md`.
+
+          ### Checksums
+
+          - **`SHA256SUMS.txt`** - one merged list over every file attached to this release.
+          - **`SHA256SUMS-<target>.txt`** - the per-target list, beside its archive.
+
+          Verify from a directory holding the downloaded assets:
+
+          ```sh
+          sha256sum -c SHA256SUMS.txt      # Linux
+          shasum -a 256 -c SHA256SUMS.txt  # macOS
+          ```
+
+          ### Not on crates.io
+
+          `agentic` is not published to a registry, so the source ships here too:
+
+          - **`agentic-@VERSION@-source.tar.gz`** - the tagged tree, which is what actually builds.
+          - **`agentic-@VERSION@-vendor.tar.gz`** - `cargo vendor` output plus `vendor-config.toml`, so the tree builds offline.
+          - **`<crate>-@VERSION@.crate`** - one per workspace crate, the `cargo package` output for that crate.
+          - **`agentic-skills-@VERSION@.tar.gz`** - `Documentation/Skill`, the corpus the binary validates.
+
+          The `.crate` files are one crate at a time. `Crate/ChatDriver` and `Crate/Workflow`
+          compile their scripts through a shared `Build/Script.rs` that sits above them in the
+          tree, so build those two from the source tarball rather than from their `.crate`.
+
+          The archives are unsigned but hashed. Signing and notarisation are a separate decision.
+          BODY
+          )"
+
+          # The per-target list is generated from the independent target
+          # declaration rather than from the matrix. Bold here and code spans in
+          # the heredoc above: a backtick inside a single-quoted format string is
+          # exactly what SC2016 flags, and this is the one part of the body the
+          # shell has to build.
+          Targets=""
+          for Target in ${EXPECTED_TARGETS}; do
+            case "${Target}" in
+              *windows*) Extension=zip ;;
+              *) Extension=tar.gz ;;
+            esac
+            Targets="${Targets}- **${Target}** - **agentic-${VERSION}-${Target}.${Extension}**"$'\n'
+          done
+
+          Body="${Body//@TARGETS@/${Targets}}"
+          Body="${Body//@VERSION@/${VERSION}}"
+          Body="${Body//@SHA@/${GITHUB_SHA}}"
+          Body="${Body//@TAG@/${TAG}}"
+          printf '%s\n' "${Body}" > dist/ReleaseBody.md
+          cat dist/ReleaseBody.md
+
       # Created exactly once, before any matrix leg attaches a file, so five
       # concurrent `action-gh-release` invocations do not race to create it.
-      - name: Create GitHub Release
+      # `body_path` is what ships; `generate_release_notes` is kept because the
+      # house shape names it, and the REST API gives an explicit body precedence.
+      - name: Create the release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          body_path: dist/ReleaseBody.md
           generate_release_notes: true
           draft: false
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -84,8 +224,8 @@ jobs:
       - name: Point the aarch64-musl linker at the cross gcc
         if: ${{ matrix.target == 'aarch64-unknown-linux-musl' }}
         run: |
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "${GITHUB_ENV}"
+          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> "${GITHUB_ENV}"
 
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -100,6 +240,7 @@ jobs:
       # `--locked`: a lock file that no longer matches the manifests is a failed
       # build, not a different binary shipped under the same tag.
       - name: Build
+        shell: bash
         run: cargo build --locked --release -p agentic --target ${{ matrix.target }}
 
       # A tag names the version; a dispatch has to read it out of the manifest, so
@@ -114,7 +255,7 @@ jobs:
           else
             Version="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
           fi
-          echo "version=${Version}" >> "$GITHUB_OUTPUT"
+          echo "version=${Version}" >> "${GITHUB_OUTPUT}"
           echo "packaging agentic ${Version} for ${{ matrix.target }}"
 
       - name: Package (Unix)
@@ -127,7 +268,7 @@ jobs:
           Target="${{ matrix.target }}"
           Name="agentic-${Version}-${Target}"
           cp "Target/${Target}/release/agentic" agentic
-          tar czf "${Name}.tar.gz" agentic LICENSE
+          tar czf "${Name}.tar.gz" agentic LICENSE README.md
           ls -lh "${Name}.tar.gz"
           tar tzf "${Name}.tar.gz"
 
@@ -143,35 +284,79 @@ jobs:
           $Target = "${{ matrix.target }}"
           $Name = "agentic-$env:Version-$Target"
           Copy-Item "Target/$Target/release/agentic.exe" "agentic.exe"
-          Compress-Archive -Path "agentic.exe", "LICENSE" -DestinationPath "$Name.zip" -CompressionLevel Optimal
+          Compress-Archive -Path "agentic.exe", "LICENSE", "README.md" -DestinationPath "$Name.zip" -CompressionLevel Optimal
           Get-ChildItem "$Name.zip"
+
+      # Windows hashes with `Get-FileHash`, not bash + `certutil`/`findstr`: Git
+      # Bash's MSYS path-conversion layer turns a single-slash flag like
+      # `findstr /v` into a filesystem path, so the hash step silently breaks.
+      # The list is written with LF endings and no BOM so `sha256sum -c` on Linux
+      # (which is where `Finalize` cross-checks it) reads it verbatim.
+      - name: Checksum (Windows)
+        if: ${{ contains(matrix.target, 'windows') }}
+        shell: pwsh
+        env:
+          Version: ${{ steps.version.outputs.version }}
+        run: |
+          $Target = "${{ matrix.target }}"
+          $File = "agentic-$env:Version-$Target.zip"
+          $Hash = (Get-FileHash $File -Algorithm SHA256).Hash.ToLower()
+          $Line = "$Hash  $File`n"
+          [IO.File]::WriteAllText("SHA256SUMS-$Target.txt", $Line, [Text.UTF8Encoding]::new($false))
+          Get-Content "SHA256SUMS-$Target.txt"
+
+      - name: Checksum (Unix)
+        if: ${{ !contains(matrix.target, 'windows') }}
+        shell: bash
+        env:
+          Version: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          Target="${{ matrix.target }}"
+          File="agentic-${Version}-${Target}.tar.gz"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${File}" > "SHA256SUMS-${Target}.txt"
+          else
+            shasum -a 256 "${File}" > "SHA256SUMS-${Target}.txt"
+          fi
+          cat "SHA256SUMS-${Target}.txt"
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: agentic-${{ matrix.target }}
-          path: agentic-*.*
-          retention-days: 30
+          path: |
+            agentic-*.*
+            SHA256SUMS-${{ matrix.target }}.txt
           if-no-files-found: error
+          retention-days: 30
 
       # The Release job already created the release; each leg only attaches its
-      # own archive here. `agentic-*.*` cannot match the bare `agentic.exe` the
-      # Windows leg stages - the hyphen is what keeps the binary out of the
-      # asset list.
-      - name: Upload to release
+      # own archive and its own checksum list here. `agentic-*.*` cannot match
+      # the bare `agentic.exe` the Windows leg stages - the hyphen is what keeps
+      # the binary out of the asset list.
+      - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/Agentic/v')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          files: agentic-*.*
+          tag_name: ${{ github.ref_name }}
+          files: |
+            agentic-*.*
+            SHA256SUMS-${{ matrix.target }}.txt
           fail_on_unmatched_files: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Runs once, after every leg has finished. Two jobs in one: it packages what is
+  # not a per-platform binary, and it proves the release is complete by reading
+  # it back. A job that only uploads proves nothing about what landed.
   Finalize:
     name: Finalize release assets
     needs: [Build]
     # `always()` so an incomplete matrix is reported as the missing archive it
-    # is, instead of the job that would have said so being skipped silently.
+    # is, instead of the job that would have said so being skipped silently. A
+    # dispatch has no release to finalize, so it stops after the dry run.
     if: always() && startsWith(github.ref, 'refs/tags/Agentic/v')
     runs-on: ubuntu-latest
     permissions:
@@ -185,55 +370,240 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Download every attached asset
+      - name: Resolve the version
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "TAG=${GITHUB_REF_NAME}"
+            echo "VERSION=${GITHUB_REF_NAME#Agentic/v}"
+          } >> "${GITHUB_ENV}"
+
+      # `continue-on-error` on purpose: when a leg never produced an artifact,
+      # this step coming back empty is the evidence the next step names. Failing
+      # here instead would report "no artifacts found" and hide which platform.
+      - name: Download every leg's artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: agentic-*
+          path: dist
+          merge-multiple: true
+
+      # Gate one: is the matrix complete? Named per target, and checked before
+      # anything is packaged, so an incomplete build never gets as far as
+      # attaching a partial asset set.
+      - name: Assert the build matrix is complete
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Expected targets: ${EXPECTED_TARGETS}"
+          Missing=0
+          for Target in ${EXPECTED_TARGETS}; do
+            case "${Target}" in
+              *windows*) Archive="agentic-${VERSION}-${Target}.zip" ;;
+              *) Archive="agentic-${VERSION}-${Target}.tar.gz" ;;
+            esac
+            for File in "${Archive}" "SHA256SUMS-${Target}.txt"; do
+              if [ -f "dist/${File}" ]; then
+                echo "have ${File}"
+              else
+                echo "::error::missing build artifact: ${File} (was the ${Target} leg removed from the matrix, or did it fail?)"
+                Missing=1
+              fi
+            done
+          done
+          if [ "${Missing}" -ne 0 ]; then
+            echo "::error::The build matrix is incomplete - refusing to publish a partial release."
+            exit 1
+          fi
+          # Each leg's list must describe the bytes that actually arrived.
+          for Target in ${EXPECTED_TARGETS}; do
+            ( cd dist && sha256sum -c "SHA256SUMS-${Target}.txt" )
+          done
+
+      - name: Setup Rust (nightly, latest)
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: nightly
+
+      # Not on crates.io: the `.crate` files are how a consumer gets one crate's
+      # packaged source without a registry. Two things stand between this tree
+      # and a `.crate`, and both are answered here rather than by publishing:
+      #
+      # - `cargo package` strips every `path` dependency and resolves the version
+      #   from the registry, so an unpublished sibling cannot be found. A patch
+      #   table generated from the workspace itself stands in for the registry;
+      #   absolute paths because a `--config` file resolves relative ones against
+      #   its own location, not the workspace root.
+      # - It refuses a path dependency that names no version, which is why
+      #   `[workspace.dependencies]` carries a version beside each path.
+      #
+      # `--no-verify` because the tree was already built per target above;
+      # `--allow-dirty` because packaging writes build output the next package
+      # then sees.
+      - name: Package every crate
+        shell: bash
+        run: |
+          set -euo pipefail
+          Patch="${RUNNER_TEMP}/package-patch.toml"
+          {
+            echo '[patch.crates-io]'
+            cargo metadata --no-deps --format-version 1 \
+              | jq -r '.packages[] | "\(.name) = { path = \"\(.manifest_path | sub("/Cargo.toml$"; ""))\" }"'
+          } > "${Patch}"
+          cat "${Patch}"
+          for Manifest in Crate/*/Cargo.toml; do
+            echo "::group::cargo package ${Manifest}"
+            cargo --config "${Patch}" package --no-verify --allow-dirty --manifest-path "${Manifest}"
+            echo "::endgroup::"
+          done
+          cp Target/package/*.crate dist/
+          ls -l dist/*.crate
+
+      # The offline path: `cargo vendor` plus the source-replacement block it
+      # prints, so `vendor-config.toml` can be appended to `.cargo/config.toml`.
+      - name: Vendor the dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          Root="$(mktemp -d)"
+          cargo vendor "${Root}/vendor" > "${Root}/vendor-config.toml"
+          cat "${Root}/vendor-config.toml"
+          tar -czf "dist/agentic-${VERSION}-vendor.tar.gz" -C "${Root}" vendor vendor-config.toml
+          ls -l "dist/agentic-${VERSION}-vendor.tar.gz"
+
+      # The tagged tree itself. The `.crate` files are per-crate package output;
+      # this is the only asset that unpacks into something `cargo build --locked`
+      # can run, which is why it travels beside them.
+      - name: Package the source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --prefix="agentic-${VERSION}/" \
+            -o "dist/agentic-${VERSION}-source.tar.gz" "${GITHUB_SHA}"
+          tar tzf "dist/agentic-${VERSION}-source.tar.gz" | head -20
+          ls -l "dist/agentic-${VERSION}-source.tar.gz"
+
+      # The skill corpus is part of what this repository ships, so it travels
+      # with the binary that validates it. It unpacks to `Documentation/Skill`.
+      - name: Package the skill corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf "dist/agentic-skills-${VERSION}.tar.gz" -C . Documentation/Skill
+          tar tzf "dist/agentic-skills-${VERSION}.tar.gz" | head -20
+          ls -l "dist/agentic-skills-${VERSION}.tar.gz"
+
+      # One list over every file that will be attached - the per-target lists
+      # included, since they are attached files too. Hashed from the bytes in
+      # `dist/`, which are the bytes that go up.
+      - name: Merge the checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          rm -f SHA256SUMS.txt
+          {
+            printf '# agentic %s - every file attached to the %s release.\n' "${VERSION}" "${TAG}"
+            printf '# Generated by .github/workflows/Build.yml from commit %s - do not edit.\n' "${GITHUB_SHA}"
+            printf '# Verify with: sha256sum -c SHA256SUMS.txt\n'
+          } > SHA256SUMS.txt
+          shopt -s nullglob
+          Files=()
+          for File in *; do
+            [ "${File}" = "SHA256SUMS.txt" ] && continue
+            [ -f "${File}" ] || continue
+            Files+=("${File}")
+          done
+          printf '%s\n' "${Files[@]}" | LC_ALL=C sort > "${RUNNER_TEMP}/merged-files.txt"
+          while IFS= read -r File; do
+            sha256sum "${File}"
+          done < "${RUNNER_TEMP}/merged-files.txt" >> SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          Entries="$(grep -cv '^#' SHA256SUMS.txt || true)"
+          Count="$(wc -l < "${RUNNER_TEMP}/merged-files.txt")"
+          if [ "${Entries}" -ne "${Count}" ]; then
+            echo "::error::SHA256SUMS.txt has ${Entries} entries for ${Count} attached files"
+            exit 1
+          fi
+
+      - name: Attach the packaging assets and the merged checksums
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/*.crate
+            dist/agentic-*-source.tar.gz
+            dist/agentic-*-vendor.tar.gz
+            dist/agentic-skills-*.tar.gz
+            dist/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Gate two: read the release back. The asset set must contain every
+      # expected name, and every expected file must have an entry in the merged
+      # checksum list. The expected list is built from the independent target
+      # declaration, not from the matrix, so a deleted leg fails by name.
+      - name: Assert the release asset set
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p Assets
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir Assets --clobber
-          ls -l Assets
-
-      - name: Assert the matrix is complete
-        run: |
-          set -euo pipefail
-          Version="${GITHUB_REF_NAME#Agentic/v}"
+          {
+            for Target in ${EXPECTED_TARGETS}; do
+              case "${Target}" in
+                *windows*) printf 'agentic-%s-%s.zip\n' "${VERSION}" "${Target}" ;;
+                *) printf 'agentic-%s-%s.tar.gz\n' "${VERSION}" "${Target}" ;;
+              esac
+              printf 'SHA256SUMS-%s.txt\n' "${Target}"
+            done
+            for Crate in dist/*.crate; do
+              basename "${Crate}"
+            done
+            printf 'agentic-%s-source.tar.gz\n' "${VERSION}"
+            printf 'agentic-%s-vendor.tar.gz\n' "${VERSION}"
+            printf 'agentic-skills-%s.tar.gz\n' "${VERSION}"
+            printf 'SHA256SUMS.txt\n'
+          } | LC_ALL=C sort -u > "${RUNNER_TEMP}/expected-assets.txt"
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' \
+            | LC_ALL=C sort -u > "${RUNNER_TEMP}/assets.txt"
+          echo "--- expected"
+          cat "${RUNNER_TEMP}/expected-assets.txt"
+          echo "--- attached"
+          cat "${RUNNER_TEMP}/assets.txt"
           Missing=0
-          for Target in x86_64-unknown-linux-musl aarch64-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin; do
-            Asset="agentic-${Version}-${Target}.tar.gz"
-            if [ ! -f "Assets/${Asset}" ]; then
-              echo "::error::missing ${Asset}"
+          while IFS= read -r Name; do
+            if ! grep -qxF -- "${Name}" "${RUNNER_TEMP}/assets.txt"; then
+              echo "::error::missing release asset: ${Name}"
               Missing=1
             fi
-          done
-          Asset="agentic-${Version}-x86_64-pc-windows-msvc.zip"
-          if [ ! -f "Assets/${Asset}" ]; then
-            echo "::error::missing ${Asset}"
-            Missing=1
-          fi
+          done < "${RUNNER_TEMP}/expected-assets.txt"
+          while IFS= read -r Name; do
+            [ "${Name}" = "SHA256SUMS.txt" ] && continue
+            if ! awk -v n="${Name}" '$2 == n { Found = 1 } END { exit(Found ? 0 : 1) }' dist/SHA256SUMS.txt; then
+              echo "::error::${Name} has no entry in SHA256SUMS.txt"
+              Missing=1
+            fi
+          done < "${RUNNER_TEMP}/expected-assets.txt"
           if [ "${Missing}" -ne 0 ]; then
-            echo "::error::the release matrix is incomplete - this release is not done"
+            echo "::error::The release is incomplete - do not announce it."
             exit 1
           fi
-          echo "all five archives are attached"
+          echo "All $(wc -l < "${RUNNER_TEMP}/expected-assets.txt") expected assets are attached and covered by SHA256SUMS.txt."
 
-      - name: Build SHA256SUMS.txt
-        run: |
-          set -euo pipefail
-          cd Assets
-          # The five archives and nothing else: a checksum list cannot hash
-          # itself, and hashing an asset the release page does not show is noise.
-          sha256sum agentic-*.tar.gz agentic-*.zip | sort -k2 > ../SHA256SUMS.txt
-          Count="$(wc -l < ../SHA256SUMS.txt)"
-          if [ "${Count}" -ne 5 ]; then
-            echo "::error::expected 5 checksums, wrote ${Count}"
-            exit 1
-          fi
-          cat ../SHA256SUMS.txt
-
-      - name: Upload SHA256SUMS.txt
+      # Gate three: the published bytes. Download what the release actually
+      # serves and verify it against the checksum list the release also serves.
+      - name: Verify the published bytes
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+          Published="$(mktemp -d)"
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${Published}" --clobber
+          ( cd "${Published}" && sha256sum -c SHA256SUMS.txt )
+          echo "Every published asset matches SHA256SUMS.txt."
