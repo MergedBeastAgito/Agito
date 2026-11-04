@@ -26,12 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The tree inherits `rustfmt.toml` from its parent directory, and that file
-      # sets `unstable_features = true` with nightly-only options
-      # (`space_after_colon = false`, `imports_granularity`, `format_strings`,
-      # ...). Stable rustfmt drops them silently instead of failing, which turns
-      # the format gate into a false positive - so nightly is the one toolchain
-      # in every job here, and `cargo fmt` is a real gate rather than a guess.
+      # `rustfmt.toml` at the repository root is what makes the format gate
+      # meaningful: the house style is tabs, `space_after_colon = false`,
+      # `imports_granularity`, `format_strings` and the rest, and stable rustfmt
+      # drops the unstable options silently instead of failing. Nightly is
+      # therefore the toolchain in every job here.
       - name: Setup Rust (nightly, latest)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
@@ -89,11 +88,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Rust (nightly, latest)
+      # Pinned to the nightly that formatted the tree, and deliberately not
+      # `nightly`: rustfmt's output moves between nightlies, so an unpinned
+      # format gate goes red on an unrelated push the day the formatter changes
+      # its mind. `rustfmt.toml` at the repository root is the other half of the
+      # pin - it carries the house style into CI, which has no parent directory
+      # to inherit it from, and the two together are what make this job
+      # reproducible rather than a coin flip.
+      - name: Setup Rust (nightly, pinned to the formatter)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
-          toolchain: nightly
-          components: rustfmt, clippy
+          toolchain: nightly-2026-10-17
+          components: rustfmt
 
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
