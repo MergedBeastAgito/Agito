@@ -27,6 +27,7 @@ agentic-chat-driver = { version = "0.1.2", path = "Crate/ChatDriver" }
 agentic-browser-cdp = { version = "0.1.2", path = "Crate/BrowserCDP" }
 agentic-design-verification = { version = "0.1.2", path = "Crate/DesignVerification" }
 agentic-workflow = { version = "0.1.2", path = "Crate/Workflow" }
+agentic-spacetime-catalog = { version = "0.1.2", path = "Crate/SpacetimeCatalog" }
 
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

@@ -3,7 +3,7 @@
 //! Everything below this crate is a port that somebody else implements. This
 //! crate is where a browser is chosen, where a pace is chosen, and where the
 //! two bindings that translate a consumer's port onto the substrate are
-//! installed. It is also where the seven manifests live, embedded at compile
+//! installed. It is also where the eight manifests live, embedded at compile
 //! time, so the binary can report what the workspace ships without reading a
 //! file.
 //!

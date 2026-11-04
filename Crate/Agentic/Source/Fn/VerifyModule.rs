@@ -12,6 +12,7 @@ use AgenticChatDriver::Code as ChatCode;
 use AgenticDesignVerification::Code as DesignCode;
 use AgenticRuntime::Code as RuntimeCode;
 use AgenticSkillContract::Rule as SkillRule;
+use AgenticSpacetimeCatalog::Code as CatalogCode;
 use serde_json::{Value, json};
 
 use crate::Struct::Manifest::{Find, Manifest};
@@ -45,6 +46,7 @@ pub struct Readiness {
 pub fn Declared(Name:&str) -> Option<Vec<&'static str>> {
 	Some(match Name {
 		"@agentic/runtime" => RuntimeCode::All().into_iter().map(RuntimeCode::Name).collect(),
+		"@agentic/spacetime-catalog" => CatalogCode::All().into_iter().map(CatalogCode::Name).collect(),
 		"@agentic/skill-contract" => SkillRule::All().into_iter().map(SkillRule::Name).collect(),
 		"@agentic/chat-driver" => ChatCode::All().into_iter().map(ChatCode::Name).collect(),
 		"@agentic/browser-cdp" => BrowserCode::All().into_iter().map(BrowserCode::Name).collect(),

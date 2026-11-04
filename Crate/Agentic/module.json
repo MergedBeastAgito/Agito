@@ -9,6 +9,7 @@
 	"requires": {
 		"ports": [
 			"agentic.browse",
+			"agentic.catalog.rules",
 			"agentic.chat.ask",
 			"agentic.verify.design",
 			"agentic.skill.validate",

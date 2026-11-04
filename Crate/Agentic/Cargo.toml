@@ -22,6 +22,7 @@ agentic-chat-driver = { workspace = true }
 agentic-design-verification = { workspace = true }
 agentic-browser-cdp = { workspace = true }
 agentic-workflow = { workspace = true }
+agentic-spacetime-catalog = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }

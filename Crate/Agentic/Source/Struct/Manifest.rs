@@ -1,4 +1,4 @@
-//! The seven manifests, embedded.
+//! The eight manifests, embedded.
 //!
 //! `include_str!` rather than a build script or a serde load at launch: the
 //! bytes the crate reports are the bytes that were checked in, and the harness
@@ -24,13 +24,20 @@ pub struct Manifest {
 }
 
 /// Every module this workspace ships, in dependency order.
-pub const All:[Manifest; 7] = [
+pub const All:[Manifest; 8] = [
 	Manifest {
 		Name:"@agentic/runtime",
 		Kind:"runtime",
 		Port:"agentic.runtime",
 		State:"holds-workspace",
 		JSON:include_str!("../../../Runtime/module.json"),
+	},
+	Manifest {
+		Name:"@agentic/spacetime-catalog",
+		Kind:"capability",
+		Port:"agentic.catalog.rules",
+		State:"stateless",
+		JSON:include_str!("../../../SpacetimeCatalog/module.json"),
 	},
 	Manifest {
 		Name:"@agentic/skill-contract",

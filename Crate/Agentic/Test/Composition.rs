@@ -10,8 +10,8 @@ use std::{fs, path::Path};
 use Agentic::{All, Command, Declared, Drive, Find, Run, Verb, VerifyModule};
 
 #[test]
-fn the_workspace_ships_seven_manifests_each_with_a_name_a_port_and_a_state() {
-	assert_eq!(All.len(), 7);
+fn the_workspace_ships_eight_manifests_each_with_a_name_a_port_and_a_state() {
+	assert_eq!(All.len(), 8);
 	for Manifest in All {
 		assert!(!Manifest.Name.is_empty());
 		assert!(Manifest.Name.starts_with("@agentic/"));
@@ -46,6 +46,10 @@ fn every_manifest_names_exactly_the_errors_its_crate_declares() {
 fn the_error_vocabulary_of_each_crate_is_the_one_the_manifest_promises() {
 	assert_eq!(
 		Declared("@agentic/runtime").unwrap(),
+		vec!["admission-refused", "lease-held", "budget-exhausted"]
+	);
+	assert_eq!(
+		Declared("@agentic/spacetime-catalog").unwrap(),
 		vec!["admission-refused", "lease-held", "budget-exhausted"]
 	);
 	assert_eq!(
@@ -89,7 +93,7 @@ fn the_readiness_report_is_the_json_a_harness_reads() {
 fn the_manifests_verb_lists_every_module() {
 	let Text = Drive(Run(Verb::Manifests)).expect("listed");
 	let Lines:Vec<&str> = Text.lines().collect();
-	assert_eq!(Lines.len(), 7);
+	assert_eq!(Lines.len(), 8);
 	assert!(Text.contains("@agentic/runtime"));
 	assert!(Text.contains("agentic.browse"));
 }

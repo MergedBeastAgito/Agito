@@ -1,0 +1,22 @@
+{
+	"name": "@agentic/spacetime-catalog",
+	"kind": "capability",
+	"version": "0.1.2",
+	"provides": {
+		"port": "agentic.catalog.rules",
+		"errors": ["admission-refused", "lease-held", "budget-exhausted"]
+	},
+	"requires": {},
+	"artefact": {
+		"entry": "Target/debug/libAgenticSpacetimeCatalog.rlib",
+		"hash": null,
+		"runtime": "rust>=1.88"
+	},
+	"state": "stateless",
+	"cost": {
+		"coldMs": 5,
+		"warmMs": 1,
+		"network": false
+	},
+	"verify": "agentic verify --module @agentic/spacetime-catalog"
+}
