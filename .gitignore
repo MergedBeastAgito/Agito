@@ -14,6 +14,11 @@ node_modules/
 # `--locked`, so the same tag has to produce the same bytes, and `--locked`
 # needs the lock file in the tree. Updating dependencies is then a commit of its
 # own rather than a silent difference between two builds of one tag.
+#
+# Negated explicitly rather than left unmentioned: a global ignore file for every
+# repository under `~/Developer` lists `Cargo.lock`, and a rule that is merely
+# absent here inherits that global answer. This line is the one that decides.
+!Cargo.lock
 
 # Scratch: probes and throwaway trees. The archive of everything this workspace
 # worked from is tracked - `.hermes/research/`, `.hermes/bundle/` and
