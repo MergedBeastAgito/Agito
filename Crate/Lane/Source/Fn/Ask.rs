@@ -23,7 +23,10 @@
 
 use AgenticRuntime::Call;
 
-use crate::Struct::{Answer::Answer, Error::Error, Port::Poster, Request::Request};
+use crate::{
+	Fn::Parse::Parse,
+	Struct::{Answer::Answer, Error::Error, Port::Poster, Request::Request},
+};
 
 /// Post one request and return the answer it caused.
 pub async fn Ask(Request:&Request, Poster:&dyn Poster, Call:Call) -> Result<Answer, Error> {
@@ -39,5 +42,5 @@ pub async fn Ask(Request:&Request, Poster:&dyn Poster, Call:Call) -> Result<Answ
 		.map_err(|Failure| Error::PostFailed(Failure.Message, Failure.Detail))?;
 	// The request is in hand here and the reply may have omitted a score's
 	// legend, so this is the one place the two can be joined.
-	Ok(Parse::Parse(&Body)?.Filled(Request))
+	Ok(Parse(&Body)?.Filled(Request))
 }

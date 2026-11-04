@@ -46,6 +46,12 @@ The five, by subject:
   target is an error rather than index 0. `Open-Questions.md` Q9/Q10, named there as the cheapest
   blocking question to settle first.
 
+Two edges hold among the five, and they are the first real content of `depends`: the fence depends
+on one authority and on what a generation is, because a fence is checked by the authority that
+receives it and it names a generation that must already mean something. Manifest-is-a-type and
+transport-identity stand alone. So the writing order is one authority, then what a generation is,
+then the fence; the other two can go whenever.
+
 All five start `proposed`, so the corpus opens with zero `settled` records. That is the finding, not
 a gap in this proposal: nothing in the tree enforces any of these today.
 
@@ -71,8 +77,9 @@ depends: []
 ---
 ```
 
-- **`title`** - one sentence naming the decision, in the imperative; the file is its lowercase with
-  hyphens for spaces. It is the record's identity, so nothing is numbered.
+- **`title`** - one sentence naming the decision, in the imperative; the file is
+  `Documentation/Decision/<title>.md`, its lowercase with hyphens for spaces. It is the record's
+  identity, so nothing is numbered.
 - **`date`** - the day the record last changed its claim, not the day it was created.
 - **`status`** - `proposed` (asserted, nothing enforces it), `settled` (`enforced_by` names the
   test), `superseded` (`superseded_by` names the replacement).
@@ -95,12 +102,10 @@ read. There is no scheduler and no board here, so nothing consumes the value and
 carries the same information mechanically is `depends`: a decision that is expensive to reverse is
 one other records rest on, and those are edges the gate checks rather than a scalar nobody reads.
 
-**`slug`: out.** At five records the title is already unique, and a second name for one thing is a
-second thing to keep in sync.
-
-**`source`: out.** A record states a decision this repository owns. Where a capture informed it, the
-body cites it the way `Design.md` does; the field would make a capture look like the authority for a
-decision the capture does not make.
+**`slug` and `source`: out.** At five records the title is already unique, and a second name for one
+thing is a second thing to keep in sync. A record states a decision this repository owns; where a
+capture informed it the body cites it the way `Design.md` does, because a field would make a capture
+look like the authority for a decision the capture does not make.
 
 ---
 
@@ -129,9 +134,10 @@ record that restates one is refused.
 
 **No board.** A board triages work; a record states a decision. The `proposed` records that block
 work are already cards, and a record's `status` is not work state - conflating the two is how
-TimeLine's board and its corpus came to need a sync whose disagreement is a bug. No triage need is
-named here that the existing board does not already serve, so `rfc_board.py`'s model is neither
-copied nor adapted.
+TimeLine's board and its corpus came to need a sync whose disagreement is a bug. `Scope.md` already
+rules the direction out for a stronger reason than this proposal has: Agentic "does not grow a copy
+of the site, the archive or the RFC board". No triage need is named here that the existing board
+does not already serve, so `rfc_board.py`'s model is neither copied nor adapted.
 
 ---
 
@@ -154,6 +160,7 @@ It rejects a record that:
 - carries a `date` that is not `YYYY-MM-DD`;
 - repeats a `title` another record already has, or has a file name that is not its title's slug;
 - names an `applies_to` path that does not exist from the repository root;
+- names an `owner` that is not one of its own `applies_to` paths;
 - carries `superseded_by` without `status: superseded`, or `status: superseded` without it;
 - is named in another record's `supersedes` while not naming that record back;
 - names in `supersedes`, `superseded_by` or `depends` a title that does not exist, or reaches itself
