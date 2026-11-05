@@ -146,8 +146,8 @@ fn a_state_no_condition_holds_falls_back_to_drive() {
 	let Corpus = Read(&Dir);
 	let Body = json!({ "speed_kmh": 12, "gear": 2 });
 	let State = State::Of(Body.clone()).expect("the state is a JSON object");
-	let Chosen = Select(&Corpus, &State, &Rules::default(), &Rules::default())
-		.expect("the corpus carries one catch-all");
+	let Chosen =
+		Select(&Corpus, &State, &Rules::default(), &Rules::default()).expect("the corpus carries one catch-all");
 	println!(
 		"case {:<18} expected {:<24} selected {:<24} {}",
 		"nothing holds",
