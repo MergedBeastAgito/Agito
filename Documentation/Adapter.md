@@ -69,9 +69,10 @@ shapes, while an adapter naming another adapter is the edge it forbids. The faca
 thing a crate _inside_ the workspace must not name - it exists for the consumer outside the tree,
 and a third-party adapter is exactly that consumer.
 
-`Fixture/Sdk/Test/Port.rs` is the claim: one dependency, one trait object, one `Serves` call, and no
-substrate behind it. `Crate/Sdk/Test/Facade.rs` checks the other half - that the facade's dependency
-line is six ports and that the adapter is one of them.
+The claim was one dependency, one trait object, one `Serves` call and no substrate behind it, made
+by a crate outside the workspace; the fixture crate that made it, and the facade test that held the
+facade's dependency line to six ports, are both deleted. What is left is `cargo tree`: the facade's
+dependency list is the six ports, and the adapter is one of them.
 
 ---
 
@@ -181,16 +182,23 @@ decide whether it is well formed.
 
 ---
 
-## Claim to test
+## Claims, and what is left of them
 
-| Claim                                                                        | Where it is checked                                                  |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| The trait is object-safe and usable as `Arc<dyn Adapter>`                    | `Crate/Adapter/Test/Adapter.rs`                                      |
-| A foreign implementation satisfies the trait                                 | `Crate/Adapter/Test/Adapter.rs`                                      |
-| A consumer outside the tree reaches the port through the facade alone        | `Crate/Sdk/Test/Facade.rs`, `Fixture/Sdk/Test/Port.rs`               |
-| The port a value reports matches the manifest that named it                  | `Crate/Adapter/Test/Adapter.rs`, `Crate/Agentic/Test/Composition.rs` |
-| An adapter under a root is listed with its port and its directory            | `Crate/Agentic/Test/Composition.rs`                                  |
-| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agentic/Test/Composition.rs`                                  |
-| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agentic/Test/Composition.rs`                                  |
-| A stale root is skipped and the listing survives                             | `Crate/Agentic/Test/Composition.rs`                                  |
-| `adapter` is a kind the boundary rule knows                                  | `Crate/Agentic/Test/Boundaries.rs`                                   |
+These were checked by suites that no longer exist. They are kept because each is still a claim the
+code makes, and because a reader deserves to know which ones nothing checks now.
+
+| Claim                                                                        | Where it was checked                                   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------ |
+| The trait is object-safe and usable as `Arc<dyn Adapter>`                    | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
+| A foreign implementation satisfies the trait                                 | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
+| A consumer outside the tree reaches the port through the facade alone        | `Crate/SDK/Test/Facade.rs`, `Fixture/SDK/` (both gone) |
+| The port a value reports matches the manifest that named it                  | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
+| An adapter under a root is listed with its port and its directory            | `Crate/Agentic/Test/Composition.rs` (deleted)          |
+| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agentic/Test/Composition.rs` (deleted)          |
+| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agentic/Test/Composition.rs` (deleted)          |
+| A stale root is skipped and the listing survives                             | `Crate/Agentic/Test/Composition.rs` (deleted)          |
+| `adapter` is a kind the boundary rule knows                                  | `Crate/Agentic/Test/Boundaries.rs` (deleted)           |
+
+`agentic manifests --adapter <root>` and `agentic verify --module <name> --adapter <root>` still
+answer the four middle claims at run time: a root that is stale is skipped with a warning, a
+duplicate name is refused, an unknown kind is refused, and a foreign module reports `code: null`.

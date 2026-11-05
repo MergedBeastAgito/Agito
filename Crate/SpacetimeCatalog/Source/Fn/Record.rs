@@ -29,7 +29,7 @@
 //! anybody else until [`crate::Resolve`] says what happened.
 
 use crate::{
-	Fn::{Fenced::IsLive, Json::Quoted, Latest::Latest},
+	Fn::{Fenced::IsLive, JSON::Quoted, Latest::Latest},
 	Struct::{
 		Answer::Answer,
 		Code::Code,

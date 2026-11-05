@@ -22,9 +22,10 @@ store, no grader for driver correctness, no failure taxonomy and no bench verb -
 lists `manifests`, `verify`, `skills`, `browse`, `chat` and `design`, and nothing else. What exists
 is every ingredient the harness would be built from, and this skill names each one.
 
-It is not the scenario suite. `cargo test --workspace` proves that a case the file states is
-answered correctly, against a scripted page and a clock the test owns; it cannot say whether the
-driver got better, because it never meets a product, never costs anything and never flakes.
+It is not a test suite, and this tree no longer has one: the scenario suite that proved a stated
+case was answered correctly, against a scripted page and a clock the test owned, is deleted. Even
+while it existed it could not say whether the driver got better, because it never met a product,
+never cost anything and never flaked.
 
 ---
 
@@ -136,9 +137,9 @@ evaluation. Relabelling failures as unsupported afterwards is how a score is man
 
 ## Two lanes: replay and live
 
-- **Controlled replay** feeds identical recorded observations into the driver. The scenario files
-  under `scenarios/` are already a fixture corpus for this lane, and the three parity suites already
-  answer them; a harness adds nothing to replay except the records around it.
+- **Controlled replay** feeds identical recorded observations into the driver. The scenario corpus
+  this lane would have replayed is deleted, so the fixtures have to be recorded again before a
+  harness has anything to feed; a harness adds nothing to replay except the records around it.
 - **Live differential** runs matched tasks in separate equivalent sessions, randomising
   implementation order and interleaving pairs closely in time. It measures deployment reality and
   cannot control a changing service.
@@ -169,7 +170,8 @@ spend.
 1. Versioned task/trial/run records and an append-only evidence stream - the `--observe` line is the
    first record's shape.
 2. An independent grader for submit, correlate, complete, extract, modelled on `Check`.
-3. A replay lane over `scenarios/`, so the grader is calibrated against cases whose answer is known.
+3. A replay lane over recorded cases whose answer is known, so the grader is calibrated before it
+   scores anything.
 4. A live lane whose preflight is `agentic verify --module <name>` plus the state's own check.
 5. A report: first-attempt success, failure causes, latency, flake, coverage, cost per success.
 
@@ -184,8 +186,7 @@ calibrated.
 - No numbers. Nothing here has been measured against a live product, and no result from this tree
   should be quoted as one.
 - Not a rubric for answer quality - that axis needs human labels or a deterministic predicate, and
-  neither exists here - and not a replacement for `cargo test --workspace`, the only gate this tree
-  has.
+  neither exists here - and not a replacement for a test suite, of which this tree now has none.
 
 ---
 
@@ -197,14 +198,14 @@ calibrated.
 
 ## Claim → test
 
-| Claim                                                 | Test                                                                                                                     |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Every read is available as evidence                   | `cargo test -p agentic-chat-driver --test Chat observe_reports_every_read_and_stops_when_the_observer_disconnects`       |
-| An observer can end the wait without failing the call | `cargo test -p agentic-chat-driver --test Chat observe_that_continues_sees_the_answer_settle`                            |
-| Settlement is the page's signal plus three reads      | `cargo test -p agentic-chat-driver --test Chat the_settlement_state_settles_on_the_third_agreement_and_not_before`       |
-| The budget is the caller's, not the adapter's         | `cargo test -p agentic-chat-driver --test Chat hands_the_page_the_callers_own_deadline`                                  |
-| The grader records a failure instead of throwing      | `cargo test -p agentic-design-verification a_read_that_fails_is_a_failed_invariant_not_an_exception_out_of_check`        |
-| An absent element fails even when every reading holds | `cargo test -p agentic-design-verification an_absent_element_fails_the_verdict_even_when_every_invariant_reads_a_number` |
-| Admission is a JSON a harness can read                | `Target/debug/agentic verify --module @agentic/chat-driver` prints `"ready": true` with its `state`                      |
-| The replay lane is the scenario suite                 | `cargo test --workspace` passes without starting Chromium                                                                |
-| This tree ships no harness                            | `Target/debug/agentic --help` lists no verb that records a trial or a run                                                |
+| Claim                                                 | How it was checked, or what is left                                                                 |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Every read is available as evidence                   | the chat driver's suite (deleted); `--observe` still emits the line                                 |
+| An observer can end the wait without failing the call | the chat driver's suite (deleted)                                                                   |
+| Settlement is the page's signal plus three reads      | the chat driver's suite (deleted)                                                                   |
+| The budget is the caller's, not the adapter's         | the chat driver's suite (deleted)                                                                   |
+| The grader records a failure instead of throwing      | the design-verification suite (deleted)                                                             |
+| An absent element fails even when every reading holds | the design-verification suite (deleted)                                                             |
+| Admission is a JSON a harness can read                | `Target/debug/agentic verify --module @agentic/chat-driver` prints `"ready": true` with its `state` |
+| The replay lane would have been the scenario suite    | deleted with the corpus; there is nothing to replay against                                         |
+| This tree ships no harness                            | `Target/debug/agentic --help` lists no verb that records a trial or a run                           |

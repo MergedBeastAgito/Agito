@@ -15,15 +15,15 @@
 //!   "$comment": "what the file is for, if the author wants to say",
 //!   "version": 1,
 //!   "state": {
-//!     "speed_kmh": {
-//!       "type": "number", "source": "memory", "address": "car+0x430",
-//!       "unit": "km/h", "range": [0, 400], "note": "signed forward speed"
+//!     "depth": {
+//!       "type": "number", "source": "memory", "address": "counter+0x430",
+//!       "unit": "count", "range": [0, 400], "note": "signed backlog depth"
 //!     },
 //!     "grounded": { "type": "array", "items": "boolean", "length": 4 },
 //!     "note": { "type": "string" }
 //!   },
 //!   "derived": {
-//!     "moved_m": "metres the car advanced over the last six ticks"
+//!     "lag_s": "seconds the oldest entry has waited, over the last six ticks"
 //!   }
 //! }
 //! ```

@@ -16,12 +16,12 @@
 //!
 //! # A path is a name, and a dot walks into an object
 //!
-//! `speed` reads the top level. `car.speed` reads the object under `car`. The
-//! exact key is tried first, so a field whose own name contains a dot is still
-//! reachable by writing that name; only when no such key exists is the name read
-//! as a path. A path that walks into a scalar, an array or a `null` answers
-//! nothing rather than failing - a context is assembled under load and a
-//! condition is not a place to fail a run.
+//! `depth` reads the top level. `queue.depth` reads the object under `queue`.
+//! The exact key is tried first, so a field whose own name contains a dot is
+//! still reachable by writing that name; only when no such key exists is the
+//! name read as a path. A path that walks into a scalar, an array or a `null`
+//! answers nothing rather than failing - a context is assembled under load and
+//! a condition is not a place to fail a run.
 //!
 //! # Missing is not a value
 //!
@@ -38,9 +38,9 @@
 //!
 //! ```json
 //! {
-//!   "speed_kmh": 38,
+//!   "depth": 38,
 //!   "verdict": "moving",
-//!   "car": { "gear": 3, "rpm": 4100 },
+//!   "queue": { "level": 3, "rate": 4100 },
 //!   "knob": { "target": 60 }
 //! }
 //! ```
@@ -113,7 +113,7 @@ impl Context {
 	///
 	/// The key is the path that was asked for, not the leaf it resolved to: a
 	/// condition holds the path it was written with, and asking
-	/// [`crate::Struct::When::When::Holds`] about `car.gear` has to find the
+	/// [`crate::Struct::When::When::Holds`] about `queue.level` has to find the
 	/// field it named. An unresolved path answers a state with no field at all,
 	/// so `has` is false and every comparison is false - the same statement as
 	/// "we could not read it".

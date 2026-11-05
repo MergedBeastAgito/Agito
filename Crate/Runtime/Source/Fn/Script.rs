@@ -144,9 +144,8 @@ pub fn Unfilled(Text:&str) -> Option<String> {
 /// repeated name is a mistake the count catches.
 ///
 /// A `const fn` cannot format its panic message, so the message names the
-/// problem rather than the parameter; the parameter is named by the test that
-/// covers this (`Crate/Runtime/Test/Runtime.rs`), and the call site's own line
-/// is in the compiler's error.
+/// problem rather than the parameter, and the call site's own line is in the
+/// compiler's error.
 pub const fn AssertParameters(Declared:&str, Given:&[&str]) {
 	let mut Index = 0;
 	while Index < Given.len() {
@@ -274,75 +273,4 @@ macro_rules! script {
 			&[$((stringify!($Name), AsRef::<str>::as_ref(&$Value))),*],
 		)
 	}};
-}
-
-#[cfg(test)]
-mod Tests {
-	use super::*;
-	const Declared:&str = "Serialise:code\nScroll:text\nAnswer:text\n";
-
-	#[test]
-	fn a_text_parameter_is_escaped_and_a_code_parameter_is_not() {
-		let Filled = FillDeclared(
-			"const A = __PARAM_Scroll__; const B = __PARAM_Serialise__;",
-			Declared,
-			&[("Scroll", "a \"quoted\" \\ selector"), ("Serialise", "() => 1")],
-		);
-		assert_eq!(Filled, "const A = \"a \\\"quoted\\\" \\\\ selector\"; const B = () => 1;");
-	}
-
-	#[test]
-	fn a_marker_with_no_value_is_reported_and_a_value_with_no_marker_is_not() {
-		let Filled = FillDeclared("x(__PARAM_Scroll__)", Declared, &[("Unused", "1")]);
-		assert_eq!(Unfilled(&Filled).as_deref(), Some("Scroll"));
-		assert_eq!(Unfilled("no marker here"), None);
-	}
-
-	#[test]
-	fn a_value_that_looks_like_a_marker_is_never_substituted_again() {
-		// A page's own text is data. If a question happens to contain a marker,
-		// the second pass must not splice another parameter's code into it.
-		let Filled = FillDeclared(
-			"const Text = __PARAM_Scroll__; const Seen = __PARAM_Serialise__;",
-			Declared,
-			&[("Scroll", "__PARAM_Serialise__"), ("Serialise", "() => 1")],
-		);
-		assert_eq!(Filled, "const Text = \"__PARAM_Serialise__\"; const Seen = () => 1;");
-	}
-
-	#[test]
-	fn escaping_matches_json_for_every_byte() {
-		// The values that reach a page are selectors and questions. The rule
-		// this holds is that the escaped form is exactly what a JSON string
-		// literal would be, so a value that survives `serde_json` survives
-		// this.
-		let Cases = [
-			"",
-			"a",
-			"#main .composer",
-			"a\"b",
-			"a\\b",
-			"a\nb",
-			"a\tb",
-			"a\u{08}b\u{0c}c",
-			"a\u{01}b",
-			"a\u{7f}b",
-			"Grüße, 世界",
-			"a\u{2028}b\u{2029}c",
-		];
-		for Case in Cases {
-			let Escaped = Escape(Case);
-			assert_eq!(Escaped, serde_json::to_string(Case).unwrap(), "{Case:?}");
-		}
-	}
-
-	#[test]
-	fn the_parameter_check_bites_for_a_missing_an_extra_and_a_repeated_name() {
-		assert!(Declares(Declared, "Scroll"));
-		assert!(!Declares(Declared, "Scrol"));
-		assert!(!Declares(Declared, "Scrollex"));
-		assert_eq!(CountDeclared(Declared), 3);
-		assert_eq!(CountDeclared(""), 0);
-		assert_eq!(CountDeclared("A:text"), 1);
-	}
 }

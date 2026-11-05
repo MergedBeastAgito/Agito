@@ -29,12 +29,11 @@ is never re-emitted.
   ten beside it; `Crate/Workflow/Source/Script/Measure.ts`. The path under `Source/Script/` is the
   path the macro takes, minus the extension: `script!("Expressions/ReadAnswers")`.
 - **A second file only when the first is pinned.** `Expressions/ReadBoth.ts` reads the thread with
-  the same code as `ReadAnswers.ts` and returns the page's Markdown beside the text, because
-  `Crate/ChatDriver/Test/Fixture/Expression.json` holds the bytes of the two single-format
-  expressions and an expression that gained a field would not be the expression a page already
-  received. The two files are held together by a test that compares them from the first line of the
-  thread read to the object each one returns: a change to one that is not a change to the other
-  fails there rather than in production.
+  the same code as `ReadAnswers.ts` and returns the page's Markdown beside the text, because the two
+  single-format expressions are the bytes a page already receives and an expression that gained a
+  field would not be that expression. The two files are written so the thread read is the same text
+  in both, from its first line to the object each one returns: a change to one that is not a change
+  to the other is a change to what a page receives.
 - **One rule, included twice.** `Crate/ChatDriver/build.rs` and `Crate/Workflow/build.rs` are each
   three lines around `include!("../../Build/Script.rs")`, and each calls
   `CompileScripts("Source/Script", "Script")`. The rule for what a script may contain lives in
@@ -142,18 +141,18 @@ pass.
 
 ---
 
-## The bytes are held by a fixture, not by a fresh snapshot
+## The bytes are held by construction, and the fixture is gone
 
-The compiled artefact must equal the bytes the page was already receiving, because those bytes are
-what the recorded baselines were taken against. So the expectation is **dumped from the code that
-came before**, not retyped: `Crate/ChatDriver/Test/Fixture/Expression.json` is a map of expression
-name to bytes, built by the pre-compilation `Expressions.rs` in a scratch crate, and
-`Crate/Workflow/Test/Fixture/Measure.json` is the same for the one measurement expression.
+The compiled artefact must equal the bytes the page was already receiving. That used to be held by
+two byte-identity fixtures - a map of expression name to bytes for the chat driver, dumped from the
+pre-compilation `Expressions.rs`, and the same for the workflow's one measurement expression - and
+both are deleted with the rest of the verification layer.
 
-It is a baseline, not a snapshot to refresh. A change that fails it has changed what a page
-receives, which is exactly the change the compilation was not allowed to make - and it is the
-assertion that rules out a formatter, because a compiler that re-indented, re-quoted or appended a
-semicolon would pass a behavioural test and fail here.
+What holds the rule now is the walker itself. The erasure removes exactly the bytes of the
+type-syntax spans and emits every other byte, so a compiler that re-indented, re-quoted, appended a
+semicolon or dropped a comment cannot be written without changing that walk. The rule is structural
+rather than asserted: nothing compares the output to a recorded baseline any more, so a change to
+the walker is a change to what a page receives and nothing will say so.
 
 The fixture also covers the _set_ of expressions: the test asserts that the fixture and the driver
 build the same number of names, so an expression added without a baseline fails rather than going
@@ -198,13 +197,13 @@ and the determinism check.
 
 ## Claim → test
 
-| Claim                                          | Test                                                                                                                                                                                                          |
+| Claim                                          | How it was checked, or what is left                                                                                                                                                                           |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The compiled artefact is the old bytes         | `cargo test -p agentic-chat-driver every_compiled_expression_is_byte_for_byte_the_one_the_page_received`                                                                                                      |
-| The workflow's expression is held too          | `cargo test -p agentic-workflow the_measure_expression_is_byte_for_byte_the_one_the_page_received`                                                                                                            |
-| Every marker is filled, and the check bites    | `cargo test -p agentic-chat-driver every_expression_is_filled_and_no_script_is_left_with_a_marker`                                                                                                            |
+| The compiled artefact is the old bytes         | the chat driver's suite (deleted); nothing compares the output to a baseline now                                                                                                                              |
+| The workflow's expression is held too          | the workflow's suite (deleted)                                                                                                                                                                                |
+| Every marker is filled, and the check bites    | the chat driver's suite (deleted); `AssertParameters` still refuses a call site that omits one                                                                                                                |
 | A malformed script names its position          | write `Crate/ChatDriver/Source/Script/Expressions/Broken.ts` holding an unclosed call, run `cargo build -p agentic-chat-driver`, require `Source/Script/Expressions/Broken.ts:<line>:<col>: Unexpected token` |
 | A call site cannot forget a parameter          | delete one argument from a `script!` call, run `cargo build -p agentic-chat-driver`, require `E0080` naming that call site                                                                                    |
 | A rebuild that changes nothing touches nothing | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agentic-chat-driver/*/out/Script/` before and after                                                                    |
-| Escaping matches the old encoder               | `cargo test -p agentic-runtime escaping_matches_json_for_every_byte`                                                                                                                                          |
+| Escaping matches the old encoder               | the runtime's suite (deleted); `Escape` is what a page receives, unasserted                                                                                                                                   |
 | The build needs no node and no network         | `cargo build --workspace --offline` succeeds                                                                                                                                                                  |

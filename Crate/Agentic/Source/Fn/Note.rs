@@ -26,7 +26,7 @@ use crate::Struct::Note::Given;
 /// than filed under an empty one.
 pub fn Note(Answer:&Answer, Given:Given) -> Result<String, String> {
 	let Given { Thread, Title, Project, Account, Captured } = Given;
-	let Source = Answer.Url.trim().to_string();
+	let Source = Answer.URL.trim().to_string();
 	let Thread = match NonEmpty(Thread) {
 		Some(Thread) => Thread,
 		None => ThreadOf(&Source).ok_or_else(|| Unfiled(&Source))?,
@@ -60,8 +60,8 @@ pub fn Unfiled(Source:&str) -> String {
 /// and `--thread` is how a caller says what its product does instead: a
 /// renderer that took the last path segment of any URL would file
 /// `https://example.test/docs/intro` under `intro`.
-pub fn ThreadOf(Url:&str) -> Option<String> {
-	let Path = Url.split(['?', '#']).next().unwrap_or_default();
+pub fn ThreadOf(URL:&str) -> Option<String> {
+	let Path = URL.split(['?', '#']).next().unwrap_or_default();
 	let (_, Thread) = Path.split_once("/search/")?;
 	let Thread = Thread.trim_end_matches('/');
 	(!Thread.is_empty() && !Thread.contains('/')).then(|| Thread.to_string())

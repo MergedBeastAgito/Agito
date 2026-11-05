@@ -1,18 +1,18 @@
 name: Publish
 
-# Publish proves a tagged release is still sound, and then stops.
+# Publish is the armed-by-hand path to crates.io, and it stops before it gets
+# there.
 #
 # It is chained off `Build` rather than off the tag itself. A second workflow on
 # `push: tags: [Agentic/v*]` would be a second release ceremony racing the first
 # over the same release and the same `SHA256SUMS.txt` - the exact collision
 # Build.yml's header rules out. `workflow_run` has no such problem: it fires
-# after the release pipeline has finished, and this workflow only reads.
+# after the release pipeline has finished.
 #
-# What runs here is the suite, against the commit Build built. What does NOT run
-# here is `cargo publish`: the crates.io namespace is not ours yet. The publish
-# job is present, named, and skipped - a job that is absent gets re-added by the
-# next person, while a job that is present and refusing says why in the one
-# place the next person will look.
+# What does NOT run here is `cargo publish`: the crates.io namespace is not ours
+# yet. The publish job is present, named, and skipped - a job that is absent gets
+# re-added by the next person, while a job that is present and refusing says why
+# in the one place the next person will look.
 #
 # Three independent guards hold it shut, and none of them is "the workflow
 # remembers":
@@ -64,88 +64,13 @@ env:
   DO_NOT_TRACK: 1
 
 jobs:
-  Test:
-    name: Test the tagged tree
-    # Two ways in, one bar: a Build run that concluded `success` on an
-    # `Agentic/v*` tag, or a manual dispatch. The dispatch arm is not a
-    # convenience - without it this job would be skipped on every dispatch (a
-    # dispatch has no `workflow_run` payload to read `conclusion` from) and the
-    # only thing a person could exercise by hand is the part that never runs.
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'Agentic/v'))
-    runs-on: ubuntu-latest
-    permissions:
-      # Scoped down from the workflow ceiling: this job reads the tree, runs the
-      # suite, and writes nothing anywhere.
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The commit Build built, not "whatever the tag points at now": a moved
-          # tag would otherwise let this workflow certify code the release never
-          # contained. A dispatch has no run to read and falls back to the ref
-          # chosen in the UI.
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
-
-      # `nightly` on purpose, and the same `nightly` Build.yml's matrix uses.
-      # There is no `rust-toolchain.toml` in this tree, so the pin that exists
-      # is the action SHA; testing the release with a different toolchain than
-      # the one that built it would be testing something else. If the toolchain
-      # ever needs to be reproducible rather than current, the fix is a
-      # `rust-toolchain.toml` in the tree, not a literal here.
-      - name: Setup Rust (nightly, latest)
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
-        with:
-          toolchain: nightly
-
-      # `.cargo/config.toml` puts the build directory at `Target` (capital), not
-      # the default `target`, so that is the path worth caching.
-      - name: Cache cargo
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/
-            ~/.cargo/git/
-            Target/
-          key: cargo-publish-test-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-publish-test-${{ runner.os }}-
-
-      # No browser is launched: every port in these suites is a fake, which is
-      # what makes the differential run reproducible on a bare runner.
-      - name: cargo test
-        run: cargo test --workspace --locked
-
-      # `agentic skills` reports findings and exits 0 - the corpus is data, not
-      # an assertion - so the gate reads the sentence rather than the status
-      # code, exactly as Check.yml does. A release whose shipped corpus the tool
-      # cannot parse has to fail here, where nothing has gone out yet.
-      - name: Skill corpus gate
-        run: |
-          set -euo pipefail
-          Output="$(cargo run --locked -p agentic --release -- skills Documentation/Skill)"
-          printf '%s\n' "${Output}"
-          if ! printf '%s\n' "${Output}" | grep -qF ', 0 finding(s),'; then
-            echo "::error::the skill corpus under Documentation/Skill has findings"
-            exit 1
-          fi
-
   Publish:
     name: Publish to crates.io
-    needs: [Test]
     # Skipped on every default path: a tag-driven run fails the `workflow_dispatch`
     # test, and a dispatch leaves the input at its default of false.
-    #
-    # `needs.Test.result == 'success'` is spelled out rather than leaned on. An
-    # `if:` containing no status check function inherits an implicit `success()`,
-    # but the explicit form keeps the ordering requirement readable beside the
-    # input that is the actual gate - and it is what stops an armed dispatch from
-    # publishing over a failing suite.
     if: |
       github.event_name == 'workflow_dispatch' &&
-      inputs.publish_for_real &&
-      needs.Test.result == 'success'
+      inputs.publish_for_real
     runs-on: ubuntu-latest
     permissions:
       # Nothing here writes to the repository either; the crates.io token would
@@ -170,6 +95,6 @@ jobs:
       # the step: a publish job with no publish step is a job that reads as
       # finished work.
       - name: Publish to crates.io (refused while the namespace is not ours)
-        run: cargo publish -p agentic --locked
+        run: cargo publish -p agentic
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

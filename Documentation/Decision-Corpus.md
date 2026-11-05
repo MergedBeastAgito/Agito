@@ -1,7 +1,9 @@
 # A decision corpus for Agentic
 
-**Status:** proposal - nothing here is a decision until accepted; no record, directory or board
-exists.
+**Status:** proposal, and its gate is gone. Nothing here is a decision until accepted; no record,
+directory or board exists. The proposal put the check in `Crate/Agentic/Test/Corpus.rs` under
+`cargo test --workspace`, and both the test target and `cargo test` are deleted - so if this is ever
+accepted, the enforcement half has to be re-decided rather than resumed.
 
 ---
 
@@ -9,7 +11,7 @@ exists.
 
 **Recommendation: yes - five records, and no sixth until a failure owes one.**
 
-The price is one test about the size of `Crate/Agentic/Test/Legend.rs` (277 lines with its own
+The price is one test about the size of the diagram check that used to exist (277 lines with its own
 cases, no new dependency), five records of roughly forty lines, and one standing obligation:
 `status` must stay true, which no gate fully checks.
 
@@ -119,15 +121,15 @@ the RFC board". No triage need is named here that the existing board cannot serv
 
 ## 5. The gate
 
-**`cargo test --workspace`**, running `Crate/Agentic/Test/Corpus.rs`, registered as
-`[[test]] name = "Corpus"` beside Boundaries, Composition, Extract and Legend.
+**`cargo test --workspace`**, running a `Corpus` test target beside the four others the tree had.
+Every one of those targets is deleted, so this section states a design that has no host.
 
-`Scripts/Feed.mjs` is the discipline the brief names, and it was deleted with the Node toolchain,
+`Script/Feed.mjs` is the discipline the brief names, and it was deleted with the Node toolchain,
 which is the lesson `README.md` states: "a gate that lives in the toolchain being deleted is a gate
 that leaves with it". Its successor in discipline is `Crate/Agentic/Test/Legend.rs`, which is
-`Scripts/Legend.mjs` in Rust, a test rather than a script "because the gate it replaces was a
-command somebody had to remember". The corpus gate takes that shape: no Node, no Python, no new
-toolchain, one command that already runs.
+`Script/Legend.mjs` in Rust, a test rather than a script "because the gate it replaces was a command
+somebody had to remember". The corpus gate takes that shape: no Node, no Python, no new toolchain,
+one command that already runs.
 
 It rejects a record that:
 

@@ -10,7 +10,7 @@
 //! marks the table append-only so a context cannot quietly rewrite it.
 
 use crate::{
-	Fn::{Json::Array, Latest::Latest},
+	Fn::{JSON::Array, Latest::Latest},
 	Struct::{
 		Answer::Answer,
 		Bind::Bind as BindArgs,
@@ -34,8 +34,8 @@ pub fn Bind<C:Context>(Ctx:&mut C, Args:BindArgs) -> Answer {
 	if Named.len() != Declared {
 		return Answer::Refused(Code::AdmissionRefused);
 	}
-	for Id in &Named {
-		if Ctx.Find(TableName::Capability, Id).is_none() {
+	for ID in &Named {
+		if Ctx.Find(TableName::Capability, ID).is_none() {
 			return Answer::Refused(Code::AdmissionRefused);
 		}
 	}
@@ -64,8 +64,8 @@ pub fn Bind<C:Context>(Ctx:&mut C, Args:BindArgs) -> Answer {
 			Next
 		},
 	};
-	let Id = Sequence.to_string();
-	if Ctx.Find(TableName::Generation, &Id).is_some() {
+	let ID = Sequence.to_string();
+	if Ctx.Find(TableName::Generation, &ID).is_some() {
 		return Answer::Refused(Code::AdmissionRefused);
 	}
 	let Now = Ctx.Now();
@@ -73,7 +73,7 @@ pub fn Bind<C:Context>(Ctx:&mut C, Args:BindArgs) -> Answer {
 	Ctx.Insert(
 		TableName::Generation,
 		Row::Of([
-			("id", Value::Text(Id)),
+			("id", Value::Text(ID)),
 			("sequence", Value::Number(Sequence)),
 			("parent", Previous.map_or(Value::Null, Value::Text)),
 			("manifestDigest", Value::Text(Manifest.Digest)),

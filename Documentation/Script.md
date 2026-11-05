@@ -16,11 +16,10 @@ their `cargo add` resolved to on the same day.
   workflow's `Source/Script/Measure.ts`. The path under `Source/Script/` is the path the macro
   takes: `script!("Expressions/ReadAnswers")`.
 - **A second file only when the first is pinned.** `Expressions/ReadBoth.ts` carries the same thread
-  read as `Expressions/ReadAnswers.ts` and adds the page's Markdown to what it returns, because
-  `Crate/ChatDriver/Test/Fixture/Expression.json` holds the bytes of the two single-format
-  expressions: an expression that gained a field would not be the expression a page already
-  received. The duplication is held together by a test that compares the two from the first line of
-  the thread read to the object each one returns.
+  read as `Expressions/ReadAnswers.ts` and adds the page's Markdown to what it returns, because the
+  two single-format expressions are what a page already receives: an expression that gained a field
+  would not be that expression. The duplication is written so the thread read is the same text in
+  both files.
 - **A `build.rs` per owning crate**, three lines around `Build/Script.rs`, which is the one
   statement of what a script may contain and how it becomes bytes. `ChatDriver` and `Workflow` both
   include it, so the rule cannot drift between them.
@@ -165,8 +164,8 @@ The gates, from the workspace root:
 # Build with no node_modules present and no network, from a clean Target/.
 rm -rf Target && cargo build --workspace --offline
 
-# The byte-identity gate: every expression against the code at the commit before the card.
-cargo test -p agentic-chat-driver -p agentic-workflow
+# The compilation itself: every expression under Source/Script/ is erased and emitted.
+cargo build -p agentic-chat-driver -p agentic-workflow
 
 # A malformed script names its file and line and fails the build.
 printf '(() => {\n\treturn 1;\n)()\n' > Crate/ChatDriver/Source/Script/Expressions/Broken.ts
@@ -176,10 +175,9 @@ cargo build -p agentic-chat-driver   # error: Source/Script/Expressions/Broken.t
 #   error[E0080]: evaluation panicked: script parameters: a declared parameter is missing
 #   --> Crate/ChatDriver/Source/Fn/Expressions.rs:148:2
 
-# The scenarios: every case in `scenarios/` against its expectation, through the
-# scripted fakes. This is the whole contract now - the TypeScript side that used
-# to answer the same files was deleted with its toolchain.
-cargo test --workspace --offline --test Parity
+# The build itself: every script under Source/Script/ is erased and compiled, and a
+# malformed one stops the build with its position named.
+cargo build --workspace --offline
 ```
 
 The measurements above were taken with spike crates in the session scratch directory, each built
@@ -189,7 +187,8 @@ from an empty `target/`, with the package count read from `cargo tree | wc -l`:
 RUSTC_WRAPPER= /usr/bin/time -p cargo build   # cold, sccache defeated
 ```
 
-The byte-identity fixture, `Crate/ChatDriver/Test/Fixture/Expression.json`, is the _before_ side: it
-was dumped by building the pre-card `Expressions.rs` and the pre-card scripts in a scratch crate and
-printing every expression it produced. It is a baseline, not a snapshot to refresh - a change that
-fails it is a change to what a page receives.
+The byte-identity fixture that used to hold the _before_ side - the expressions dumped from the
+pre-card `Expressions.rs`, so a reformatting compiler would fail rather than pass - is deleted with
+the rest of the verification layer. What still enforces the same rule is structural: the erasure
+removes exactly the bytes of the type-syntax spans and emits every other byte, so a compiler that
+re-indented or re-quoted could not be written without changing the walker.

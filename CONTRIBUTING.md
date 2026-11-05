@@ -22,25 +22,23 @@ corrections of an earlier pass, and both record the pass they correct.
 
 ---
 
-## The gate
+## The build
 
 A change is ready when these pass, and none of them needs the network:
 
 ```
-cargo test --workspace
+cargo build --workspace --release
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
+cargo run -q -p agentic -- manifests
 ```
 
-`cargo test --workspace` is the one that matters most: it refuses an import that reverses an arrow
-(`Crate/Agentic/Test/Boundaries.rs`), it holds every diagram to the shared legend
-(`Crate/Agentic/Test/Legend.rs`), and it answers every scenario in `scenarios/` through the fakes. A
-new crate needs a `module.json` before it needs a test, because the boundary check reads the
-manifest rather than the code.
-
-The suites are fake-based by design: a page is a scripted responder, a browser is a scripted
-launcher, and a deadline passes because the test advanced a clock it owns. A test that needs a real
-browser belongs in an ad-hoc run under `.hermes/tools/`, not in the gate.
+There is no test suite. The per-crate suites, the parity corpus under `Scenario/`, the
+out-of-workspace fixture crate and the path audit were deleted with the rest of the verification
+layer, and no workflow step asserts anything a build did not produce. What a change is held to is
+that it compiles, that clippy is silent, that the formatting matches `rustfmt.toml`, and that the
+module table still prints - a new crate needs a `module.json` before it needs anything else, because
+that table is what `agentic manifests` and `agentic verify` read.
 
 ---
 
@@ -48,12 +46,12 @@ browser belongs in an ad-hoc run under `.hermes/tools/`, not in the gate.
 
 One convention, everywhere in the tree: folders, files, identifiers and prose.
 
-| Kind       | Rule                                                             | Example                                 |
-| ---------- | ---------------------------------------------------------------- | --------------------------------------- |
-| Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/BrowserCDP/Source`, `scenarios/` |
-| File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`     |
-| Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`      |
-| Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                 |
+| Kind       | Rule                                                             | Example                                                |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
+| Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/BrowserCDP/Source`; `module.json`, `Cargo.toml` |
+| File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`                    |
+| Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`                     |
+| Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                                |
 
 A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a file or crate named after one
 keeps it - `BrowserCDP`, `CDPSession`.
@@ -65,10 +63,9 @@ TypeScript that the crate's `build.rs` compiles, and its path is the argument th
 takes - `script!("Expressions/ReadAnswers")` - so the file and the macro call carry the same
 PascalCase name.
 
-The tree has one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/, Test/}`. `Source/` holds
-the code and `Test/` the suites. It is strict because a module path is a file path:
-`Crate/<Name>/Source/Library.rs` is the library root, `Fn/` holds operations, `Struct/` holds data
-and contracts, and every module name matches its file.
+The tree has one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/}`. It is strict because a
+module path is a file path: `Crate/<Name>/Source/Library.rs` is the library root, `Fn/` holds
+operations, `Struct/` holds data and contracts, and every module name matches its file.
 
 A rename is mechanical: `git mv` the path, then follow every import, the `module.json` that names
 the package, and the paths quoted in `Documentation/` and `README.md`. A half-renamed tree does not

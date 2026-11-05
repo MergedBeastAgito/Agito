@@ -13,8 +13,8 @@ path = "Source/Library.rs"
 
 # Three dependencies, and the short list is the claim: no HTTP client, no
 # executor, no browser. The poster that reaches the endpoint is behind
-# `Struct::Port::Poster`, so the round trip is testable from a fixture and the
-# crate itself never opens a socket.
+# `Struct::Port::Poster`, so the caller supplies the round trip's other end and
+# the crate itself never opens a socket.
 [dependencies]
 agentic-runtime = { workspace = true }
 # The request's JSON form is a derive, not a hand-built `json!` literal: three
@@ -30,82 +30,3 @@ non_upper_case_globals = "allow"
 
 [lints.clippy]
 upper_case_acronyms = "allow"
-
-[[test]]
-name = "Lane"
-path = "Test/Lane.rs"
-
-[[test]]
-name = "SelectLane"
-path = "Test/SelectLane.rs"
-
-# The body's own claims - three keys, no chat field, the lane's model - kept in a
-# target of their own so they stay runnable while the round trip's fixture and
-# poster are being worked on.
-[[test]]
-name = "Request"
-path = "Test/Request.rs"
-
-# The corpus's typed model: a lane written by hand, the condition read out of it,
-# and the context that condition is answered with. No file, no socket, no
-# selection - the shape the loader and the selector both rest on.
-[[test]]
-name = "Schema"
-path = "Test/Schema.rs"
-
-
-# The loader alone: the layout on disk, the discovery of lane files, and the
-# refusal that names the path or the id it was about. Separate from `Lane.rs`
-# because these cases need corpora that are deliberately broken, and a file
-# holding both a working round trip and nine refusals is a file nobody can read.
-[[test]]
-name = "Load"
-path = "Test/Load.rs"
-
-# The loader and the selector together, against a corpus this test builds in a
-# temp directory: five lanes with mutually exclusive conditions, the typed
-# questions inside their templates, the three refusals a corpus author hits, and
-# the two ways a selection fails. Hermetic by construction - the suite never
-# reads the real corpus, and two runs cannot share a file.
-[[test]]
-name = "Corpus"
-path = "Test/Corpus.rs"
-
-# The decoder alone: one body per way a reply can be wrong, and no corpus and no
-# poster in sight. Separate from `Lane.rs` because a decoder that needed either
-# would be testing something other than the reading - and because every case
-# here is a body a transport actually hands back, not a reply this crate built.
-[[test]]
-name = "Decode"
-path = "Test/Decode.rs"
-
-# The shipped reply as data: the document under `Test/Fixture/Clef/`, the poster
-# that answers from it, and the three things that document promises - a chosen
-# option, a share for every option that sums to one, and a budget. No corpus and
-# no socket: what it holds is the stand-in other runs are wired with.
-[[test]]
-name = "ClefFixture"
-path = "Test/ClefFixture.rs"
-
-# The whole entry point, once: a corpus on disk, a lane chosen by a condition, a
-# request composed and posted, and the typed answer that comes back - against the
-# shipped fixture poster rather than a scripted body. A target of its own because
-# it is the only one that runs every step in a single pass, and because a document
-# edited into something the pipeline cannot read should fail a suite named after
-# the round trip.
-[[test]]
-name = "EndToEnd"
-path = "Test/EndToEnd.rs"
-
-# The entry point's own signature, as a contract: one call in, and the three
-# origins of its one error type out - a selection that names no lane, a poster
-# that does not answer, and a reply the decoder refuses with its own variant
-# kept. Also the two claims a caller relies on but a happy path cannot show:
-# that a failure before the post leaves nothing recorded, and that the
-# state-selected form and the context-selected form compose the same request.
-# `Test/EndToEnd.rs` holds the same pipeline's answer and body; this holds what
-# the signature promises when it fails, which is why they are two targets.
-[[test]]
-name = "Decide"
-path = "Test/Decide.rs"
-

@@ -5,12 +5,12 @@
 //! binary cannot reason about, and refusing it is the difference between a check
 //! and a shrug.
 //!
-//! `Crate/Agentic/Test/Boundaries.rs` states the same list on the other side of
-//! the same fact - which arrow each kind may draw - and the two are read
-//! together: this one decides what a manifest may call itself, that one decides
-//! what a crate may import once it has. A kind added to one and not the other is
-//! a module that verifies and cannot be placed, or one that is placed and cannot
-//! be verified.
+//! The same list used to be stated on the other side of the same fact - which
+//! arrow each kind may draw - by a boundary check that read every crate's
+//! `module.json` and `Cargo.toml`. That check is deleted, so this file is the
+//! only statement of the vocabulary: a kind added here is a kind the readiness
+//! report accepts, and nothing else decides whether the arrows around it make
+//! sense.
 
 /// The kinds a manifest may declare, in the layer order the design uses.
 ///

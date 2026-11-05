@@ -267,20 +267,22 @@ property it exists for.
 
 **Asked:** the thread's question 5 (`:98-100`), and the capture specifies the check at `:590-696`.
 
-**Answered:** `Crate/Agentic/Test/Boundaries.rs`, which reads every crate's `module.json` for its
-kind and its `Cargo.toml` for its edges, and fails on an edge the design does not allow - a
-capability naming an adapter, an adapter naming another adapter, anything naming the composition
-root. It runs in `cargo test --workspace`, so the gate is the test job rather than a step somebody
-remembers. The `cargo metadata` walk this entry used to propose stays the stronger check if features
-ever make the declared edges and the resolved ones disagree; the declared edges are what a reviewer
-reads, and they are what the test holds.
+**Answered, and the answer has since been deleted.** `Crate/Agentic/Test/Boundaries.rs` read every
+crate's `module.json` for its kind and its `Cargo.toml` for its edges, and failed on an edge the
+design does not allow - a capability naming an adapter, an adapter naming another adapter, anything
+naming the composition root. It ran in `cargo test --workspace`, and both are gone. The question is
+open again: `cargo tree` answers the same edge for a human, and nothing answers it for a push. The
+`cargo metadata` walk this entry used to propose stays the stronger check if features ever make the
+declared edges and the resolved ones disagree; the declared edges are what a reviewer reads, and
+they are what the test holds.
 
 ```sh
-cargo test -p agentic --test Boundaries
+cargo tree -p agentic-chat-driver | grep -c browser   # must answer 0
 ```
 
-**Blocks:** nothing now. `Documentation/Design.md`'s claim that the four layers are enforced rather
-than merely described is what this test makes true.
+**Blocks:** nothing now, and nothing checks it. The `Boundaries` target this entry used to name is
+deleted, so `Documentation/Design.md`'s claim that the four layers are enforced rather than merely
+described is a claim a reader verifies by hand.
 
 ## Q21 - Is the house style what the thread was told it is?
 
@@ -347,9 +349,9 @@ the tree satisfied and then removed, and what replaces it is the narrower questi
 `Documentation/Parity.md` - whether the cases only the Rust side asserts are right.
 
 **Q19 and Q20, manifest mapping and the arrows check.** These were the two halves this tree had no
-implementation of. Q20 is now answered by `Crate/Agentic/Test/Boundaries.rs`; Q19 - a serde struct
-that validates a manifest in CI - is still open, and without it the manifest is a JSON file nobody
-has mapped.
+implementation of. Q20 was answered by `Crate/Agentic/Test/Boundaries.rs` and that answer is deleted
+with it; Q19 - a serde struct that validates a manifest in CI - is still open, and without it the
+manifest is a JSON file nobody has mapped.
 
 **Q9 and Q10, transport identity.** If a transport can address a post by position, the browser
 port's signature is wrong, and it is wrong in a way that every capability above it inherits. This is
@@ -366,33 +368,34 @@ on them yet, which is why they are last: the thread that produced them has no co
 # Gates the TypeScript layer took with it
 
 The TypeScript packages, the scenario runners and the Node toolchain were deleted once the
-expressions were compiled at build time and the crates answered every scenario themselves. Four
-gates went with them. Each is recorded here with what it held and what holds it now, because a gate
-that disappears quietly is a property nobody notices losing.
+expressions were compiled at build time and the crates answered every scenario themselves. The gates
+below are what that took: three went with the layer and one is held by a crate, and each is recorded
+here with what it held and what holds it now, because a gate that disappears quietly is a property
+nobody notices losing.
 
-- **The feed bundler's determinism.** `Scripts/Feed.mjs` drove `.hermes/tools/bundle.mjs` over a
+- **The feed bundler's determinism.** `Script/Feed.mjs` drove `.hermes/tools/bundle.mjs` over a
   fixture and asserted that it splits, excludes and orders the same way twice. Both the tool and the
   gate were Node. The tool stays - it is local tooling, not part of the build - and nothing holds
   its determinism. **Owed:** a Rust gate over the bundler, or a decision that the bundler is not
   worth one.
 
-- **The mutation suite.** `scenarios/mutate.mjs` applied five defects to both implementations'
-  sources and insisted both suites rejected each. Three of the five edited TypeScript files that no
-  longer exist. **Owed:** the five defects as a Rust-only harness, run by hand rather than from
-  inside `cargo test` - a test that rewrites its own sources and re-runs `cargo test` is a test that
-  can leave the tree mutated, and this working tree is swept into commits by an external process.
-  The five are named in `Documentation/Parity.md` with the test each must break.
+- **The mutation suite.** `mutate.mjs` applied five defects to both implementations' sources and
+  insisted both suites rejected each. Three of the five edited TypeScript files that no longer
+  exist. **Owed:** the five defects as a Rust-only harness, run by hand rather than from inside
+  `cargo test` - a test that rewrites its own sources and re-runs `cargo test` is a test that can
+  leave the tree mutated, and this working tree is swept into commits by an external process. The
+  five are named in `Documentation/Parity.md` with the test each must break.
 
-- **The markdown formatter.** `prettier --check` was the prose gate. **Decision:** no formatter
-  check on markdown. Prose is formatted by hand and by the editor's own settings, and a Rust
-  formatter for a house style this specific does not exist. `cargo fmt --check` remains the
-  formatting gate for the code.
+- **The markdown formatter.** `prettier --check` was the prose gate. **Decision:** it stays as a
+  formatter and not as a gate. `package.json` carries `prettier` and `prettier.config.mjs` its
+  settings, so Markdown and JSON are formatted by `npm run Format`; no run-time and no build step
+  depends on it, and CI runs `cargo fmt --check` for the code alone. A Rust formatter for a house
+  style this specific does not exist.
 
 - **The catalogue's tests.** `Package/spacetime-catalog` held the database rules as data and 25
   assertions over them, and no crate replaced it. **Held by:** `Crate/SpacetimeCatalog/`, which
-  carries the six tables as records, the seven rules as functions over them, and every case the
-  TypeScript statement had. `cargo test -p agentic-spacetime-catalog` runs 34 cases, 30 of them
-  carried from `Tables.test.ts`, `Reducers.test.ts` and `Destination.test.ts` - which hold 7, 18 and
-  5 tests, not the 25 this entry used to claim. `Documentation/Spacetime-Catalog.md` §What proves it
-  names them, and §What the port changed in this document records where the prose and the source
+  carries the six tables as records and the seven rules as functions over them. The 34 cases carried
+  from `Tables.test.ts`, `Reducers.test.ts` and `Destination.test.ts` - which hold 7, 18 and 5
+  tests, not the 25 this entry used to claim - are deleted with the crate's suite.
+  `Documentation/Spacetime-Catalog.md` records what the port changed where the prose and the source
   disagreed.

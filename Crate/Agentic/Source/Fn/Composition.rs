@@ -22,7 +22,7 @@ use AgenticWorkflow::Struct::Binding::{Measure, Page};
 /// piping the tool's answer must not find a diagnostic in the middle of it.
 pub fn Browser(Chrome:ChromeOptions) -> Arc<dyn Browse> {
 	let Report:Report = Arc::new(|Target, Why| {
-		eprintln!("browser-cdp: dispose of {} failed: {}", Target.Url, Why.Message());
+		eprintln!("browser-cdp: dispose of {} failed: {}", Target.URL, Why.Message());
 	});
 	Arc::new(CreateSession(
 		Chrome::New(Chrome),
@@ -35,7 +35,7 @@ pub fn Browser(Chrome:ChromeOptions) -> Arc<dyn Browse> {
 pub struct ChatSpec {
 	/// The chat product's URL. With a bind it is only a fallback: the page
 	/// keeps whatever URL it was already showing.
-	pub Url:String,
+	pub URL:String,
 	/// Attach to this endpoint instead of launching a browser.
 	pub Attach:Option<String>,
 	/// Bind this page on the attached browser instead of opening one.
@@ -54,14 +54,14 @@ pub fn Chat(Browse:Arc<dyn Browse>, Spec:ChatSpec) -> Driver {
 		Some(Endpoint) => Page::Attached(Browse, Endpoint.clone(), Spec.Bind.clone()),
 		None => Page::Create(Browse),
 	};
-	let Options = ChatOptions { Selectors:Spec.Selectors, ..ChatOptions::New(Spec.Url) };
+	let Options = ChatOptions { Selectors:Spec.Selectors, ..ChatOptions::New(Spec.URL) };
 	CreateChat(Arc::new(Page) as Arc<dyn ChatPort>, Options, Arc::new(Tokio))
 }
 
 /// A design verifier over a browser, with the workflow's measurement binding
 /// installed.
-pub fn Design(Browse:Arc<dyn Browse>, Url:impl Into<String>) -> Verifier {
-	CreateVerify(Arc::new(Measure::Create(Browse, Url)), Arc::new(Tokio))
+pub fn Design(Browse:Arc<dyn Browse>, URL:impl Into<String>) -> Verifier {
+	CreateVerify(Arc::new(Measure::Create(Browse, URL)), Arc::new(Tokio))
 }
 
 /// What a caller passes to `Browser` when it wants a visible browser on the

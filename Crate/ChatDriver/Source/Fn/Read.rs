@@ -142,7 +142,7 @@ pub fn AsSources(Value:&Value) -> Option<Vec<Source>> {
 			.map(|Entry| {
 				let Object = Entry.as_object();
 				Source {
-					Url:TextOf(Object.and_then(|Object| Object.get("url"))),
+					URL:TextOf(Object.and_then(|Object| Object.get("url"))),
 					Label:TextOf(Object.and_then(|Object| Object.get("label"))),
 				}
 			})

@@ -26,16 +26,22 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use crate::Struct::{External::External, Manifest::All};
+use crate::{
+	Fn::Resolve,
+	Struct::{External::External, Manifest::All},
+};
 
 /// The variable a caller uses when it does not pass `--adapter`.
 pub const Variable:&str = "AGENTIC_ADAPTER_PATH";
 
 /// The directories to read: the flag when it was given, the environment
 /// otherwise.
+///
+/// Both are resolved through [`Resolve::Given`], so a relative entry means the
+/// same directory whatever the process was started in.
 pub fn Roots(Given:&[String]) -> Vec<PathBuf> {
 	if !Given.is_empty() {
-		return Given.iter().map(PathBuf::from).collect();
+		return Given.iter().map(|One| Resolve::Given(Path::new(One))).collect();
 	}
 	// `var_os` rather than `var`: a path list is a list of paths, and a path is
 	// not required to be UTF-8. A value that is not readable as text is still a
@@ -53,7 +59,10 @@ pub fn FromValue(Value:Option<&OsStr>) -> Vec<PathBuf> {
 	let Some(Value) = Value else {
 		return Vec::new();
 	};
-	env::split_paths(Value).filter(|One| !One.as_os_str().is_empty()).collect()
+	env::split_paths(Value)
+		.filter(|One| !One.as_os_str().is_empty())
+		.map(|One| Resolve::Given(&One))
+		.collect()
 }
 
 /// Every third-party module under these roots, in path order.

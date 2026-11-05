@@ -114,7 +114,7 @@ impl Session {
 }
 
 impl Browse for Session {
-	fn Open<'a>(&'a self, Url:&'a str, Options:OpenOptions) -> FutureBox<'a, Result<Target, Error>> {
+	fn Open<'a>(&'a self, URL:&'a str, Options:OpenOptions) -> FutureBox<'a, Result<Target, Error>> {
 		Box::pin(async move {
 			let Ownership = Options.Ownership();
 			let Phase = match Ownership {
@@ -135,8 +135,8 @@ impl Browse for Session {
 						"the options asked for an existing page but named no endpoint",
 					));
 				},
-				None => self.Launcher.Launch(Url, Options.Call.clone()),
-				Some(Endpoint) => self.Launcher.Attach(Endpoint, Options.Want(Url), Options.Call.clone()),
+				None => self.Launcher.Launch(URL, Options.Call.clone()),
+				Some(Endpoint) => self.Launcher.Attach(Endpoint, Options.Want(URL), Options.Call.clone()),
 			};
 			let Transport = match Bound(Work, &Options.Call, self.Pace.as_ref()).await {
 				Ok(Ok(Transport)) => Transport,
@@ -154,14 +154,14 @@ impl Browse for Session {
 					));
 				},
 			};
-			let Target = Target { Url:Transport.Url().to_string(), Ws:Transport.Endpoint().to_string(), Ownership };
+			let Target = Target { URL:Transport.URL().to_string(), Ws:Transport.Endpoint().to_string(), Ownership };
 			if Transport.Closed() {
 				if let Some(Why) = self.Release(Transport.clone(), Ownership).await {
 					self.ReportQuietly(&Target, &Why);
 				}
 				return Err(Error::Unavailable(
 					"the transport was already closed when it arrived",
-					format!("{Url} on {}", Target.Ws),
+					format!("{URL} on {}", Target.Ws),
 				));
 			}
 			Self::Lock(&self.Held).insert(Target.Ws.clone(), Transport);

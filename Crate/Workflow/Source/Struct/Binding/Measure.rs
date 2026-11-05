@@ -23,11 +23,11 @@ use crate::Fn::Measure::MeasurementExpression;
 /// The verification capability's transport, served by the browser substrate.
 pub struct Measure {
 	Browse:Arc<dyn BrowserBrowse>,
-	Url:String,
+	URL:String,
 }
 
 /// Bind design verification's `Browse` to one page of one browser.
-pub fn Create(Browse:Arc<dyn BrowserBrowse>, Url:impl Into<String>) -> Measure { Measure { Browse, Url:Url.into() } }
+pub fn Create(Browse:Arc<dyn BrowserBrowse>, URL:impl Into<String>) -> Measure { Measure { Browse, URL:URL.into() } }
 
 /// A browser failure, said in the verification port's vocabulary.
 fn Classify(Why:BrowserError) -> Failure {
@@ -42,7 +42,7 @@ impl Browse for Measure {
 		Box::pin(async move {
 			let Target = self
 				.Browse
-				.Open(&self.Url, OpenOptions::Launch(Call.clone()))
+				.Open(&self.URL, OpenOptions::Launch(Call.clone()))
 				.await
 				.map_err(Classify)?;
 			let Expression = MeasurementExpression(Selectors);

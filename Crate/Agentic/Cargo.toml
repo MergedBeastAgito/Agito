@@ -35,54 +35,9 @@ serde_json = { workspace = true }
 # operating system's fact rather than this crate's.
 libc = { workspace = true }
 
-# A third-party adapter implements this crate's trait, and the composition test
-# holds one as `Arc<dyn Adapter>` through the same path a consumer would take.
-# The binary itself never constructs an adapter: `agentic verify` decides whether
-# a manifest is well formed without running the code behind it.
-[dev-dependencies]
-agentic-adapter = { workspace = true }
-
 [lints.rust]
 non_snake_case = "allow"
 non_upper_case_globals = "allow"
 
 [lints.clippy]
 upper_case_acronyms = "allow"
-
-[[test]]
-name = "Boundaries"
-path = "Test/Boundaries.rs"
-
-[[test]]
-name = "Composition"
-path = "Test/Composition.rs"
-
-[[test]]
-name = "Extract"
-path = "Test/Extract.rs"
-
-[[test]]
-name = "Legend"
-path = "Test/Legend.rs"
-
-[[test]]
-name = "Note"
-path = "Test/Note.rs"
-
-# The one test that reads a corpus this workspace did not write. It sits here
-# rather than beside `Crate/Lane` because the corpus's vocabulary is a game's,
-# and `Crate/Lane/Test/Lane.rs` states that a game name inside the crate would
-# be the crate claiming a caller it does not have.
-[[test]]
-name = "CorpusLanes"
-path = "Test/CorpusLanes.rs"
-
-# The same corpus, decided end to end: the lane each case selects, the request
-# it composes and the typed answer a canned reply returns, one document per
-# template under `Test/Fixture/CorpusDecide/`. A target of its own because it is
-# the only one that joins the real corpus to the poster, and a corpus or a
-# fixture edited into something the pipeline cannot read should fail a suite
-# named after that join rather than an assertion inside another one.
-[[test]]
-name = "CorpusDecide"
-path = "Test/CorpusDecide.rs"

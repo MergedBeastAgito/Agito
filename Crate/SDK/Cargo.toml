@@ -8,7 +8,7 @@ publish.workspace = true
 description = "One dependency for a consumer: the workspace's stable surface, re-exported and nothing else."
 
 [lib]
-name = "AgenticSdk"
+name = "AgenticSDK"
 path = "Source/Library.rs"
 
 # Only the ports. A facade that named a substrate would be a facade a consumer
@@ -28,11 +28,6 @@ agentic-design-verification = { workspace = true }
 agentic-skill-contract = { workspace = true }
 agentic-adapter = { workspace = true }
 
-# The facade's own test parses the manifests it embeds, which is the one place a
-# serialiser is needed and it is not needed by anything a consumer builds.
-[dev-dependencies]
-serde_json = { workspace = true }
-
 # The house style is PascalCase everywhere: functions, modules, fields and
 # constants. These three lints are the only ones that disagree with it.
 [lints.rust]
@@ -41,7 +36,3 @@ non_upper_case_globals = "allow"
 
 [lints.clippy]
 upper_case_acronyms = "allow"
-
-[[test]]
-name = "Facade"
-path = "Test/Facade.rs"

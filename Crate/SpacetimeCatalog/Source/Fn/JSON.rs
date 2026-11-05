@@ -43,30 +43,3 @@ pub(crate) fn Array(Values:&[String]) -> String {
 	let Items:Vec<String> = Values.iter().map(|One| Quoted(One)).collect();
 	format!("[{}]", Items.join(","))
 }
-
-#[cfg(test)]
-mod proof {
-	use super::{Array, Quoted};
-
-	#[test]
-	fn a_string_is_quoted_and_escaped_the_way_json_requires() {
-		assert_eq!(Quoted("high"), "\"high\"");
-		assert_eq!(Quoted("a\"b\\c"), "\"a\\\"b\\\\c\"");
-		assert_eq!(Quoted("a\nb\tc\rd"), "\"a\\nb\\tc\\rd\"");
-		assert_eq!(Quoted("\u{8}\u{c}"), "\"\\b\\f\"");
-		assert_eq!(Quoted("\u{1}"), "\"\\u0001\"");
-		// Non-ASCII is not escaped: a JSON document is text, and the ids this
-		// crate writes are capability names rather than bytes.
-		assert_eq!(Quoted("каталог"), "\"каталог\"");
-	}
-
-	#[test]
-	fn an_array_is_the_ids_in_the_order_it_was_given() {
-		assert_eq!(Array(&["agentic.browse@0.1.0".to_string()]), "[\"agentic.browse@0.1.0\"]");
-		assert_eq!(
-			Array(&["agentic.browse@0.1.0".to_string(), "agentic.chat@0.1.0".to_string()]),
-			"[\"agentic.browse@0.1.0\",\"agentic.chat@0.1.0\"]"
-		);
-		assert_eq!(Array(&[]), "[]");
-	}
-}

@@ -28,6 +28,13 @@ pub struct Manifest {
 	pub Kind:&'static str,
 	/// The port it provides.
 	pub Port:&'static str,
+	/// The verbs it declares under `provides.verbs`, in its own order.
+	///
+	/// A verb is an extra thing the module can be asked to do beyond
+	/// answering its port - the chat driver's `agentic.chat.note` is the
+	/// one the workspace ships - and most modules declare none, so an empty
+	/// slice is the ordinary case rather than a missing value.
+	pub Verbs:&'static [&'static str],
 	/// The retention class the manifest declares.
 	pub State:&'static str,
 	/// The manifest's bytes, exactly as checked in.
@@ -40,6 +47,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/runtime",
 		Kind:"runtime",
 		Port:"agentic.runtime",
+		Verbs:&[],
 		State:"holds-workspace",
 		JSON:include_str!("../../../Runtime/module.json"),
 	},
@@ -53,6 +61,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/adapter",
 		Kind:"capability",
 		Port:"agentic.adapter",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../Adapter/module.json"),
 	},
@@ -63,6 +72,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/lane",
 		Kind:"capability",
 		Port:"agentic.lane.decide",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../Lane/module.json"),
 	},
@@ -70,6 +80,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/spacetime-catalog",
 		Kind:"capability",
 		Port:"agentic.catalog.rules",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../SpacetimeCatalog/module.json"),
 	},
@@ -77,13 +88,20 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/skill-contract",
 		Kind:"capability",
 		Port:"agentic.skill.validate",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../SkillContract/module.json"),
 	},
+	// The one module that declares a verb. `agentic.chat.note` is not the
+	// port: a caller asks `agentic.chat.ask` and gets an answer, while `note`
+	// is the call that prints a research note built from that same answer.
+	// It carries its own (empty) error list, so the verb is a statement a
+	// harness can read rather than a name nobody lists.
 	Manifest {
 		Name:"@agentic/chat-driver",
 		Kind:"capability",
 		Port:"agentic.chat.ask",
+		Verbs:&["agentic.chat.note"],
 		State:"holds-transport",
 		JSON:include_str!("../../../ChatDriver/module.json"),
 	},
@@ -91,6 +109,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/browser-cdp",
 		Kind:"adapter",
 		Port:"agentic.browse",
+		Verbs:&[],
 		State:"holds-transport",
 		JSON:include_str!("../../../BrowserCDP/module.json"),
 	},
@@ -98,6 +117,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/design-verification",
 		Kind:"capability",
 		Port:"agentic.verify.design",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../DesignVerification/module.json"),
 	},
@@ -105,6 +125,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/workflow",
 		Kind:"workflow",
 		Port:"agentic.workflow",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../Workflow/module.json"),
 	},
@@ -112,6 +133,7 @@ pub const All:[Manifest; 10] = [
 		Name:"@agentic/composition",
 		Kind:"composition",
 		Port:"agentic.compose",
+		Verbs:&[],
 		State:"stateless",
 		JSON:include_str!("../../../Agentic/module.json"),
 	},

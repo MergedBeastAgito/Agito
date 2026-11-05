@@ -16,15 +16,15 @@
 //! ```json
 //! { "op": "always" }
 //! { "op": "eq", "field": "verdict", "value": "blocked" }
-//! { "op": "ne", "field": "gear", "value": -1 }
+//! { "op": "ne", "field": "mode", "value": -1 }
 //! { "op": "in", "field": "verdict", "values": ["blocked", "stalled"] }
-//! { "op": "gt", "field": "speed_kmh", "than": 60 }
-//! { "op": "lt", "field": "moved_m", "than": 1.5 }
-//! { "op": "and", "of": [ { "op": "gt", "field": "speed_kmh", "than": 60 },
-//!                        { "op": "lt", "field": "route_cue_x", "than": 0.5 } ] }
+//! { "op": "gt", "field": "queue.depth", "than": 60 }
+//! { "op": "lt", "field": "lag_s", "than": 1.5 }
+//! { "op": "and", "of": [ { "op": "gt", "field": "queue.depth", "than": 60 },
+//!                        { "op": "lt", "field": "rate", "than": 0.5 } ] }
 //! { "op": "or", "of": [ { "op": "eq", "field": "verdict", "value": "blocked" },
 //!                       { "op": "eq", "field": "verdict", "value": "stalled" } ] }
-//! { "op": "not", "of": { "op": "eq", "field": "gear", "value": 0 } }
+//! { "op": "not", "of": { "op": "eq", "field": "mode", "value": 0 } }
 //! ```
 //!
 //! Three rules the schema keeps, and each is a decision rather than an
@@ -37,12 +37,12 @@
 //! - **`gt` and `lt` are numeric and exclusive.** A range is two of them, and
 //!   the inclusive spellings are not here because a threshold that includes its
 //!   own bound is a rule that fires on the boundary reading and not the tick
-//!   after - the kind of off-by-one nobody notices until a car is against a
-//!   wall. A corpus that needs `>=` writes `not (lt ...)`.
-//! - **A field path is a string, and a dot walks into an object.** `speed` reads
-//!   the top level; `car.speed` reads the object under `car`. One flat name and
-//!   a nested one are the same lookup, so an adapter whose context is flat and
-//!   one whose context is grouped are both expressible without a second
+//!   after - the kind of off-by-one nobody notices until a queue is exactly
+//!   full. A corpus that needs `>=` writes `not (lt ...)`.
+//! - **A field path is a string, and a dot walks into an object.** `depth` reads
+//!   the top level; `queue.depth` reads the object under `queue`. One flat name
+//!   and a nested one are the same lookup, so an adapter whose context is flat
+//!   and one whose context is grouped are both expressible without a second
 //!   operator.
 //!
 //! # Missing is not a value
@@ -50,7 +50,7 @@
 //! Every comparison answers `false` when its field is absent or `null`. An
 //! unobserved field is not a field of zero, and a predicate that treated it as
 //! one would select a lane for a reading nobody took. `not` is the complement
-//! of its inner case, so `not (eq gear 0)` **is** true for a missing `gear` -
+//! of its inner case, so `not (eq mode 0)` **is** true for a missing `mode` -
 //! that follows from `not` meaning "the inner case does not hold", and a corpus
 //! that must not fire on a missing field writes the positive form
 //! (`in`, `eq`, `gt`, `lt`) instead of negating it.

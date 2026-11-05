@@ -284,7 +284,7 @@ impl StandIn {
 			Resource:Ticket.Resource().to_string(),
 			Generation:Ticket.Generation(),
 			Fence:Ticket.Fence(),
-			LeaseId:Ticket.LeaseId().to_string(),
+			LeaseID:Ticket.LeaseID().to_string(),
 			At:Now,
 			Reason:Reason.clone(),
 			Resolution:None,
@@ -348,7 +348,7 @@ impl Authority for StandIn {
 			let Fence = Inner.Fences.get(Resource).copied().unwrap_or(0) + 1;
 			Inner.Fences.insert(Resource.to_string(), Fence);
 			let Lease = Lease {
-				Id:format!("{}#{Resource}#{Fence}", self.Token),
+				ID:format!("{}#{Resource}#{Fence}", self.Token),
 				Resource:Resource.to_string(),
 				Fence,
 				ExpiresAt,

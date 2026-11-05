@@ -8,20 +8,11 @@
 # Rust is rustfmt's, configured by rustfmt.toml at the root.
 *.rs
 
-# The compiled-script sources are inputs pinned to what a page received.
-# `Crate/ChatDriver/Test/Fixture/Expression.json` records the exact bytes, and a
-# test compares the compiled output against it - so reformatting these files
-# changes the thing under test. The test's own doc calls itself "the assertion
-# that rules out a formatter"; leaving prettier in scope would make that
-# assertion fire on every run, and re-recording the fixture instead would make it
-# tautological.
+# The compiled-script sources are inputs pinned to what a page received. The
+# erasure that turns them into the JavaScript a page runs preserves every byte
+# outside the type syntax, so reformatting one of these files would change what
+# the page receives rather than tidy it.
 Crate/*/Source/Script/
-
-# The same argument for the note baseline: `Capture.md` is what a page said and
-# `Note.md` is the exact bytes the renderer is compared against, so a formatter
-# that rewrapped a paragraph would change the thing under test rather than tidy
-# it. A capture is evidence; evidence is not reformatted.
-Crate/*/Test/Fixture/*.md
 
 # TOML has its own layout rules and rustfmt/prettier disagree about arrays.
 *.toml

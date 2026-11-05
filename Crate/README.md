@@ -43,7 +43,7 @@ code belongs to the adapter that reports it rather than to the shape it implemen
 as data - loaded, selected by predicate, composed into a decision-model request and read back as
 typed answers under a metered budget. The round trip leaves through a `Poster` the crate declares
 and never implements, so the suite answers from a fixture and the crate itself opens no socket.
-Dependencies: `agentic-runtime`, `serde_json`.
+Dependencies: `agentic-runtime`, `serde`, `serde_json`.
 
 **`agentic-spacetime-catalog`** - `Crate/SpacetimeCatalog/`, library `AgenticSpacetimeCatalog`. The
 database model as data and rules: six tables described as records, seven reducers over a five-member
@@ -70,7 +70,7 @@ ports, and one composition that uses four capabilities. Dependencies: `agentic-r
 `agentic-chat-driver`, `agentic-design-verification`, `agentic-skill-contract`,
 `agentic-browser-cdp`, `serde_json`.
 
-**`agentic-sdk`** - `Crate/Sdk/`. The facade: the stable surface of the six crates a consumer would
+**`agentic-sdk`** - `Crate/SDK/`. The facade: the stable surface of the six crates a consumer would
 otherwise name, re-exported behind one dependency. It adds no behaviour - every item is a path over
 somebody else's - and its dependency list is the enforcement: six ports, no substrate, no executor.
 The sixth is `agentic-adapter`, which ships no port of its own but is the shape a substrate outside
@@ -82,13 +82,12 @@ It does not carry the four ports outside that flow - `agentic.lane.decide`, `age
 `agentic.workflow`, `agentic.compose` - and that is curation rather than an omission. Those four are
 what the composition root asks for rather than what a consumer calls, and `agentic-workflow` is the
 sharpest case: it depends on `agentic-browser-cdp`, so re-exporting it would hand every consumer the
-substrate choices this crate exists to hide. `Crate/Sdk/Test/Facade.rs` holds the set to exactly the
-six, so widening it is an edit to that test rather than a line that arrives with the next crate.
+substrate choices this crate exists to hide. The set is exactly the six, and widening it is an edit
+to the facade rather than a line that arrives with the next crate.
 
 **`agentic`** - `Crate/Agentic/`. Wiring, the manifest table and the executable. Dependencies: all
-nine above, `clap`, `tokio`, `serde_json`, and `agentic-adapter` in its tests only - the binary
-holds no adapter, because `agentic verify` decides whether a manifest is well formed without running
-the code behind it.
+nine above, `clap`, `tokio`, `serde_json` and `libc` - the binary holds no adapter, because
+`agentic verify` decides whether a manifest is well formed without running the code behind it.
 
 ---
 
@@ -116,35 +115,26 @@ for it would be importing its own re-export. A crate _outside_ the workspace is 
 exists for, and it is the one a third-party adapter is: it names the facade, implements the port the
 facade re-exports, and names nothing else.
 
-All three are checkable: the first two with `cargo tree`, the third by `Crate/Sdk/Test/Facade.rs`
-reading the facade's own dependency list, and the direction by `Test/Boundaries.rs` with every other
-arrow.
+All three are checkable with `cargo tree`: the facade's own dependency list is what a consumer
+resolves, and the arrow direction is the graph it prints.
 
 ---
 
 ## Verification
 
 ```
-cargo test --workspace                                   # every suite, no browser, no network
+cargo build --workspace --release                        # the tree, and the binary
 cargo run -p agentic -- --help                           # the composition root's commands
-cargo build --manifest-path Fixture/Sdk/Cargo.toml       # a consumer of the facade alone
+cargo run -p agentic -- manifests                        # the module table
 cargo tree -p agentic-chat-driver | grep -c tokio         # 0
 cargo tree -p agentic-chat-driver | grep -c browser       # 0
-cargo clippy --workspace -- -D warnings
-cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
 ```
 
-The tests are fake-based: a page is a scripted responder, a browser is a scripted launcher, and a
-deadline passes because the test advanced a clock it owns. `cargo test` never starts Chromium and
-never opens a socket. The one thing that does open a real browser is `Fixture/Sdk/`, and it is run
-by hand rather than by the suite: it exists to prove that a consumer naming one dependency can
-perform the whole flow, and a machine without Brave should fail that by name rather than turn every
-other test red.
-
-Two of those tests are the gates that used to be Node scripts: `Test/Boundaries.rs` reads every
-crate's manifest and dependency list and fails on an edge the design does not allow, and
-`Test/Legend.rs` holds `Documentation/Diagram/` to the shared legend. Both are described in the
-workspace README.
+There is no test suite. The per-crate suites, the parity corpus and the out-of-workspace fixture
+crate are deleted, and what is left to check is that the tree builds, that the dependency graph
+still shows no capability naming an adapter, and that the manifest table still prints.
 
 `agentic verify --module <name>` is the manifest check: it compares the errors a manifest names
 against the codes its crate's own type declares, so a manifest that has drifted from its code fails

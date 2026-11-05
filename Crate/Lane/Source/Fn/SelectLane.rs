@@ -14,11 +14,11 @@
 //! ```json
 //! "lanes": {
 //!     "ice": {
-//!         "fields": ["speed", "surface"],
+//!         "fields": ["rate", "surface"],
 //!         "templates": ["surface.loss"],
 //!         "select": { "op": "and", "of": [
 //!             { "op": "eq", "field": "surface", "value": "ice" },
-//!             { "op": "gt", "field": "speed", "than": 40 }
+//!             { "op": "gt", "field": "rate", "than": 40 }
 //!         ] }
 //!     }
 //! }
@@ -119,7 +119,7 @@ fn Conditional(Corpus:&Corpus) -> String {
 	Named.join("; ")
 }
 
-/// The context as one line, for the same reason: `speed=60, yaw=0.5`.
+/// The context as one line, for the same reason: `rate=60, mode=0.5`.
 ///
 /// A path that holds `null` is printed as `null` rather than omitted, because
 /// "the caller sent nothing here" is exactly what a reader of a no-match needs to

@@ -5,8 +5,8 @@
 //! - [`Poster`] is what the crate needs and never implements. One request in,
 //!   one reply body out, bounded by the caller's [`AgenticRuntime::Call`]. The
 //!   credentials, the transport, the status codes and the retry policy are an
-//!   adapter's business; a fixture that answers from a captured body is an
-//!   adapter too (`Test/Fake.rs`), which is why the suite needs no socket.
+//!   adapter's business, and an implementation that answers from a captured
+//!   body is one too.
 //! - [`Decide`] is what the crate provides: select a lane, ask about it, report
 //!   the meter.
 //!

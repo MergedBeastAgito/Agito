@@ -32,7 +32,7 @@ impl Ownership {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Target {
 	/// The page this session is bound to.
-	pub Url:String,
+	pub URL:String,
 	/// The endpoint the transport behind that page is connected to.
 	pub Ws:String,
 	/// Whether this session launched the browser or attached to one.
@@ -80,10 +80,10 @@ impl OpenOptions {
 	}
 
 	/// The page this option asks a launcher for.
-	pub fn Want<'a>(&'a self, Url:&'a str) -> crate::Struct::Transport::PageWant<'a> {
+	pub fn Want<'a>(&'a self, URL:&'a str) -> crate::Struct::Transport::PageWant<'a> {
 		match &self.Page {
 			Some(Key) => crate::Struct::Transport::PageWant::Existing(Key),
-			None => crate::Struct::Transport::PageWant::Fresh(Url),
+			None => crate::Struct::Transport::PageWant::Fresh(URL),
 		}
 	}
 }
@@ -98,7 +98,7 @@ pub trait Browse: Send + Sync {
 	/// Open a page, returning the handle the session is bound to.
 	fn Open<'a>(
 		&'a self,
-		Url:&'a str,
+		URL:&'a str,
 		Options:OpenOptions,
 	) -> FutureBox<'a, Result<Target, crate::Struct::Error::Error>>;
 	/// Evaluate an expression in the page and return its value.

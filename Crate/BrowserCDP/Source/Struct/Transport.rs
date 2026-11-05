@@ -1,4 +1,4 @@
-//! The seam a provider implements, and the fake in `Test/` stands in for.
+//! The seam a provider implements.
 //!
 //! Nothing in this file starts a browser. A [`Launcher`] is supplied by the
 //! composition root - it may speak CDP over a WebSocket, drive a subprocess, or
@@ -28,7 +28,7 @@ pub trait Transport: Send + Sync {
 	fn Endpoint(&self) -> &str;
 	/// The URL the page is actually on, which is not always the URL a caller
 	/// asked for: a page bound by target id keeps whatever it was showing.
-	fn Url(&self) -> &str;
+	fn URL(&self) -> &str;
 	/// True once the connection is gone. A closed transport is dead, not slow.
 	fn Closed(&self) -> bool;
 	/// Ask the page one expression and return what it produced.
@@ -64,6 +64,6 @@ pub trait Launcher: Send + Sync {
 		Want:PageWant<'a>,
 		Call:Call,
 	) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>>;
-	/// Start a browser and open `Url` in it.
-	fn Launch<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>>;
+	/// Start a browser and open `URL` in it.
+	fn Launch<'a>(&'a self, URL:&'a str, Call:Call) -> FutureBox<'a, Result<Arc<dyn Transport>, Error>>;
 }

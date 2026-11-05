@@ -46,7 +46,7 @@ pub trait Context {
 
 	/// The row keyed by the table's primary column, or `None`. One lookup, no
 	/// scan.
-	fn Find(&self, Table:TableName, Id:&str) -> Option<Row>;
+	fn Find(&self, Table:TableName, ID:&str) -> Option<Row>;
 
 	/// Insert a row. A row already at its key is a defect, not an overwrite.
 	fn Insert(&mut self, Table:TableName, Row:Row);
@@ -54,6 +54,6 @@ pub trait Context {
 	/// Replace the row at the key it carries. A missing row is a defect.
 	fn Update(&mut self, Table:TableName, Row:Row);
 
-	/// Remove the row at `Id`. No rule in this crate calls it.
-	fn Delete(&mut self, Table:TableName, Id:&str);
+	/// Remove the row at `ID`. No rule in this crate calls it.
+	fn Delete(&mut self, Table:TableName, ID:&str);
 }

@@ -19,6 +19,17 @@
 //! here provides. `code` is `null` in that report rather than a copy of the
 //! manifest's own list, because a copy would read as agreement.
 //!
+//! # Verbs are a claim too
+//!
+//! `provides.verbs` is the other half of a module's surface: the chat driver
+//! answers `agentic.chat.ask`, and `agentic.chat.note` is a call it also
+//! accepts. A verb declared in a manifest that nothing reads is a promise made
+//! to nobody, so both reports carry the names the file declares, and a shipped
+//! module's names are compared with the table's the way its port and its error
+//! codes are. The shape is checked rather than assumed - a `provides.verbs` that
+//! is not an object keyed by non-empty verb names is refused, in the same shape
+//! as a kind outside the vocabulary.
+//!
 //! What a foreign report cannot answer, the value can: an adapter states its own
 //! port, and `AgenticAdapter::Serves` compares that statement with the manifest
 //! that registered it. `agentic verify` never constructs an adapter - a command
@@ -53,6 +64,9 @@ pub struct Readiness {
 	pub Kind:String,
 	/// The port it provides.
 	pub Port:String,
+	/// The verbs it declares under `provides.verbs`, in the order its
+	/// manifest names them. Empty for a module that declares none.
+	pub Verbs:Vec<String>,
 	/// The retention class it declares.
 	pub State:String,
 	/// The errors the manifest names.
@@ -121,6 +135,43 @@ fn Errors(Parsed:&Value) -> Vec<String> {
 		.unwrap_or_default()
 }
 
+/// The verbs a manifest declares under `provides`, in the order it names them.
+///
+/// The shape on disk is an object keyed by the verb's own name, because a verb
+/// carries an error list the way a port does: `agentic.chat.note` is not
+/// `agentic.chat.ask`, and a code the verb reports belongs to the verb. So the
+/// names are the object's keys, and declaring none is the ordinary case -
+/// every module but the chat driver declares no verb at all - which is why an
+/// absent key answers an empty list rather than an error.
+///
+/// A `provides.verbs` that is not that shape is refused here rather than
+/// reported as a verb no caller could ever name: a bare string, a list of
+/// values, a declaration that is not an object, or a key that is empty or
+/// blank. The caller turns the `Err` into the reason a module is not ready,
+/// which is the same shape as a kind outside the vocabulary.
+pub fn VerbsOf(Parsed:&Value) -> Result<Vec<String>, String> {
+	let Some(Provides) = Parsed.get("provides") else {
+		return Ok(Vec::new());
+	};
+	match Provides.get("verbs") {
+		None | Some(Value::Null) => Ok(Vec::new()),
+		Some(Value::Object(Verbs)) => {
+			let mut Names = Vec::with_capacity(Verbs.len());
+			for (Name, Declaration) in Verbs {
+				if Name.trim().is_empty() {
+					return Err("names a verb with no name in `provides.verbs`".to_string());
+				}
+				if !Declaration.is_object() {
+					return Err(format!("declares the verb {Name:?} and its declaration is not an object"));
+				}
+				Names.push(Name.clone());
+			}
+			Ok(Names)
+		},
+		Some(_) => Err("`provides.verbs` is not an object keyed by verb name".to_string()),
+	}
+}
+
 /// The ports a manifest says it requires.
 fn Requires(Parsed:&Value) -> Vec<String> {
 	Parsed
@@ -165,6 +216,11 @@ fn Report(One:&'static Manifest) -> Result<Readiness, String> {
 	let FileName = Text(&Parsed, "name");
 	let FileKind = Text(&Parsed, "kind");
 	let FilePort = Provides(&Parsed);
+	let Verbs = VerbsOf(&Parsed);
+	let FileVerbs:Vec<&str> = Verbs
+		.as_ref()
+		.map(|List| List.iter().map(String::as_str).collect())
+		.unwrap_or_default();
 	let Declared:Vec<String> = Code.iter().map(|Code| (*Code).to_string()).collect();
 	let Reason = if FileName != One.Name {
 		Some(format!(
@@ -180,6 +236,14 @@ fn Report(One:&'static Manifest) -> Result<Readiness, String> {
 		Some(format!("the table names the port {} and its file names {FilePort}", One.Port))
 	} else if !Known(One.Kind) {
 		Some(format!("{:?} is not one of {}", One.Kind, Names()))
+	} else if let Err(Why) = &Verbs {
+		Some(Why.clone())
+	} else if FileVerbs != One.Verbs {
+		Some(format!(
+			"the table names the verbs [{}] and its file names [{}]",
+			One.Verbs.join(", "),
+			FileVerbs.join(", ")
+		))
 	} else if ManifestErrors != Declared {
 		Some(format!(
 			"the manifest names [{}] and the crate names [{}]",
@@ -195,6 +259,7 @@ fn Report(One:&'static Manifest) -> Result<Readiness, String> {
 		Module:One.Name.to_string(),
 		Kind:One.Kind.to_string(),
 		Port:One.Port.to_string(),
+		Verbs:Verbs.unwrap_or_default(),
 		State,
 		Manifest:ManifestErrors,
 		Code:Some(Declared),
@@ -210,6 +275,7 @@ fn ReportForeign(One:&External, Ports:&[String]) -> Result<Readiness, String> {
 	let Parsed:Value = serde_json::from_str(&One.JSON)
 		.map_err(|Why| format!("{} ships a manifest that does not parse: {Why}", One.Path.display()))?;
 	let ManifestErrors = Errors(&Parsed);
+	let Verbs = VerbsOf(&Parsed);
 	let Requires = Requires(&Parsed);
 	let Entry = Parsed
 		.get("artefact")
@@ -225,6 +291,8 @@ fn ReportForeign(One:&External, Ports:&[String]) -> Result<Readiness, String> {
 	let Distinct = ManifestErrors.iter().collect::<BTreeSet<&String>>().len() == ManifestErrors.len();
 	let Reason = if !Known(&One.Kind) {
 		Some(format!("{:?} is not one of {}", One.Kind, Names()))
+	} else if let Err(Why) = &Verbs {
+		Some(Why.clone())
 	} else if !States().contains(&One.State.as_str()) {
 		Some(format!("{:?} is not one of the four state classes", One.State))
 	} else if ManifestErrors.iter().any(|Code| Code.trim().is_empty()) {
@@ -245,6 +313,7 @@ fn ReportForeign(One:&External, Ports:&[String]) -> Result<Readiness, String> {
 		Module:One.Name.clone(),
 		Kind:One.Kind.clone(),
 		Port:One.Port.clone(),
+		Verbs:Verbs.unwrap_or_default(),
 		State:One.State.clone(),
 		Manifest:ManifestErrors,
 		Code:None,
@@ -269,6 +338,7 @@ pub fn ReadinessJSON(Readiness:&Readiness) -> Value {
 		"module": Readiness.Module,
 		"kind": Readiness.Kind,
 		"port": Readiness.Port,
+		"verbs": Readiness.Verbs,
 		"state": Readiness.State,
 		"ready": Readiness.Ready,
 		"external": Readiness.External,

@@ -9,17 +9,21 @@ product consumes this workspace and supplies its own composition root.
 ## The shape of it
 
 One tree and one specification. `Crate/` is a Cargo workspace where the specification and the
-implementation are the same artifact, and the scenarios under `scenarios/` are the evidence that
-each crate answers the contract its file states. `Documentation/` records the decisions the tree
-makes and why.
+implementation are the same artifact: each crate's `module.json` states what it is and what it
+provides, and `agentic manifests` prints that table from the binary. `Documentation/` records the
+decisions the tree makes and why.
 
-There used to be two trees. `Package/` held the same capabilities as TypeScript, `scenarios/` was
-one input both implementations answered to, and `Scripts/` was a Node gate over the pair. That layer
-was deleted once the browser expressions were compiled at build time and every scenario was answered
-by a crate. It was not a predecessor kept for reference: it was a second implementation of the same
-rules, a second toolchain and a second set of gates, and keeping it meant every behaviour had to be
-written twice before either side could be believed. What it established is recorded in
-`Documentation/Parity.md`; what it enforced is now a test in `Crate/Agentic/Test/`.
+There used to be two trees. `Package/` held the same capabilities as TypeScript, `Scenario/` was one
+input both implementations answered to, and `Script/` was a Node gate over the pair. That layer was
+deleted once the browser expressions were compiled at build time. It was not a predecessor kept for
+reference: it was a second implementation of the same rules, a second toolchain and a second set of
+gates, and keeping it meant every behaviour had to be written twice before either side could be
+believed. What it established is recorded in `Documentation/Parity.md`.
+
+The verification layer went the same way: the per-crate test suites, the parity corpus, the
+out-of-workspace fixture crate and the path audit are gone, and `Documentation/Parity.md` records
+what they held. What remains is what ships - the crates, their manifests, the `agentic` binary and
+the corpus under `Documentation/Skill` that `agentic skills` validates.
 
 The one TypeScript that remains is under `Crate/*/Source/Script/`: the expressions a driver sends to
 a page, compiled by that crate's `build.rs` into the JavaScript the page receives. That is not a
@@ -78,7 +82,7 @@ the TypeScript compiled into the JavaScript sent to a page, PascalCase module na
 - **`agentic-workflow`** - the bridge from the substrate to the consumer-owned ports, and one
   composition that uses four capabilities.
 - **`agentic-sdk`** - the facade: the six crates a consumer would otherwise name, re-exported behind
-  one dependency, with no behaviour of its own. `Crate/Sdk/Source/Library.rs` states what may appear
+  one dependency, with no behaviour of its own. `Crate/SDK/Source/Library.rs` states what may appear
   there and why the substrate, the browser's own adapter seam and the policy engine do not. The
   sixth is the adapter port, which a substrate outside this tree implements - the one consumer the
   facade cannot reach any other way.
@@ -99,76 +103,47 @@ what the crate states, and it records where the two disagreed when the port was 
 
 ---
 
-## scenarios/
+## Build/
 
-One scenario file per capability, plus the timing files, read by the Rust parity suites. Each case
-states a fixture, a sequence of steps and the expected result, the ordered effect list and the
-number of reports. `Crate/BrowserCDP/Test/Parity.rs`, `Crate/ChatDriver/Test/Parity.rs` and
-`Crate/SkillContract/Test/Parity.rs` read them and answer them through scripted fakes, so
-`cargo test --workspace` is the whole of the scenario gate.
+One file, and it is included rather than imported: `Crate/ChatDriver/build.rs` and
+`Crate/Workflow/build.rs` each carry a doc comment, `include!("../../Build/Script.rs")` and one
+`main` that calls `CompileScripts`, so the rule for what a script may contain and how it becomes
+bytes is written once and cannot drift between the two crates.
 
-`effects` is the protocol the implementation spoke, not its answer: every launch, attach,
-evaluation, write, send, release and report the fake observed, in order. A port that answers
-correctly by the wrong route fails. A case names the unit case that proves it in its `rust` field,
-and each parity suite refuses a case that names a test which does not exist.
-
-These files used to be the input to a differential run: a Node referee drove the TypeScript packages
-in process, asked cargo for the Rust half, and compared the two observation files. That referee is
-gone with the TypeScript side, and with it the claim that the two implementations agree.
-`Documentation/Parity.md` records what the comparison established while it existed and what replaced
-it - the Rust tests, which are now the only statement of the contract.
-
----
-
-## Fixture/
-
-One crate outside the workspace, and its own workspace root: `Fixture/Sdk/` depends on `agentic-sdk`
-and on nothing else this tree ships. It builds a session, opens `Page/Probe.html` and evaluates an
-expression - the whole flow the facade exists to make possible from one dependency - and its `Test/`
-holds the adapter port as `Arc<dyn Adapter>`, which is the other consumer the facade exists for: a
-substrate outside this tree. `tokio` is the only other dependency, because the browser adapter
-spawns its handler on it, and nothing else is named: the evaluated value is read with `as_str` and
-`Display` rather than through a serialiser the consumer would have to depend on.
-
-```
-cargo build --manifest-path Fixture/Sdk/Cargo.toml   # the facade alone
-cargo test --manifest-path Fixture/Sdk/Cargo.toml    # the port; no browser, no substrate
-cargo run --manifest-path Fixture/Sdk/Cargo.toml     # needs a browser; AGENTIC_BROWSER names one
-cargo tree --manifest-path Fixture/Sdk/Cargo.toml --depth 1
-```
-
-It is not a workspace member, and deliberately: a member would resolve its siblings through this
-workspace's own graph, which is exactly the thing a consumer cannot do.
+`Build/Script.rs` erases rather than transpiles. The file is parsed by a real TypeScript parser, the
+spans of the TypeScript-only syntax are found in the AST, and exactly those bytes are removed -
+every other byte, including indentation, quotes and comments, is the byte the page already received.
+A file with no type syntax compiles to itself, which is why moving the expressions to `.ts` changed
+nothing a page sees. What it refuses matters as much as what it emits: an unrecognised construct is
+a build error rather than a silently mangled expression, the erased result must still parse as
+JavaScript, and every `__PARAM_Name__` marker must have a matching `declare const`, so the parameter
+contract cannot drift from the expression it describes. Types are not checked - a transpiler parses,
+it does not infer - and `Documentation/Script.md` records what a `tsc --noEmit` pass costs and why
+it is not a gate.
 
 ---
 
-## The gates
+## What was verified, and is not any more
 
-Two checks that used to be Node scripts are Rust tests, because a gate that lives in the toolchain
-being deleted is a gate that leaves with it:
+There is no test suite, no parity corpus and no consumer fixture in this tree. `cargo build`,
+`cargo clippy` and `cargo fmt --check` are what a change is held to; nothing else runs, and no
+workflow step asserts anything the build did not produce.
 
-- **`Crate/Agentic/Test/Boundaries.rs`** - reads every crate's `module.json` for its kind and its
-  `Cargo.toml` for its edges, and fails when a capability names an adapter, an adapter names another
-  adapter, anything names the composition root, or anything but the composition root names the
-  facade. It also refuses a kind it does not know, so a new crate kind fails loudly rather than
-  passing as "anything goes".
-- **`Crate/Agentic/Test/Legend.rs`** - fails when a page under `Documentation/Diagram/` carries a
-  Mermaid block without the shared legend, when a diagram has no frontmatter, theme or class
-  annotation, when a `.svg` has no `.mmd` beside it, or when a render is a placeholder. A page added
-  without a legend leaves its terms undefined for the next reader.
-
-Both run in `cargo test --workspace`, which is why the gate below is one command. Two further gates
-did not survive the deletion - the feed bundler's determinism and the mutation suite - and
-`Documentation/Open-Questions.md` records each with what it held and what is owed.
+The corpus under `Scenario/` stated 82 cases across the browser, the chat driver and the skill
+contract, and three parity suites answered them through scripted fakes. `Fixture/SDK/` was a crate
+outside the workspace that depended on `agentic-sdk` alone, and it existed to prove the facade from
+a consumer's side. `Script/AuditPaths.sh` refused an absolute machine path in a tracked file. All
+three are deleted; `Documentation/Parity.md` records what they held and what the deletion took.
 
 ---
 
 ## .hermes/
 
-The record and the local tooling. `research/` holds the captures this workspace came out of, never
+The record and the local tooling, and untracked: it is the owner's working archive, kept on disk
+beside the tree and out of git. `research/` holds the captures this workspace came out of, never
 edited, with `catalog.mjs` indexing them into `Index.md`. `tools/` holds the feed, and every tool
 there is a standalone script that takes a DevTools websocket URL - local tooling, not part of the
-build and not required by any gate:
+build:
 
 - **`bundle.mjs`** - turn a tree into deterministic batches: `tree.txt`, `batch-NN.txt` per payload,
   and a `manifest.json` of what went where and what was left out.
@@ -201,8 +176,8 @@ a decision, and a document that changes its mind says so rather than rewriting t
   behind it.
 - **`Spacetime-Catalog.md`** - the catalogue as rules and data, and why it lives here rather than in
   a module that imports the server SDK.
-- **`Parity.md`** - what the scenarios establish, what the differential run established while it
-  existed, and what replaced it.
+- **`Parity.md`** - what the parity corpus established, what the differential run established while
+  it existed, and what the deletion of both took with it.
 - **`Research.md`** - the index over the captures: what each thread settled, what it left open, and
   which document consumed it.
 - **`Open-Questions.md`** - every question still open, with the experiment that would settle it and
@@ -214,20 +189,24 @@ a decision, and a document that changes its mind says so rather than rewriting t
 
 ## Before you start
 
-- **Rust ≥ 1.88** - `Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`. That is the
-  only toolchain: there is no `node_modules`, no package manager and no formatter to install.
+- **Rust ≥ 1.88** - `Cargo.toml` pins `edition = "2024"` and `rust-version = "1.88"`, and it is the
+  only toolchain the build needs. A Node layer exists for formatting alone: `package.json` carries
+  `prettier` and `prettier.config.mjs` holds its settings, so Markdown and JSON are formatted with
+  it. Nothing at run time and nothing at build time depends on it, and the build works with no
+  `node_modules` present.
 
-## The gate
+## The build
 
 ```
-cargo test --workspace      # every suite, the parity scenarios, the boundaries and the diagrams
+cargo build --workspace --release
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
+cargo run -q -p agentic -- manifests
 ```
 
-`cargo test --workspace` never starts Chromium and never opens a socket: a page is a scripted
-responder, a browser is a scripted launcher, and a deadline passes because the test advanced a clock
-it owns.
+There is no `cargo test` step: the suites, the corpus and the fixture crate are gone.
+`agentic manifests` prints the module table, and `agentic skills` validates the corpus under
+`Documentation/Skill` - that is the whole of what this tree checks about itself.
 
 ---
 

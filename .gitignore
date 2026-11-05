@@ -8,12 +8,12 @@
 # unanchored ignore rule for a directory nothing creates is a rule that hides the
 # day something starts creating one.
 
-# Scratch: probes and throwaway trees. The archive of everything this workspace
-# worked from is tracked - `.hermes/research/`, `.hermes/bundle/` and
-# `.hermes/tools/` are the record and the tooling - and only the scratch inside
-# it is not.
-!.hermes
-.hermes/tmp/
+# The working archive: research captures, review bundles, notes and the tooling
+# that made them. It is the owner's scratch rather than repository content, and
+# it stays on disk. It is untracked because a capture records the page it came
+# from - an account id, an organisation, a person's name - and a tracked file
+# may name none of those.
+.hermes/
 
 # Local secrets: any API key, any token. A credential in this repository deserves
 # a rule that travels with the repository rather than one that depends on a
@@ -30,4 +30,10 @@ __pycache__/
 # The agent instruction file is source, not scratch: a global ignore for
 # `AGENTS.md` must not take it out of this tree.
 !AGENTS.md
+
+# A lock file is machine state, not repository content. It is generated locally and
+# by any CI job that needs one; it is never committed, in this repository or any
+# other. `--locked` therefore cannot appear in a workflow step - a fresh checkout
+# has no lock file for the flag to match - and a cache key hashes the manifests.
 Cargo.lock
+/target/

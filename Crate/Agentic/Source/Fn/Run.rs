@@ -18,7 +18,8 @@ use crate::{
 	Fn::{
 		Composition::{Browser, Chat as ChatOver, ChatSpec, Design, Headless},
 		Discover,
-		VerifyModule::{ReadinessJSON, VerifyModule},
+		Resolve,
+		VerifyModule::{ReadinessJSON, VerbsOf, VerifyModule},
 	},
 	Struct::{
 		Binary::{Command::Verb, Shape::Shape},
@@ -26,6 +27,15 @@ use crate::{
 		Note::Given,
 	},
 };
+
+/// The variable that names a skill corpus when no root is given.
+const SkillVariable:&str = "AGENTIC_SKILL_PATH";
+
+/// The corpus beside this crate: the repository keeps it two levels up.
+const SkillRelative:&str = "../../Documentation/Skill";
+
+/// Where an installed tree keeps the corpus the release ships.
+const SkillAbsolute:&str = "/usr/local/share/agentic/skills";
 
 /// Run one verb, answering the text to print or the reason it could not be run.
 pub async fn Run(Command:Verb) -> Result<String, String> {
@@ -39,11 +49,20 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			let Foreign = Discover::Discover(&Roots)?;
 			let mut Lines:Vec<String> = All
 				.iter()
-				.map(|Manifest| Row(Manifest.Name, Manifest.Kind, Manifest.Port, Manifest.State, "workspace"))
+				.map(|Manifest| {
+					Row(
+						Manifest.Name,
+						Manifest.Kind,
+						Manifest.Port,
+						&Verbs(Manifest.Verbs),
+						Manifest.State,
+						"workspace",
+					)
+				})
 				.collect();
 			Lines.extend(Foreign.iter().map(|One| {
 				let Origin = One.Path.display().to_string();
-				Row(&One.Name, &One.Kind, &One.Port, &One.State, &Origin)
+				Row(&One.Name, &One.Kind, &One.Port, &Declared(&One.JSON), &One.State, &Origin)
 			}));
 			Ok(Lines.join("\n"))
 		},
@@ -53,7 +72,16 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			let Text = serde_json::to_string_pretty(&ReadinessJSON(&Readiness)).unwrap_or_else(|_| "{}".to_string());
 			if Readiness.Ready { Ok(Text) } else { Err(Text) }
 		},
-		Verb::Skills { Root, Json } => {
+		Verb::Skills { Root, JSON } => {
+			// The argument when there is one, and the three-tier default when
+			// there is not: beside this crate, then `AGENTIC_SKILL_PATH`, then
+			// the installed location. The resolved path is what the summary
+			// and the JSON report, so a caller can see which corpus was read.
+			let Root = match Root {
+				Some(Named) => Resolve::Given(std::path::Path::new(&Named)),
+				None => Resolve::Default(SkillVariable, SkillRelative, SkillAbsolute),
+			};
+			let Root = Root.to_string_lossy().into_owned();
 			let Contract = CreateContract();
 			let Skills = Contract.Discover(&Root).await;
 			let mut Findings = Vec::new();
@@ -61,7 +89,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				Findings.extend(Contract.Validate(Skill).await);
 			}
 			let Digest = Contract.Digest(&Skills);
-			if Json {
+			if JSON {
 				Ok(serde_json::to_string_pretty(&json!({
 					"root": Root,
 					"digest": Digest,
@@ -81,7 +109,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				Ok(Lines.join("\n"))
 			}
 		},
-		Verb::Browse { Url, Expression, Attach, Bind, Timeout } => {
+		Verb::Browse { URL, Expression, Attach, Bind, Timeout } => {
 			let Browse = Browser(Headless());
 			let Call = Budget(Timeout);
 			let Options = match (Attach, Bind) {
@@ -97,10 +125,10 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			};
 			let Ownership = Options.Ownership();
 			let Target = Browse
-				.Open(&Url, Options)
+				.Open(&URL, Options)
 				.await
 				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
-			let Bound = Target.Url.clone();
+			let Bound = Target.URL.clone();
 			let Value = Browse
 				.Evaluate(&Target, &Expression, Call)
 				.await
@@ -117,7 +145,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			.unwrap_or_else(|_| "{}".to_string()))
 		},
 		Verb::Chat {
-			Url,
+			URL,
 			Model,
 			Question: Text,
 			Attach,
@@ -133,11 +161,12 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			Timeout,
 		} => {
 			let mut Selectors = match &Overrides {
-				Some(Path) => {
-					let Text = std::fs::read_to_string(Path)
-						.map_err(|Why| format!("the selector file {Path} could not be read: {Why}"))?;
+				Some(Named) => {
+					let File = Resolve::Given(std::path::Path::new(Named));
+					let Text = std::fs::read_to_string(&File)
+						.map_err(|Why| format!("the selector file {} could not be read: {Why}", File.display()))?;
 					let Parsed:serde_json::Value = serde_json::from_str(&Text)
-						.map_err(|Why| format!("the selector file {Path} is not JSON: {Why}"))?;
+						.map_err(|Why| format!("the selector file {} is not JSON: {Why}", File.display()))?;
 					AgenticChatDriver::Struct::Selectors::Merged(&Parsed)
 				},
 				None => AgenticChatDriver::DefaultSelectors(),
@@ -181,11 +210,11 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			if Shape.CarriesNote()
 				&& Given.Thread.as_deref().is_none_or(|Thread| Thread.trim().is_empty())
 				&& Bind.is_none()
-				&& crate::Fn::Note::ThreadOf(&Url).is_none()
+				&& crate::Fn::Note::ThreadOf(&URL).is_none()
 			{
-				return Err(crate::Fn::Note::Unfiled(&Url));
+				return Err(crate::Fn::Note::Unfiled(&URL));
 			}
-			let Driver = ChatOver(Browser(Headless()), ChatSpec { Url:Url.clone(), Attach, Bind, Selectors });
+			let Driver = ChatOver(Browser(Headless()), ChatSpec { URL:URL.clone(), Attach, Bind, Selectors });
 			let Call = Budget(Timeout);
 			// An observer is a sink and a stop, the way a mutation observer is
 			// a callback and a disconnect: the driver pushes every
@@ -233,14 +262,14 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			}
 			Ok(serde_json::to_string_pretty(&Out).unwrap_or_else(|_| "{}".to_string()))
 		},
-		Verb::Design { Url, Selectors, Timeout } => {
-			let Verifier = Design(Browser(Headless()), Url.clone());
+		Verb::Design { URL, Selectors, Timeout } => {
+			let Verifier = Design(Browser(Headless()), URL.clone());
 			let Measurements = Verifier
 				.Measure(&Selectors, Budget(Timeout))
 				.await
 				.map_err(|Why| format!("{}: {}", Why.Code().Name(), Why.Message()))?;
 			Ok(serde_json::to_string_pretty(&json!({
-				"url": Url,
+				"url": URL,
 				"measurements": Measurements.iter().map(|Measurement| json!({
 					"selector": Measurement.Selector,
 					"present": Measurement.Present,
@@ -252,14 +281,38 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 	}
 }
 
-/// One row of the manifest listing: name, kind, port, state and where it came
-/// from.
+/// One row of the manifest listing: name, kind, port, verbs, state and where
+/// it came from.
 ///
-/// The origin is the fifth column because the difference between "this binary
+/// The origin is the last column because the difference between "this binary
 /// carries it" and "this file said so" is the difference between a claim that
 /// was compiled and a claim that was read.
-fn Row(Name:&str, Kind:&str, Port:&str, State:&str, Origin:&str) -> String {
-	format!("{Name:<32} {Kind:<12} {Port:<24} {State:<16} {Origin}")
+fn Row(Name:&str, Kind:&str, Port:&str, Verbs:&str, State:&str, Origin:&str) -> String {
+	format!("{Name:<32} {Kind:<12} {Port:<24} {Verbs:<20} {State:<16} {Origin}")
+}
+
+/// The verbs column for a module the table carries: its names, or `-` when it
+/// declares none.
+///
+/// `-` rather than an empty cell because a column of blanks reads as a value
+/// that failed to load, and "this module declares no verb" is a fact.
+fn Verbs(Names:&[&str]) -> String { if Names.is_empty() { "-".to_string() } else { Names.join(",") } }
+
+/// The verbs column for a module read from a file: what its own bytes declare,
+/// or `?` when that declaration is not the shape `verify` reads.
+///
+/// A listing shows the module rather than hiding it, the way it shows one whose
+/// state is missing; `verify` is where a malformed declaration becomes a reason.
+/// But it must not print a verb the file did not declare, so the marker is `?`
+/// and never `-`.
+fn Declared(JSON:&str) -> String {
+	let Ok(Parsed) = serde_json::from_str::<serde_json::Value>(JSON) else {
+		return "?".to_string();
+	};
+	match VerbsOf(&Parsed) {
+		Ok(Names) => Verbs(&Names.iter().map(String::as_str).collect::<Vec<_>>()),
+		Err(_) => "?".to_string(),
+	}
 }
 
 /// The JSON a `text` or a `markdown` call prints, and the base of the one a
@@ -274,7 +327,7 @@ fn Envelope(Answer:&AgenticChatDriver::Answer, Reading:&str) -> serde_json::Valu
 		// The page's own URL, not the one this call was given: with a bind
 		// they are different, and the one that answered is the one a caller
 		// recording provenance needs.
-		"url": Answer.Url,
+		"url": Answer.URL,
 		"format": Reading,
 		"text": Answer.Text,
 		"model": Answer.Model,
@@ -285,7 +338,7 @@ fn Envelope(Answer:&AgenticChatDriver::Answer, Reading:&str) -> serde_json::Valu
 			"detail": Step.Detail,
 		})).collect::<Vec<_>>(),
 		"sources": Answer.Sources.iter().map(|Source| json!({
-			"url": Source.Url,
+			"url": Source.URL,
 			"label": Source.Label,
 		})).collect::<Vec<_>>(),
 	})

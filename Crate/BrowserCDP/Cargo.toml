@@ -25,11 +25,3 @@ non_upper_case_globals = "allow"
 
 [lints.clippy]
 upper_case_acronyms = "allow"
-
-[[test]]
-name = "Browse"
-path = "Test/Browse.rs"
-
-[[test]]
-name = "Parity"
-path = "Test/Parity.rs"

@@ -31,8 +31,8 @@ pub fn RecordTrace<C:Context>(Ctx:&mut C, Args:TraceArgs) -> Answer {
 		return Answer::Refused(Code::AdmissionRefused);
 	}
 	let Now = Ctx.Now();
-	let Id = format!("{Now}:{Kind}:{Subject}");
-	if let Some(Existing) = Ctx.Find(TableName::Trace, &Id) {
+	let ID = format!("{Now}:{Kind}:{Subject}");
+	if let Some(Existing) = Ctx.Find(TableName::Trace, &ID) {
 		return if Existing.Text("payload") == Some(Payload.as_str()) {
 			Answer::Accepted
 		} else {
@@ -43,7 +43,7 @@ pub fn RecordTrace<C:Context>(Ctx:&mut C, Args:TraceArgs) -> Answer {
 	Ctx.Insert(
 		TableName::Trace,
 		Row::Of([
-			("id", Value::Text(Id)),
+			("id", Value::Text(ID)),
 			("at", Value::Number(Now)),
 			("kind", Value::Text(Kind)),
 			("subject", Value::Text(Subject)),

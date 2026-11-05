@@ -4,7 +4,7 @@
 pub mod Bind;
 pub mod Claim;
 pub mod Fenced;
-pub mod Json;
+pub mod JSON;
 pub mod Latest;
 pub mod Probe;
 pub mod Record;

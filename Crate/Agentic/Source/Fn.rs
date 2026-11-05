@@ -3,5 +3,6 @@
 pub mod Composition;
 pub mod Discover;
 pub mod Note;
+pub mod Resolve;
 pub mod Run;
 pub mod VerifyModule;

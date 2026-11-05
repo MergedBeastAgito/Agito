@@ -22,7 +22,7 @@ pub enum ColumnType {
 	/// A flag.
 	Boolean,
 	/// A JSON document held as text, so a new shape needs no migration.
-	Json,
+	JSON,
 	/// A string, or absent.
 	OptionalText,
 	/// A number, or absent.
@@ -36,7 +36,7 @@ impl ColumnType {
 			ColumnType::Text => "string",
 			ColumnType::Number => "number",
 			ColumnType::Boolean => "boolean",
-			ColumnType::Json => "json",
+			ColumnType::JSON => "json",
 			ColumnType::OptionalText => "optional-string",
 			ColumnType::OptionalNumber => "optional-number",
 		}
@@ -48,7 +48,7 @@ impl ColumnType {
 			ColumnType::Text,
 			ColumnType::Number,
 			ColumnType::Boolean,
-			ColumnType::Json,
+			ColumnType::JSON,
 			ColumnType::OptionalText,
 			ColumnType::OptionalNumber,
 		]
@@ -65,7 +65,7 @@ impl ColumnType {
 	/// passing review.
 	pub fn Accepts(self, Value:&Value) -> bool {
 		match self {
-			ColumnType::Text | ColumnType::Json => matches!(Value, Value::Text(_)),
+			ColumnType::Text | ColumnType::JSON => matches!(Value, Value::Text(_)),
 			ColumnType::Number => matches!(Value, Value::Number(_)),
 			ColumnType::Boolean => matches!(Value, Value::Boolean(_)),
 			ColumnType::OptionalText => matches!(Value, Value::Text(_) | Value::Null),

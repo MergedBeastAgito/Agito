@@ -11,7 +11,7 @@
 //! attributable.
 
 use crate::{
-	Fn::{Json::Quoted, Latest::Latest},
+	Fn::{JSON::Quoted, Latest::Latest},
 	Struct::{
 		Answer::Answer,
 		Code::Code,

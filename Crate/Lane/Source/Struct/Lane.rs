@@ -36,12 +36,12 @@ use crate::Struct::{Predicate::Predicate, Template::Template};
 ///
 /// ```json
 /// {
-///   "fields": ["speed", "gear"],
-///   "templates": ["corner.entry"],
+///   "fields": ["depth", "rate"],
+///   "templates": ["queue.drain"],
 ///   "model": "clef-flash",
-///   "select": { "op": "gt", "field": "speed", "than": 55 },
-///   "cadence": "on approach to a turn",
-///   "why": "yaw rate says how the car is actually rotating"
+///   "select": { "op": "gt", "field": "depth", "than": 55 },
+///   "cadence": "while the queue is over its target",
+///   "why": "the drain rate says how fast the backlog is actually clearing"
 /// }
 /// ```
 ///

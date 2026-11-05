@@ -193,7 +193,7 @@ impl fmt::Debug for Seal {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Lease {
 	/// This grant's identity. Unique within the process that issued it.
-	pub Id:String,
+	pub ID:String,
 	/// What it grants: a name the composition root chose, never a capability's.
 	pub Resource:String,
 	/// Monotonic per resource, never reused, never reset by a release.
@@ -209,7 +209,7 @@ impl fmt::Debug for Lease {
 	fn fmt(&self, Formatter:&mut fmt::Formatter<'_>) -> fmt::Result {
 		Formatter
 			.debug_struct("Lease")
-			.field("Id", &self.Id)
+			.field("ID", &self.ID)
 			.field("Resource", &self.Resource)
 			.field("Fence", &self.Fence)
 			.field("ExpiresAt", &self.ExpiresAt)
@@ -236,7 +236,7 @@ impl fmt::Debug for Lease {
 pub struct Ticket {
 	Generation:u64,
 	Resource:String,
-	LeaseId:String,
+	LeaseID:String,
 	Fence:u64,
 	ExpiresAt:Instant,
 	Seal:Seal,
@@ -249,7 +249,7 @@ impl Ticket {
 		Ticket {
 			Generation,
 			Resource:Lease.Resource.clone(),
-			LeaseId:Lease.Id.clone(),
+			LeaseID:Lease.ID.clone(),
 			Fence:Lease.Fence,
 			ExpiresAt,
 			Seal:Lease.Seal,
@@ -265,7 +265,7 @@ impl Ticket {
 	pub fn Restore(
 		Generation:u64,
 		Resource:impl Into<String>,
-		LeaseId:impl Into<String>,
+		LeaseID:impl Into<String>,
 		Fence:u64,
 		ExpiresAt:Instant,
 		Holder:Seal,
@@ -273,7 +273,7 @@ impl Ticket {
 		Ticket {
 			Generation,
 			Resource:Resource.into(),
-			LeaseId:LeaseId.into(),
+			LeaseID:LeaseID.into(),
 			Fence,
 			ExpiresAt,
 			Seal:Holder,
@@ -287,7 +287,7 @@ impl Ticket {
 	pub fn Resource(&self) -> &str { &self.Resource }
 
 	/// The id of the lease that admitted it.
-	pub fn LeaseId(&self) -> &str { &self.LeaseId }
+	pub fn LeaseID(&self) -> &str { &self.LeaseID }
 
 	/// The fence the resource was at when it was admitted.
 	pub const fn Fence(&self) -> u64 { self.Fence }
@@ -308,7 +308,7 @@ impl fmt::Debug for Ticket {
 			.debug_struct("Ticket")
 			.field("Generation", &self.Generation)
 			.field("Resource", &self.Resource)
-			.field("LeaseId", &self.LeaseId)
+			.field("LeaseID", &self.LeaseID)
 			.field("Fence", &self.Fence)
 			.field("ExpiresAt", &self.ExpiresAt)
 			.field("Seal", &self.Seal)
@@ -432,7 +432,7 @@ pub struct Ambiguous {
 	/// The fence it was admitted under.
 	pub Fence:u64,
 	/// The lease that admitted it.
-	pub LeaseId:String,
+	pub LeaseID:String,
 	/// When the refusal was recorded.
 	pub At:Instant,
 	/// Why it was refused. One sentence, already in the vocabulary of the

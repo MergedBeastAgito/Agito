@@ -22,10 +22,10 @@ use crate::Struct::Question::Question;
 ///
 /// ```json
 /// {
-///   "when": "approaching a turn, speed above the turn pace",
+///   "when": "the queue is backing up, depth above the drain rate",
 ///   "questions": {
 ///     "action": { "type": "choice", "instructions": "What next?",
-///                 "criteria": { "brake": "Brake before the turn" } }
+///                 "criteria": { "hold": "Hold the queue until it drains" } }
 ///   }
 /// }
 /// ```

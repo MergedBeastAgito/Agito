@@ -39,45 +39,45 @@ pub enum CorpusError {
 	/// A file the layout requires is not there.
 	MissingFile {
 		/// The path that was expected and is absent.
-		path:PathBuf,
+		Path:PathBuf,
 	},
 	/// A file is there and could not be read.
 	Io {
 		/// The path that was read.
-		path:PathBuf,
+		Path:PathBuf,
 		/// What the operating system said.
-		source:io::Error,
+		Source:io::Error,
 	},
 	/// A file is there, was read, and is not JSON.
-	MalformedJson {
+	MalformedJSON {
 		/// The path that was read.
-		path:PathBuf,
+		Path:PathBuf,
 		/// Which file of the layout it is, in the corpus's own words ("the
 		/// observation file"), so the sentence says what the reader was
 		/// expecting to find there rather than only where the bytes came from.
-		role:&'static str,
+		Role:&'static str,
 		/// What the parser said, with its line and column.
-		source:serde_json::Error,
+		Source:serde_json::Error,
 	},
 	/// A file is valid JSON but not the shape the corpus layout puts there.
 	///
-	/// Separate from [`CorpusError::MalformedJson`] because the two are read
+	/// Separate from [`CorpusError::MalformedJSON`] because the two are read
 	/// differently: a file that is not JSON is a file to open, while a file that
 	/// holds an array where the layout wants an object is a corpus that was
 	/// written to a different schema.
 	UnexpectedShape {
 		/// The path the shape was found in.
-		path:PathBuf,
+		Path:PathBuf,
 		/// Which part of the file, in the corpus's own words.
-		what:String,
+		What:String,
 		/// What was actually there.
-		found:String,
+		Found:String,
 	},
 	/// No file in the corpus declares a lane.
 	NoLanes {
 		/// Every file the loader searched, in the order it read them, so the
 		/// reader can see where it looked rather than guess.
-		searched:Vec<PathBuf>,
+		Searched:Vec<PathBuf>,
 	},
 	/// Two lane sources declare the same lane.
 	///
@@ -85,31 +85,31 @@ pub enum CorpusError {
 	/// the first, and which one wins would depend on a file name.
 	DuplicateLane {
 		/// The lane declared twice.
-		lane:String,
+		Lane:String,
 		/// The file that declared it first.
-		first:PathBuf,
+		First:PathBuf,
 		/// The file that declared it again.
-		second:PathBuf,
+		Second:PathBuf,
 	},
 	/// A lane names a template no template file declares.
 	UnknownTemplateRef {
 		/// The lane holding the reference.
-		lane:String,
+		Lane:String,
 		/// The template id the lane names.
-		template_id:String,
+		TemplateID:String,
 		/// Every template the corpus does declare, so the refusal says what
 		/// the lane could have named instead of only what it got wrong.
-		available:Vec<String>,
+		Available:Vec<String>,
 	},
 	/// A lane sends a field the observation neither reads nor derives.
 	UnknownFieldRef {
 		/// The lane sending the field.
-		lane:String,
+		Lane:String,
 		/// The field the lane names.
-		field:String,
+		Field:String,
 		/// Every field the observation does carry (read or derived), so the
 		/// reader sees the vocabulary the lane was written against.
-		available:Vec<String>,
+		Available:Vec<String>,
 	},
 	/// A lane states a condition the corpus's vocabulary cannot express.
 	///
@@ -119,43 +119,43 @@ pub enum CorpusError {
 	/// told which lane to open and why its condition was refused.
 	BadCondition {
 		/// The lane whose condition could not be read.
-		lane:String,
+		Lane:String,
 		/// The reader's sentence.
-		message:String,
+		Message:String,
 		/// The reader's evidence - the operator that was named, the keys that
 		/// were not read.
-		detail:String,
+		Detail:String,
 	},
 	/// A lane serves no template, so it has no question to ask.
 	LaneWithoutTemplate {
 		/// The lane that serves nothing.
-		lane:String,
+		Lane:String,
 	},
 	/// A template asks no question.
 	TemplateAsksNothing {
 		/// The template with no question.
-		template:String,
+		Template:String,
 	},
 	/// A question names no type, so nothing can say how to read its answer.
 	QuestionWithoutType {
 		/// The template the question belongs to.
-		template:String,
+		Template:String,
 		/// The question's name inside that template.
-		question:String,
+		Question:String,
 	},
 	/// A choice offers no option, so no answer could be inside its criteria.
 	ChoiceWithoutOption {
 		/// The template the question belongs to.
-		template:String,
+		Template:String,
 		/// The question's name inside that template.
-		question:String,
+		Question:String,
 	},
 	/// A score's scale has fewer than two words, so it has no position to sit at.
 	ScoreWithoutScale {
 		/// The template the question belongs to.
-		template:String,
+		Template:String,
 		/// The question's name inside that template.
-		question:String,
+		Question:String,
 	},
 }
 
@@ -167,10 +167,10 @@ impl CorpusError {
 	/// files there would be a guess.
 	pub fn Path(&self) -> Option<&Path> {
 		match self {
-			CorpusError::MissingFile { path }
-			| CorpusError::Io { path, .. }
-			| CorpusError::MalformedJson { path, .. }
-			| CorpusError::UnexpectedShape { path, .. } => Some(path),
+			CorpusError::MissingFile { Path }
+			| CorpusError::Io { Path, .. }
+			| CorpusError::MalformedJSON { Path, .. }
+			| CorpusError::UnexpectedShape { Path, .. } => Some(Path),
 			_ => None,
 		}
 	}
@@ -195,7 +195,7 @@ impl CorpusError {
 			self,
 			CorpusError::MissingFile { .. }
 				| CorpusError::Io { .. }
-				| CorpusError::MalformedJson { .. }
+				| CorpusError::MalformedJSON { .. }
 				| CorpusError::UnexpectedShape { .. }
 		)
 	}
@@ -203,35 +203,35 @@ impl CorpusError {
 	/// The sentence a human reads, naming the path or the id that was wrong.
 	pub fn Message(&self) -> String {
 		match self {
-			CorpusError::MissingFile { path } => format!("{} is missing", path.display()),
-			CorpusError::Io { path, .. } => format!("{} could not be read", path.display()),
-			CorpusError::MalformedJson { path, role, .. } => format!("{role} {} is not JSON", path.display()),
-			CorpusError::UnexpectedShape { path, what, .. } => {
-				format!("{}: {what} is not the shape the corpus layout puts there", path.display())
+			CorpusError::MissingFile { Path } => format!("{} is missing", Path.display()),
+			CorpusError::Io { Path, .. } => format!("{} could not be read", Path.display()),
+			CorpusError::MalformedJSON { Path, Role, .. } => format!("{Role} {} is not JSON", Path.display()),
+			CorpusError::UnexpectedShape { Path, What, .. } => {
+				format!("{}: {What} is not the shape the corpus layout puts there", Path.display())
 			},
 			CorpusError::NoLanes { .. } => "the corpus declares no lane".to_string(),
-			CorpusError::DuplicateLane { lane, .. } => format!("the lane {lane} is declared twice"),
-			CorpusError::UnknownTemplateRef { lane, template_id, .. } => {
-				format!("lane {lane} names the template {template_id}, which does not exist")
+			CorpusError::DuplicateLane { Lane, .. } => format!("the lane {Lane} is declared twice"),
+			CorpusError::UnknownTemplateRef { Lane, TemplateID, .. } => {
+				format!("lane {Lane} names the template {TemplateID}, which does not exist")
 			},
-			CorpusError::UnknownFieldRef { lane, field, .. } => {
-				format!("lane {lane} sends the field {field}, which the observation does not carry")
+			CorpusError::UnknownFieldRef { Lane, Field, .. } => {
+				format!("lane {Lane} sends the field {Field}, which the observation does not carry")
 			},
-			CorpusError::BadCondition { lane, .. } => {
-				format!("lane {lane} states a condition this crate cannot read")
+			CorpusError::BadCondition { Lane, .. } => {
+				format!("lane {Lane} states a condition this crate cannot read")
 			},
-			CorpusError::LaneWithoutTemplate { lane } => {
-				format!("lane {lane} serves no template, so it has no question to ask")
+			CorpusError::LaneWithoutTemplate { Lane } => {
+				format!("lane {Lane} serves no template, so it has no question to ask")
 			},
-			CorpusError::TemplateAsksNothing { template } => format!("template {template} asks no question"),
-			CorpusError::QuestionWithoutType { template, question } => {
-				format!("the question {template}/{question} names no type")
+			CorpusError::TemplateAsksNothing { Template } => format!("template {Template} asks no question"),
+			CorpusError::QuestionWithoutType { Template, Question } => {
+				format!("the question {Template}/{Question} names no type")
 			},
-			CorpusError::ChoiceWithoutOption { template, question } => {
-				format!("the choice {template}/{question} offers no option")
+			CorpusError::ChoiceWithoutOption { Template, Question } => {
+				format!("the choice {Template}/{Question} offers no option")
 			},
-			CorpusError::ScoreWithoutScale { template, question } => {
-				format!("the score {template}/{question} names no scale: a position needs two words at least")
+			CorpusError::ScoreWithoutScale { Template, Question } => {
+				format!("the score {Template}/{Question} names no scale: a position needs two words at least")
 			},
 		}
 	}
@@ -240,32 +240,32 @@ impl CorpusError {
 	/// the files that were searched, the id that was not found.
 	pub fn Detail(&self) -> String {
 		match self {
-			CorpusError::MissingFile { path } => {
-				format!("the corpus layout requires the file {}", path.display())
+			CorpusError::MissingFile { Path } => {
+				format!("the corpus layout requires the file {}", Path.display())
 			},
-			CorpusError::Io { source, .. } => source.to_string(),
-			CorpusError::MalformedJson { source, .. } => source.to_string(),
-			CorpusError::UnexpectedShape { found, .. } => found.clone(),
-			CorpusError::NoLanes { searched } => Names(searched),
-			CorpusError::DuplicateLane { first, second, .. } => format!("{} and {}", first.display(), second.display()),
-			CorpusError::UnknownTemplateRef { template_id, available, .. } => {
+			CorpusError::Io { Source, .. } => Source.to_string(),
+			CorpusError::MalformedJSON { Source, .. } => Source.to_string(),
+			CorpusError::UnexpectedShape { Found, .. } => Found.clone(),
+			CorpusError::NoLanes { Searched } => Names(Searched),
+			CorpusError::DuplicateLane { First, Second, .. } => format!("{} and {}", First.display(), Second.display()),
+			CorpusError::UnknownTemplateRef { TemplateID, Available, .. } => {
 				format!(
-					"{template_id} is not one of the templates the corpus declares: {}",
-					Listed(available)
+					"{TemplateID} is not one of the templates the corpus declares: {}",
+					Listed(Available)
 				)
 			},
-			CorpusError::UnknownFieldRef { field, available, .. } => {
+			CorpusError::UnknownFieldRef { Field, Available, .. } => {
 				format!(
-					"{field} is not one of the fields the observation carries: {}",
-					Listed(available)
+					"{Field} is not one of the fields the observation carries: {}",
+					Listed(Available)
 				)
 			},
-			CorpusError::BadCondition { message, detail, .. } => format!("{message}: {detail}"),
-			CorpusError::LaneWithoutTemplate { lane } => lane.clone(),
-			CorpusError::TemplateAsksNothing { template } => template.clone(),
-			CorpusError::QuestionWithoutType { template, question }
-			| CorpusError::ChoiceWithoutOption { template, question }
-			| CorpusError::ScoreWithoutScale { template, question } => format!("{template}/{question}"),
+			CorpusError::BadCondition { Message, Detail, .. } => format!("{Message}: {Detail}"),
+			CorpusError::LaneWithoutTemplate { Lane } => Lane.clone(),
+			CorpusError::TemplateAsksNothing { Template } => Template.clone(),
+			CorpusError::QuestionWithoutType { Template, Question }
+			| CorpusError::ChoiceWithoutOption { Template, Question }
+			| CorpusError::ScoreWithoutScale { Template, Question } => format!("{Template}/{Question}"),
 		}
 	}
 }
@@ -278,8 +278,8 @@ impl fmt::Display for CorpusError {
 impl std::error::Error for CorpusError {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			CorpusError::Io { source, .. } => Some(source),
-			CorpusError::MalformedJson { source, .. } => Some(source),
+			CorpusError::Io { Source, .. } => Some(Source),
+			CorpusError::MalformedJSON { Source, .. } => Some(Source),
 			_ => None,
 		}
 	}

@@ -41,8 +41,7 @@
 //! caller decides: a redirect, a file it owns, a sink of its own.
 //!
 //! Nothing here opens a browser, knows a transport, or reads an environment
-//! variable: the page is the composition root's to supply, and the fake in
-//! `Test/` is the proof that the rules hold without one.
+//! variable: the page is the composition root's to supply.
 
 use std::{sync::Arc, time::Duration};
 
@@ -86,7 +85,7 @@ pub type Report = Arc<dyn Fn(&Target, &Error) + Send + Sync>;
 #[derive(Clone, Debug)]
 pub struct Options {
 	/// The page to open: the chat product's URL.
-	pub Url:String,
+	pub URL:String,
 	/// How the page is read.
 	pub Selectors:Selectors,
 	/// How long between two reads of the answer while it is being written.
@@ -98,9 +97,9 @@ pub struct Options {
 impl Options {
 	/// The defaults: the reference product's selectors, a quarter-second
 	/// between reads, and five seconds for a release.
-	pub fn New(Url:impl Into<String>) -> Self {
+	pub fn New(URL:impl Into<String>) -> Self {
 		Self {
-			Url:Url.into(),
+			URL:URL.into(),
 			Selectors:DefaultSelectors(),
 			Poll:DefaultPoll,
 			DisposeBudget:DefaultDisposeBudget,
@@ -203,7 +202,7 @@ impl Driver {
 				"the page was still working when the budget ran out",
 			));
 		}
-		let Work = self.Page.Open(&self.Options.Url, Call.clone());
+		let Work = self.Page.Open(&self.Options.URL, Call.clone());
 		match Bound(Work, Call, self.Pace.as_ref()).await {
 			Ok(Ok(Target)) => Ok(Target),
 			Ok(Err(Failure)) => Err(Error::NotReady("the chat page could not be opened", Failure.Message)),
@@ -245,7 +244,7 @@ impl Driver {
 			let Error = Error::NotReady(
 				format!(
 					"dispose of {} exceeded its {}ms budget",
-					Target.Url,
+					Target.URL,
 					self.Options.DisposeBudget.as_millis()
 				),
 				Why.Name(),
@@ -458,7 +457,7 @@ impl Driver {
 		};
 
 		Ok(Answer {
-			Url:Target.Url.clone(),
+			URL:Target.URL.clone(),
 			Text,
 			Markdown,
 			Trace,

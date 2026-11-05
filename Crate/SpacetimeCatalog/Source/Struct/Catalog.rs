@@ -96,7 +96,7 @@ pub static Tables:[Table; 6] = [
 			},
 			Column {
 				Name:"capabilities",
-				Type:ColumnType::Json,
+				Type:ColumnType::JSON,
 				Key:None,
 				Note:"the capability ids the manifest names, sorted, as a JSON array",
 			},

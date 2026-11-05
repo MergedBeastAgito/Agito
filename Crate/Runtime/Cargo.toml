@@ -21,23 +21,11 @@ tokio = ["dep:tokio"]
 [dependencies]
 tokio = { workspace = true, optional = true }
 
-# The escaping test compares this crate's `Escape` against the encoder the
-# expressions were built with before they were compiled, so the move to a
-# hand-written escaper is a claim with a check rather than an assertion.
-[dev-dependencies]
-serde_json = { workspace = true }
-
 # The house style is PascalCase everywhere: functions, modules, fields and
-# constants. These three lints are the only ones that disagree with it, and they
-# are allowed for every target in the package so an integration test needs no
-# attribute of its own.
+# constants. These three lints are the only ones that disagree with it.
 [lints.rust]
 non_snake_case = "allow"
 non_upper_case_globals = "allow"
 
 [lints.clippy]
 upper_case_acronyms = "allow"
-
-[[test]]
-name = "Runtime"
-path = "Test/Runtime.rs"

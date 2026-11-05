@@ -20,7 +20,7 @@ successful `setFileInputFiles` call is not evidence that the product accepted th
 
 [`determinism.mmd`](determinism.mmd) · [`determinism.svg`](determinism.svg)
 
-`Scripts/Feed.mjs` used to assert exactly this, and it was deleted with the Node toolchain: the
+`Script/Feed.mjs` used to assert exactly this, and it was deleted with the Node toolchain: the
 bundler is local tooling under `.hermes/`, so nothing in the tree holds its determinism now. A feed
 whose batches differ between runs cannot be reviewed - only re-read - and
 `Documentation/Open-Questions.md` records the gate as owed.

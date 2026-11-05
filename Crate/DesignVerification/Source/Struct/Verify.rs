@@ -32,8 +32,7 @@ use crate::{
 /// A `Verify` over one transport.
 ///
 /// Nothing here opens a browser or reads an environment variable: the transport
-/// is the composition root's to supply, and the fake in `Test/` is the proof
-/// that the rules hold without one.
+/// is the composition root's to supply.
 pub struct Verifier {
 	Browse:Arc<dyn Browse>,
 	Pace:Arc<dyn Pace>,

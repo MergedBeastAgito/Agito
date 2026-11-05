@@ -41,17 +41,24 @@ pub enum Verb {
 	},
 	/// Discover, validate and digest a skill corpus. Needs no browser.
 	Skills {
-		/// The corpus root: a directory of skill directories.
-		Root:String,
+		/// The corpus root: a directory of skill directories. Absent, the
+		/// corpus is read beside this crate, then from `AGENTIC_SKILL_PATH`,
+		/// then from the installed location - in that order.
+		Root:Option<String>,
 		/// Print the whole record as JSON instead of a summary.
-		#[arg(long)]
-		Json:bool,
+		// The flag is pinned rather than derived: `long` on a field named
+		// `JSON` would spell `--j-s-o-n`, and the flag is part of the surface
+		// a caller scripts against. A `//` comment rather than a doc comment,
+		// because clap turns a field's docs into the help text and this is a
+		// note to the next reader, not to the caller.
+		#[arg(long = "json")]
+		JSON:bool,
 	},
 	/// Open a page and evaluate one expression in it.
 	Browse {
 		/// The page to open. With `--bind` it is only a fallback.
-		#[arg(long)]
-		Url:String,
+		#[arg(long = "url")]
+		URL:String,
 		/// The expression to evaluate.
 		#[arg(long, default_value = "1 + 1")]
 		Expression:String,
@@ -69,8 +76,8 @@ pub enum Verb {
 	/// Ask a chat product one question and print the answer once it settles.
 	Chat {
 		/// The chat product's URL. With `--bind` it is only a fallback.
-		#[arg(long)]
-		Url:String,
+		#[arg(long = "url")]
+		URL:String,
 		/// The model the answer must come from, as the page labels it.
 		#[arg(long)]
 		Model:String,
@@ -131,8 +138,8 @@ pub enum Verb {
 	/// Measure a page's named elements and print what was read.
 	Design {
 		/// The page to measure.
-		#[arg(long)]
-		Url:String,
+		#[arg(long = "url")]
+		URL:String,
 		/// A selector to measure. Repeat for each one.
 		#[arg(long = "selector", required = true)]
 		Selectors:Vec<String>,

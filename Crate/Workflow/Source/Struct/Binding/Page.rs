@@ -71,16 +71,16 @@ fn Classify(Why:BrowserError) -> Failure {
 }
 
 impl ChatPage for Page {
-	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
+	fn Open<'a>(&'a self, URL:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
 		Box::pin(async move {
 			let Options = match (&self.Attach, &self.Bind) {
 				(Some(Endpoint), Some(Key)) => OpenOptions::Existing(Endpoint.clone(), Key.clone(), Call),
 				(Some(Endpoint), None) => OpenOptions::Attach(Endpoint.clone(), Call),
 				(None, _) => OpenOptions::Launch(Call),
 			};
-			let Target = self.Browse.Open(Url, Options).await.map_err(Classify)?;
-			self.Lock().insert(Target.Url.clone(), Target.clone());
-			Ok(Target { Url:Target.Url })
+			let Target = self.Browse.Open(URL, Options).await.map_err(Classify)?;
+			self.Lock().insert(Target.URL.clone(), Target.clone());
+			Ok(Target { URL:Target.URL })
 		})
 	}
 
@@ -91,7 +91,7 @@ impl ChatPage for Page {
 		Call:Call,
 	) -> FutureBox<'a, Result<Value, Failure>> {
 		Box::pin(async move {
-			let Held = self.Lock().get(&Target.Url).cloned();
+			let Held = self.Lock().get(&Target.URL).cloned();
 			let Some(Held) = Held else {
 				return Err(Failure::Of("this binding holds no browser target for the page"));
 			};
@@ -101,7 +101,7 @@ impl ChatPage for Page {
 
 	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()> {
 		Box::pin(async move {
-			let Held = self.Lock().remove(&Target.Url);
+			let Held = self.Lock().remove(&Target.URL);
 			if let Some(Held) = Held {
 				self.Browse.Dispose(Held).await;
 			}

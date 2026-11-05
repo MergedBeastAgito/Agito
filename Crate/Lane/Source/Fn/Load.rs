@@ -192,8 +192,8 @@ pub fn Read(Observation:&str, Questions:&str) -> Result<Corpus, CorpusError> {
 
 /// The one assembly: two named texts, plus whatever further lane files exist.
 fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corpus, CorpusError> {
-	let Observed = Json(&Observation)?;
-	let Asked = Json(&Questions)?;
+	let Observed = JSON(&Observation)?;
+	let Asked = JSON(&Questions)?;
 
 	let Fields:BTreeMap<String, Value> = Object(Observed.get("state"), &Observation.Path, "the observation's state")?
 		.iter()
@@ -223,7 +223,7 @@ fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corp
 		Sources.push((&Questions.Path, Asked.clone()));
 	}
 	for One in &Extra {
-		let Parsed = Json(One)?;
+		let Parsed = JSON(One)?;
 		Searched.push(One.Path.clone());
 		if Parsed.get("lanes").is_some() {
 			Sources.push((&One.Path, Parsed));
@@ -240,9 +240,9 @@ fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corp
 		for (Name, One) in Declared {
 			if let Some(First) = Origin.get(Name) {
 				return Err(CorpusError::DuplicateLane {
-					lane:Name.clone(),
-					first:First.clone(),
-					second:Source.clone(),
+					Lane:Name.clone(),
+					First:First.clone(),
+					Second:Source.clone(),
 				});
 			}
 			Origin.insert(Name.clone(), Source.clone());
@@ -251,7 +251,7 @@ fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corp
 		}
 	}
 	if Lanes.is_empty() {
-		return Err(CorpusError::NoLanes { searched:Searched });
+		return Err(CorpusError::NoLanes { Searched });
 	}
 
 	Ok(Corpus {
@@ -290,17 +290,17 @@ fn Candidates(Directory:&Path) -> Result<Vec<PathBuf>, CorpusError> {
 }
 
 /// One named text as JSON.
-fn Json(Source:&Named) -> Result<Value, CorpusError> {
+fn JSON(Source:&Named) -> Result<Value, CorpusError> {
 	serde_json::from_str(&Source.Text)
-		.map_err(|Why| CorpusError::MalformedJson { path:Source.Path.clone(), role:Source.Role, source:Why })
+		.map_err(|Why| CorpusError::MalformedJSON { Path:Source.Path.clone(), Role:Source.Role, Source:Why })
 }
 
 /// An operating-system refusal, with a missing path kept apart from the rest.
 fn Problem(Path:&Path, Why:io::Error) -> CorpusError {
 	if Why.kind() == io::ErrorKind::NotFound {
-		CorpusError::MissingFile { path:Path.to_path_buf() }
+		CorpusError::MissingFile { Path:Path.to_path_buf() }
 	} else {
-		CorpusError::Io { path:Path.to_path_buf(), source:Why }
+		CorpusError::Io { Path:Path.to_path_buf(), Source:Why }
 	}
 }
 
@@ -332,22 +332,22 @@ fn ReadLane(
 		// to send what the question reads, and `verdict` is what it reads.
 		if !Fields.contains_key(Field) && !Derived.contains_key(Field) {
 			return Err(CorpusError::UnknownFieldRef {
-				lane:Name.to_string(),
-				field:Field.clone(),
-				available:Available(Fields, Derived),
+				Lane:Name.to_string(),
+				Field:Field.clone(),
+				Available:Available(Fields, Derived),
 			});
 		}
 	}
 	let Served = Strings(Body.get("templates"), Source, &format!("lane {Name}'s templates"))?;
 	if Served.is_empty() {
-		return Err(CorpusError::LaneWithoutTemplate { lane:Name.to_string() });
+		return Err(CorpusError::LaneWithoutTemplate { Lane:Name.to_string() });
 	}
 	for One in &Served {
 		if !Templates.contains_key(One) {
 			return Err(CorpusError::UnknownTemplateRef {
-				lane:Name.to_string(),
-				template_id:One.clone(),
-				available:Templates.keys().cloned().collect(),
+				Lane:Name.to_string(),
+				TemplateID:One.clone(),
+				Available:Templates.keys().cloned().collect(),
 			});
 		}
 	}
@@ -395,17 +395,17 @@ fn ReadSelect(
 ) -> Result<Predicate, CorpusError> {
 	let Condition:Predicate = serde_json::from_value(Declared.clone()).map_err(|Why| {
 		CorpusError::BadCondition {
-			lane:Lane.to_string(),
-			message:"the condition is not one this crate reads".to_string(),
-			detail:format!("{}: {Why}", Source.display()),
+			Lane:Lane.to_string(),
+			Message:"the condition is not one this crate reads".to_string(),
+			Detail:format!("{}: {Why}", Source.display()),
 		}
 	})?;
 	for Field in Condition.Fields() {
 		if !Fields.contains_key(Field) && !Derived.contains_key(Field) {
 			return Err(CorpusError::UnknownFieldRef {
-				lane:Lane.to_string(),
-				field:Field.to_string(),
-				available:Available(Fields, Derived),
+				Lane:Lane.to_string(),
+				Field:Field.to_string(),
+				Available:Available(Fields, Derived),
 			});
 		}
 	}
@@ -419,7 +419,7 @@ fn ReadSelect(
 fn ReadTemplate(Name:&str, Body:&Value, Source:&Path) -> Result<Template, CorpusError> {
 	let Declared = Object(Body.get("questions"), Source, &format!("template {Name}'s questions"))?;
 	if Declared.is_empty() {
-		return Err(CorpusError::TemplateAsksNothing { template:Name.to_string() });
+		return Err(CorpusError::TemplateAsksNothing { Template:Name.to_string() });
 	}
 	let mut Questions = BTreeMap::new();
 	for (Question, One) in Declared {
@@ -433,7 +433,7 @@ fn ReadQuestion(Template:&str, Name:&str, Body:&Value, Source:&Path) -> Result<Q
 	let Type = Body
 		.get("type")
 		.and_then(Value::as_str)
-		.ok_or_else(|| CorpusError::QuestionWithoutType { template:Template.to_string(), question:Name.to_string() })?;
+		.ok_or_else(|| CorpusError::QuestionWithoutType { Template:Template.to_string(), Question:Name.to_string() })?;
 	let Instructions = Line(Body, "instructions");
 	match Type {
 		"choice" => {
@@ -444,8 +444,8 @@ fn ReadQuestion(Template:&str, Name:&str, Body:&Value, Source:&Path) -> Result<Q
 			}
 			if Criteria.is_empty() {
 				return Err(CorpusError::ChoiceWithoutOption {
-					template:Template.to_string(),
-					question:Name.to_string(),
+					Template:Template.to_string(),
+					Question:Name.to_string(),
 				});
 			}
 			Ok(Question::Choice { Instructions, Criteria })
@@ -454,8 +454,8 @@ fn ReadQuestion(Template:&str, Name:&str, Body:&Value, Source:&Path) -> Result<Q
 			let Criteria = Strings(Body.get("criteria"), Source, &format!("{Template}/{Name}'s criteria"))?;
 			if Criteria.len() < 2 {
 				return Err(CorpusError::ScoreWithoutScale {
-					template:Template.to_string(),
-					question:Name.to_string(),
+					Template:Template.to_string(),
+					Question:Name.to_string(),
 				});
 			}
 			Ok(Question::Score { Instructions, Criteria })
@@ -468,9 +468,9 @@ fn ReadQuestion(Template:&str, Name:&str, Body:&Value, Source:&Path) -> Result<Q
 fn Object<'a>(Value:Option<&'a Value>, Path:&Path, What:&str) -> Result<&'a Map<String, Value>, CorpusError> {
 	Value.and_then(Value::as_object).ok_or_else(|| {
 		CorpusError::UnexpectedShape {
-			path:Path.to_path_buf(),
-			what:What.to_string(),
-			found:Value.map(Kind).unwrap_or("missing").to_string(),
+			Path:Path.to_path_buf(),
+			What:What.to_string(),
+			Found:Value.map(Kind).unwrap_or("missing").to_string(),
 		}
 	})
 }
@@ -486,9 +486,9 @@ fn Strings(Value:Option<&Value>, Path:&Path, What:&str) -> Result<Vec<String>, C
 	};
 	let Some(Items) = Value.as_array() else {
 		return Err(CorpusError::UnexpectedShape {
-			path:Path.to_path_buf(),
-			what:What.to_string(),
-			found:Kind(Value).to_string(),
+			Path:Path.to_path_buf(),
+			What:What.to_string(),
+			Found:Kind(Value).to_string(),
 		});
 	};
 	Items
@@ -496,9 +496,9 @@ fn Strings(Value:Option<&Value>, Path:&Path, What:&str) -> Result<Vec<String>, C
 		.map(|Item| {
 			Item.as_str().map(str::to_string).ok_or_else(|| {
 				CorpusError::UnexpectedShape {
-					path:Path.to_path_buf(),
-					what:format!("an entry of {What}"),
-					found:Item.to_string(),
+					Path:Path.to_path_buf(),
+					What:format!("an entry of {What}"),
+					Found:Item.to_string(),
 				}
 			})
 		})

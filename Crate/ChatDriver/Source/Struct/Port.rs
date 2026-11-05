@@ -44,7 +44,7 @@ pub struct Step {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Source {
 	/// Where the citation points.
-	pub Url:String,
+	pub URL:String,
 	/// How the page labels the citation.
 	pub Label:String,
 }
@@ -97,7 +97,7 @@ pub struct Answer {
 	/// The page's own, not the one the caller asked for. A caller that binds a
 	/// tab supplies a URL as a fallback only, and a note filed under that
 	/// fallback would name a thread the answer did not come from.
-	pub Url:String,
+	pub URL:String,
 	/// The answer's text, read once the page stopped changing it.
 	pub Text:String,
 	/// The same answer read the other way, from the same snapshot.
@@ -125,12 +125,12 @@ pub struct Answer {
 ///
 /// The driver passes it back to the `Page` that issued it and never reads it,
 /// so a provider may hang whatever it needs there - a target id, a session, a
-/// socket. `Url` is the one field the port keeps, because a failure report that
+/// socket. `URL` is the one field the port keeps, because a failure report that
 /// cannot say which page failed is not a report.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Target {
 	/// The page this session is bound to.
-	pub Url:String,
+	pub URL:String,
 }
 
 /// What a page operation reports when it fails.
@@ -169,8 +169,8 @@ impl Failure {
 ///   and a caller that already has its answer must not lose it to a failing
 ///   cleanup.
 pub trait Page: Send + Sync {
-	/// Open the page at `Url`.
-	fn Open<'a>(&'a self, Url:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>>;
+	/// Open the page at `URL`.
+	fn Open<'a>(&'a self, URL:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>>;
 	/// Evaluate one expression in the page and return its value.
 	fn Evaluate<'a>(
 		&'a self,

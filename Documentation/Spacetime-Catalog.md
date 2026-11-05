@@ -254,13 +254,14 @@ unchanged, and the tests that prove them travel with them.
   secret the rules are never given is not merely filtered from a reader, it never enters the
   database.
 
-## What proves it
+## What proved it
 
-`Crate/SpacetimeCatalog/` is the executable statement, and it carries the TypeScript package's cases
-rather than a summary of them.
+`Crate/SpacetimeCatalog/` is the executable statement, and its suite carried the TypeScript
+package's cases rather than a summary of them. The suite is deleted with the rest of the
+verification layer; the list below is the record of what it held.
 
 ```
-cargo test -p agentic-spacetime-catalog
+cargo test -p agentic-spacetime-catalog     # deleted
 ```
 
 Thirty-four cases, in four files:
@@ -276,18 +277,21 @@ Thirty-four cases, in four files:
   handover rule: an effect refused where it lands is recorded ambiguous and its resource
   quarantined, a caller that reproduces every number is still not the holder, a superseded fence is
   refused without an ambiguity, a released lease is an ambiguity, and a live one is a record.
-- **`Source/Fn/Json.rs`** - two cases proving the writer that renders `generation.capabilities` and
+- **`Source/Fn/JSON.rs`** - two cases proving the writer that renders `generation.capabilities` and
   a trace's `payload` escapes what JSON requires, because the crate takes no serialiser.
 
-What each invariant is proved by is named in its section above. Three further gates hold it:
+What each invariant was proved by is named in its section above. Three further gates held it, and
+one of them still runs:
 
-- `cargo test --workspace` counts these cases with the rest of the tree, and
-  `Crate/Agentic/Test/Composition.rs` holds the manifest to the crate's code vocabulary.
+- `cargo test --workspace` counted these cases with the rest of the tree, and
+  `Crate/Agentic/Test/Composition.rs` held the manifest to the crate's code vocabulary - both
+  deleted.
 - `agentic verify --module @agentic/spacetime-catalog` reports ready: the manifest's
   `provides.errors` is `admission-refused`, `lease-held` and `budget-exhausted`, which is exactly
-  `Code` in `Source/Struct/Code.rs`.
-- `Crate/Agentic/Test/Boundaries.rs` keeps the arrow: the crate is a capability, it imports nothing,
-  and only the composition root imports it.
+  `Code` in `Source/Struct/Code.rs`. This one is a command, not a test, and it still runs.
+- `Crate/Agentic/Test/Boundaries.rs` kept the arrow - the crate is a capability, it imports nothing,
+  and only the composition root imports it - and is deleted;
+  `cargo tree -p agentic-spacetime-catalog --depth 1` shows the same graph.
 
 The mirror with the runtime is the one correspondence the old suite wrote down.
 `Crate/Runtime/Source/Struct/StandIn.rs` maps `record`'s checks column for column - the latest

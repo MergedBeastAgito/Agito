@@ -56,9 +56,8 @@
 //!   which nothing in this tree may name. `agentic.lane.decide` leaves its round
 //!   trip through a `Poster` the caller supplies, and `agentic.catalog.rules` is
 //!   the model a manifest is checked against rather than a call a consumer
-//!   makes. `Crate/Sdk/Test/Facade.rs` holds the set to exactly these six, so
-//!   widening it is an edit to that test rather than a line that arrives with
-//!   the next crate.
+//!   makes. The set is exactly these six, and widening it is an edit to this
+//!   file rather than a line that arrives with the next crate.
 //!
 //! # Six ports, five `Error` types, one at the root
 //!
@@ -78,7 +77,7 @@
 //! it comes from this crate:
 //!
 //! ```text
-//! use agentic_sdk::{Browse, Call, Chrome, ChromeOptions, Create, Never, OpenOptions, Options, Tokio};
+//! use AgenticSDK::{Browse, Call, Chrome, ChromeOptions, Create, Never, OpenOptions, Options, Tokio};
 //!
 //! let Bounded = Call::Within(Duration::from_secs(30), &Tokio, Arc::new(Never));
 //! let Session = Create(
@@ -86,7 +85,7 @@
 //!     Arc::new(Tokio),
 //!     Options::default(),
 //! );
-//! let Target = Session.Open(Url, OpenOptions::Launch(Bounded.clone())).await?;
+//! let Target = Session.Open(URL, OpenOptions::Launch(Bounded.clone())).await?;
 //! let Value = Session.Evaluate(&Target, "document.title", Bounded).await?;
 //! Session.Dispose(Target).await;
 //! ```

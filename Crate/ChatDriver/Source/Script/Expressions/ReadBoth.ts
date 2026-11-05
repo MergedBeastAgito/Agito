@@ -21,12 +21,11 @@
  * would make every read of a thread look new to a driver correlating on text.
  *
  * This is a file of its own rather than a third parameter of `ReadAnswers.ts`
- * for one reason: `Test/Fixture/Expression.json` pins the JavaScript the two
- * single-format expressions send, byte for byte, and an expression that gained
- * a field would not be the expression a page already received. What must not
- * happen is the two files drifting, so a test in `Fn/Expressions.rs` compares
- * them from the first line of the thread read to the object each one returns:
- * the only difference it allows is the object itself.
+ * for one reason: the two single-format expressions are what a page already
+ * receives, and an expression that gained a field would not be that expression.
+ * What must not happen is the two files drifting, so the thread read below is
+ * the same text `ReadAnswers.ts` carries, from its first line to the object
+ * each one returns: the only difference is the object itself.
  */
 declare const __PARAM_Serialise__: (Root: Element | null) => string;
 declare const __PARAM_Scroll__: string;

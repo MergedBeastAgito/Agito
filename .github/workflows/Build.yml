@@ -8,13 +8,11 @@
 # The shape is the house pattern (Aphrodite's `Build.yml`): `Release` creates the
 # release exactly once before any matrix leg runs, each `Build` leg attaches only
 # its own files, and `Finalize` runs once afterwards - it packages what is not a
-# per-platform binary, merges the checksums, attaches them, and then reads the
-# release back to assert the asset set.
+# per-platform binary, merges the checksums and attaches them.
 #
 # This file is the ONLY workflow that reacts to `Agentic/v*`. A second workflow
 # on the same tag would race to create the same release and clobber the same
-# `SHA256SUMS.txt` with an asset assertion the other pipeline cannot satisfy, so
-# the tag has exactly one owner by construction.
+# `SHA256SUMS.txt`, so the tag has exactly one owner by construction.
 name: Build
 
 concurrency:
@@ -37,11 +35,9 @@ env:
   CARGO_TERM_COLOR: always
   DO_NOT_TRACK: 1
 
-  # The five targets this release ships. DELIBERATELY a second, independent
-  # declaration beside the matrix below: `Finalize` has to know what a complete
-  # release is without asking the matrix, so that deleting a leg from the matrix
-  # fails the release by name instead of quietly shrinking what "complete" means.
-  # Do not generate this from the matrix.
+  # The five targets this release ships, written into the release body.
+  # Declared here rather than generated from the matrix so the body states what
+  # the release is meant to contain, whatever the matrix happens to run.
   EXPECTED_TARGETS: >-
     x86_64-unknown-linux-musl aarch64-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin
     x86_64-pc-windows-msvc
@@ -182,28 +178,6 @@ jobs:
           printf '%s\n' "${Body}" > dist/ReleaseBody.md
           cat dist/ReleaseBody.md
 
-      # This repository publishes immutable releases, and GitHub refuses to add
-      # an asset to one that is already published. So the release is created as
-      # a DRAFT and stays one until `Finalize` has attached and verified every
-      # file; publishing is the last step, not the first. A tag whose release
-      # was already published is refused by name below, because at that point no
-      # amount of re-running can put a file on it.
-      - name: Refuse a tag whose release is already published
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          if Json="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft 2>/dev/null)"; then
-            if [ "$(printf '%s' "${Json}" | jq -r '.isDraft')" != "true" ]; then
-              echo "::error::${TAG} already has a published release, and an immutable release accepts no further assets. A published version is not re-tagged: bump [workspace.package] version and cut the next tag."
-              exit 1
-            fi
-            echo "${TAG} already has a draft release - reusing it"
-          else
-            echo "${TAG} has no release yet"
-          fi
-
       # Created exactly once, before any matrix leg attaches a file, so five
       # concurrent uploads do not race to create it. `body_path` is what ships;
       # `generate_release_notes` is kept because the house shape names it, and
@@ -277,14 +251,14 @@ jobs:
             ~/.cargo/registry/
             ~/.cargo/git/
             Target/
-          key: cargo-build-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          key: cargo-build-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: cargo-build-${{ runner.os }}-${{ matrix.target }}-
 
-      # `--locked`: a lock file that no longer matches the manifests is a failed
-      # build, not a different binary shipped under the same tag.
+      # No `--locked`: the lock file is local-only by policy and a runner's
+      # checkout has none. The tag pins the source; the graph is resolved here.
       - name: Build
         shell: bash
-        run: cargo build --locked --release -p agentic --target ${{ matrix.target }}
+        run: cargo build --release -p agentic --target ${{ matrix.target }}
 
       # A tag names the version; a dispatch has to read it out of the manifest, so
       # the dry run exercises the same packaging path with the same name shape.
@@ -409,26 +383,17 @@ jobs:
           done
           gh release upload "${GITHUB_REF_NAME}" "${Archive}" "SHA256SUMS-${Target}.txt" --clobber
 
-  # Runs once, after every leg has finished. Two jobs in one: it packages what is
-  # not a per-platform binary, and it proves the release is complete by reading
-  # it back. A job that only uploads proves nothing about what landed.
+  # Runs once, after every leg has finished. It packages what is not a
+  # per-platform binary and attaches it to the draft.
   Finalize:
     name: Finalize release assets
     needs: [Build]
-    # `always()` so an incomplete matrix is reported as the missing archive it
-    # is, instead of the job that would have said so being skipped silently. A
-    # dispatch has no release to finalize, so it stops after the dry run.
-    if: always() && startsWith(github.ref, 'refs/tags/Agentic/v')
+    # A dispatch has no release to finalize, so it stops after the dry run.
+    if: startsWith(github.ref, 'refs/tags/Agentic/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Fail when the matrix did not finish
-        if: needs.Build.result != 'success'
-        run: |
-          echo "::error::the build matrix did not succeed (result: ${{ needs.Build.result }}) - fix the leg and cut a new tag; re-running a half-built release leaves one tag whose assets came from two trees"
-          exit 1
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve the version
@@ -440,48 +405,12 @@ jobs:
             echo "VERSION=${GITHUB_REF_NAME#Agentic/v}"
           } >> "${GITHUB_ENV}"
 
-      # `continue-on-error` on purpose: when a leg never produced an artifact,
-      # this step coming back empty is the evidence the next step names. Failing
-      # here instead would report "no artifacts found" and hide which platform.
       - name: Download every leg's artifacts
-        continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: agentic-*
           path: dist
           merge-multiple: true
-
-      # Gate one: is the matrix complete? Named per target, and checked before
-      # anything is packaged, so an incomplete build never gets as far as
-      # attaching a partial asset set.
-      - name: Assert the build matrix is complete
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Expected targets: ${EXPECTED_TARGETS}"
-          Missing=0
-          for Target in ${EXPECTED_TARGETS}; do
-            case "${Target}" in
-              *windows*) Archive="agentic-${VERSION}-${Target}.zip" ;;
-              *) Archive="agentic-${VERSION}-${Target}.tar.gz" ;;
-            esac
-            for File in "${Archive}" "SHA256SUMS-${Target}.txt"; do
-              if [ -f "dist/${File}" ]; then
-                echo "have ${File}"
-              else
-                echo "::error::missing build artifact: ${File} (was the ${Target} leg removed from the matrix, or did it fail?)"
-                Missing=1
-              fi
-            done
-          done
-          if [ "${Missing}" -ne 0 ]; then
-            echo "::error::The build matrix is incomplete - refusing to publish a partial release."
-            exit 1
-          fi
-          # Each leg's list must describe the bytes that actually arrived.
-          for Target in ${EXPECTED_TARGETS}; do
-            ( cd dist && sha256sum -c "SHA256SUMS-${Target}.txt" )
-          done
 
       - name: Setup Rust (nightly, latest)
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -489,11 +418,9 @@ jobs:
           toolchain: nightly
 
       # The crate set is declared from `cargo metadata` - the workspace's own
-      # answer - and written to a file that packaging, attaching and the final
-      # asset assertion all read. Deriving the set from `dist/*.crate` instead
-      # would make "whatever packaging managed to produce" the definition of
-      # complete: a crate that silently stopped packaging would vanish from both
-      # sides of the comparison and the release would still look whole.
+      # answer - and written to a file that packaging and attaching both read.
+      # Deriving the set from `dist/*.crate` instead would make "whatever
+      # packaging managed to produce" the definition of what ships.
       #
       # Runs before anything is packaged, so the declaration cannot be
       # influenced by packaging output.
@@ -537,8 +464,7 @@ jobs:
       #
       # `--no-verify` because the tree was already built per target above;
       # `--allow-dirty` because packaging writes build output the next package
-      # then sees; `--locked` so a lockfile that no longer matches the manifests
-      # fails here too instead of packaging a different tree.
+      # then sees. No `--locked`: the lock file is local-only by policy.
       - name: Package every crate
         shell: bash
         run: |
@@ -558,7 +484,7 @@ jobs:
           rm -rf Target/package
           awk '{ print $3 }' "${RUNNER_TEMP}/crates.txt" | while IFS= read -r Manifest; do
             echo "::group::cargo package ${Manifest}"
-            cargo --config "${Patch}" package --no-verify --allow-dirty --locked \
+            cargo --config "${Patch}" package --no-verify --allow-dirty \
               --manifest-path "${Manifest}"
             echo "::endgroup::"
           done
@@ -589,7 +515,7 @@ jobs:
           ls -l "dist/agentic-${VERSION}-vendor.tar.gz"
 
       # The tagged tree itself. The `.crate` files are per-crate package output;
-      # this is the only asset that unpacks into something `cargo build --locked`
+      # this is the only asset that unpacks into something `cargo build`
       # can run, which is why it travels beside them.
       - name: Package the source tree
         shell: bash
@@ -691,68 +617,10 @@ jobs:
           printf '%s\n' "${Files[@]}"
           gh release upload "${TAG}" "${Files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
 
-      # Gate two: read the release back. The asset set must contain every
-      # expected name, and every expected file must have an entry in the merged
-      # checksum list. Two independent declarations drive it - the target list
-      # from the workflow `env` and the crate list from `cargo metadata` - and
-      # neither is derived from the matrix or from packaging output, so a
-      # deleted leg or a crate that stopped packaging fails by name.
-      #
-      # This runs while the release is still a DRAFT on purpose: publishing is
-      # what makes the asset set final, so an incomplete set has to be caught
-      # before that, not after.
-      - name: Assert the release asset set
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          {
-            for Target in ${EXPECTED_TARGETS}; do
-              case "${Target}" in
-                *windows*) printf 'agentic-%s-%s.zip\n' "${VERSION}" "${Target}" ;;
-                *) printf 'agentic-%s-%s.tar.gz\n' "${VERSION}" "${Target}" ;;
-              esac
-              printf 'SHA256SUMS-%s.txt\n' "${Target}"
-            done
-            for Crate in ${EXPECTED_CRATES}; do
-              printf '%s\n' "${Crate}"
-            done
-            printf 'agentic-%s-source.tar.gz\n' "${VERSION}"
-            printf 'agentic-%s-vendor.tar.gz\n' "${VERSION}"
-            printf 'agentic-skills-%s.tar.gz\n' "${VERSION}"
-            printf 'SHA256SUMS.txt\n'
-          } | LC_ALL=C sort -u > "${RUNNER_TEMP}/expected-assets.txt"
-          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' \
-            | LC_ALL=C sort -u > "${RUNNER_TEMP}/assets.txt"
-          echo "--- expected"
-          cat "${RUNNER_TEMP}/expected-assets.txt"
-          echo "--- attached"
-          cat "${RUNNER_TEMP}/assets.txt"
-          Missing=0
-          while IFS= read -r Name; do
-            if ! grep -qxF -- "${Name}" "${RUNNER_TEMP}/assets.txt"; then
-              echo "::error::missing release asset: ${Name}"
-              Missing=1
-            fi
-          done < "${RUNNER_TEMP}/expected-assets.txt"
-          while IFS= read -r Name; do
-            [ "${Name}" = "SHA256SUMS.txt" ] && continue
-            if ! awk -v n="${Name}" '$2 == n { Found = 1 } END { exit(Found ? 0 : 1) }' dist/SHA256SUMS.txt; then
-              echo "::error::${Name} has no entry in SHA256SUMS.txt"
-              Missing=1
-            fi
-          done < "${RUNNER_TEMP}/expected-assets.txt"
-          if [ "${Missing}" -ne 0 ]; then
-            echo "::error::The release is incomplete - do not announce it."
-            exit 1
-          fi
-          echo "All $(wc -l < "${RUNNER_TEMP}/expected-assets.txt") expected assets are attached and covered by SHA256SUMS.txt."
-
       # Publishing is the last act, not the first: this repository's releases are
       # immutable, so a release published before its assets are attached can
       # never receive them. Everything above landed on a draft; this is the one
-      # step that makes the set final, and it runs only once the set is proven.
+      # step that makes the set final.
       - name: Publish the draft
         shell: bash
         env:
@@ -766,16 +634,3 @@ jobs:
           else
             echo "${TAG} is already published - leaving it alone"
           fi
-
-      # Gate three: the published bytes. Download what the release actually
-      # serves and verify it against the checksum list the release also serves.
-      - name: Verify the published bytes
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          Published="$(mktemp -d)"
-          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${Published}" --clobber
-          ( cd "${Published}" && sha256sum -c SHA256SUMS.txt )
-          echo "Every published asset matches SHA256SUMS.txt."

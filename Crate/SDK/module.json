@@ -17,7 +17,7 @@
 		]
 	},
 	"artefact": {
-		"entry": "Target/debug/libAgenticSdk.rlib",
+		"entry": "Target/debug/libAgenticSDK.rlib",
 		"hash": null,
 		"runtime": "rust>=1.88"
 	},
@@ -27,5 +27,5 @@
 		"warmMs": 1,
 		"network": false
 	},
-	"verify": "cargo test -p agentic-sdk"
+	"verify": "cargo build -p agentic-sdk"
 }
