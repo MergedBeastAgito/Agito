@@ -37,9 +37,9 @@ constructor, and a clone carries that instant. A run that builds one `Call` and 
 therefore has a run-length budget wearing a per-tick name.
 
 **The failure it produces is a lie.** Once the single deadline passes, every later call is already
-expired, and the error arrives in the provider's vocabulary - `timeout: evaluate exceeded its
-deadline`, "the page never answered" - against a page that answered in a millisecond. The reported
-subject is the page; the real subject is the caller's arithmetic.
+expired, and the error arrives in the provider's vocabulary -
+`timeout: evaluate exceeded its deadline`, "the page never answered" - against a page that answered
+in a millisecond. The reported subject is the page; the real subject is the caller's arithmetic.
 
 The three signs that separate this from a slow page:
 
@@ -103,7 +103,7 @@ std::panic::set_hook(Box::new(|Info| eprintln!("panic: {Info}")));
 
 ## What this is not
 
-- **Not a timeout policy.** The span's value is a separate decision. This skill is about *when* the
+- **Not a timeout policy.** The span's value is a separate decision. This skill is about _when_ the
   value is computed.
 - **Not a retry strategy.** A per-operation deadline makes retries meaningful; it does not add them.
 - **Not a claim that every expired call is the caller's fault.** A page that is genuinely busy
@@ -113,9 +113,9 @@ std::panic::set_hook(Box::new(|Info| eprintln!("panic: {Info}")));
 
 ## Claim → test
 
-| claim | how it is checked |
-| --- | --- |
-| a `Call` fixes its deadline at construction | `Call::Within` body: `Deadline: Clock.Now() + Span` |
-| a reused `Call` reports the provider's timeout word | run a loop past the span; the error names the provider's phase, not the caller's |
-| a second client proves the page alive | two CDP clients: latency of the second while the first hangs |
-| a dead handler is silent | the transport's closed flag is set only by the handler task; check it before a call |
+| claim                                               | how it is checked                                                                   |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| a `Call` fixes its deadline at construction         | `Call::Within` body: `Deadline: Clock.Now() + Span`                                 |
+| a reused `Call` reports the provider's timeout word | run a loop past the span; the error names the provider's phase, not the caller's    |
+| a second client proves the page alive               | two CDP clients: latency of the second while the first hangs                        |
+| a dead handler is silent                            | the transport's closed flag is set only by the handler task; check it before a call |

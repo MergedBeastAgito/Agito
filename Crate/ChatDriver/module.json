@@ -4,7 +4,10 @@
 	"version": "0.1.3",
 	"provides": {
 		"port": "agentic.chat.ask",
-		"errors": ["not-ready", "wrong-mode", "wrong-model", "truncated"]
+		"errors": ["not-ready", "wrong-mode", "wrong-model", "truncated"],
+		"verbs": {
+			"agentic.chat.note": { "errors": [] }
+		}
 	},
 	"requires": {
 		"ports": ["agentic.browse"]

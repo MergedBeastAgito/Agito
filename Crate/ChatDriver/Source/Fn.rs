@@ -8,4 +8,5 @@
 //! to make `ask` fail outside the vocabulary the manifest declares.
 
 pub mod Expressions;
+pub mod Note;
 pub mod Read;

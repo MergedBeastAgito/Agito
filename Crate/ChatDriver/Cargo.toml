@@ -36,5 +36,9 @@ name = "Chat"
 path = "Test/Chat.rs"
 
 [[test]]
+name = "Note"
+path = "Test/Note.rs"
+
+[[test]]
 name = "Parity"
 path = "Test/Parity.rs"

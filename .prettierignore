@@ -17,6 +17,12 @@
 # tautological.
 Crate/*/Source/Script/
 
+# The same argument for the note baseline: `Capture.md` is what a page said and
+# `Note.md` is the exact bytes the renderer is compared against, so a formatter
+# that rewrapped a paragraph would change the thing under test rather than tidy
+# it. A capture is evidence; evidence is not reformatted.
+Crate/*/Test/Fixture/*.md
+
 # TOML has its own layout rules and rustfmt/prettier disagree about arrays.
 *.toml
 

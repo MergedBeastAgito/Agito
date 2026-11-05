@@ -1,6 +1,15 @@
 //! `agentic.chat.ask`: ask a chat product one question, and return the answer
 //! once the page has stopped changing it.
 //!
+//! `agentic.chat.note`: turn a capture of that answer into the document a
+//! reader opens. It is declared as a second verb beside `agentic.chat.ask`
+//! rather than as a fifth error on it, because it needs nothing from a page -
+//! no transport, no deadline, no failure - so a caller that only wants the
+//! document does not have to hold a browser to get one. The formatting used to
+//! live in a script beside this repository, which made the shape of a note a
+//! fact about that script; it is [`crate::Struct::Note::Note`] and
+//! [`crate::Fn::Note::Render`] now.
+//!
 //! The capability declares the port it needs. [`Struct::Port::Page`] is this
 //! crate's own trait - not `agentic-browser-cdp`'s `Browse`, and deliberately
 //! not a copy of it: the same three verbs, because a page is opened, asked and
@@ -34,11 +43,13 @@ pub use crate::{
 			ReadTrace,
 			TypeQuestion,
 		},
+		Note::{Build, Render, Strip},
 	},
 	Struct::{
 		Driver::{Create, Driver, Options},
 		Error::{Code, Error},
 		Format::Format,
+		Note::{DefaultChrome, Fact, Meta, Note, Vocabulary},
 		Port::{Answer, Chat, Control, Failure, Mode, Observation, Page, Question, Source, Step, Target},
 		Selectors::{DefaultSelectors, Selectors},
 		Settlement::{Confirmations, Settlement, StableReads},
