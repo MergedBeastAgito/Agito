@@ -3,11 +3,13 @@
 
 pub mod Answer;
 pub mod Budget;
+pub mod Context;
 pub mod Corpus;
 pub mod CorpusError;
 pub mod Decider;
 pub mod Error;
 pub mod Lane;
+pub mod Observation;
 pub mod Port;
 pub mod Predicate;
 pub mod Question;

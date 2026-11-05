@@ -10,15 +10,41 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::Struct::Question::Question;
 
 /// One question set.
-#[derive(Clone, Debug, Default, PartialEq)]
+///
+/// # The JSON shape
+///
+/// A template is one entry in a corpus's `templates` object, keyed by its id:
+///
+/// ```json
+/// {
+///   "when": "approaching a turn, speed above the turn pace",
+///   "questions": {
+///     "action": { "type": "choice", "instructions": "What next?",
+///                 "criteria": { "brake": "Brake before the turn" } }
+///   }
+/// }
+/// ```
+///
+/// `when` is prose, not a condition: the condition that selects a template is
+/// the caller's ([`crate::Struct::When::When`]) or the lane's own
+/// ([`crate::Struct::Predicate::Predicate`]), and the sentence is kept because a
+/// template whose only description is its question text is one nobody can tell
+/// apart from its neighbour.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct Template {
 	/// The template's name, which is its key in the corpus.
+	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub Name:String,
 	/// When it applies, as the corpus states it.
+	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub When:String,
 	/// The questions, by name. A request carries them in this order.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Questions:BTreeMap<String, Question>,
 }

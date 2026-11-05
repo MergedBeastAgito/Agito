@@ -34,3 +34,10 @@ upper_case_acronyms = "allow"
 [[test]]
 name = "Lane"
 path = "Test/Lane.rs"
+
+# The body's own claims - three keys, no chat field, the lane's model - kept in a
+# target of their own so they stay runnable while the round trip's fixture and
+# poster are being worked on.
+[[test]]
+name = "Request"
+path = "Test/Request.rs"

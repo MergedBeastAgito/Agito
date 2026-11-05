@@ -145,10 +145,12 @@ impl Context {
 		}
 		self.0
 			.iter()
-			.map(|(Field, Value)| match Value {
-				Value::Null => format!("{Field}=null"),
-				Value::Object(_) => format!("{Field}={}", Compact(Value)),
-				Other => format!("{Field}={Other}"),
+			.map(|(Field, Value)| {
+				match Value {
+					Value::Null => format!("{Field}=null"),
+					Value::Object(_) => format!("{Field}={}", Compact(Value)),
+					Other => format!("{Field}={Other}"),
+				}
 			})
 			.collect::<Vec<String>>()
 			.join(", ")
@@ -156,9 +158,7 @@ impl Context {
 }
 
 impl From<State> for Context {
-	fn from(State:State) -> Self {
-		Self(State.Body().as_object().cloned().unwrap_or_default().into_iter().collect())
-	}
+	fn from(State:State) -> Self { Self(State.Body().as_object().cloned().unwrap_or_default().into_iter().collect()) }
 }
 
 impl From<&State> for Context {

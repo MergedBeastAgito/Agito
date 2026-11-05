@@ -136,9 +136,8 @@ impl Observation {
 	/// complaint in the detail, because the person who has to fix it is looking
 	/// at the file rather than at this crate.
 	pub fn Of(Value:Value) -> Result<Self, Error> {
-		serde_json::from_value(Value).map_err(|Why| {
-			Error::CorpusInvalid("the observation is not the shape this crate reads", Why.to_string())
-		})
+		serde_json::from_value(Value)
+			.map_err(|Why| Error::CorpusInvalid("the observation is not the shape this crate reads", Why.to_string()))
 	}
 
 	/// The observation a corpus's own two tables describe.
@@ -152,7 +151,10 @@ impl Observation {
 	pub fn OfEntries(Fields:&BTreeMap<String, Value>, Derived:&BTreeMap<String, Value>) -> Self {
 		Self {
 			Version:0,
-			Fields:Fields.iter().map(|(Name, Descriptor)| (Name.clone(), ObservationField::Of(Descriptor))).collect(),
+			Fields:Fields
+				.iter()
+				.map(|(Name, Descriptor)| (Name.clone(), ObservationField::Of(Descriptor)))
+				.collect(),
 			Derived:Derived.clone(),
 			Note:None,
 			Extra:BTreeMap::new(),

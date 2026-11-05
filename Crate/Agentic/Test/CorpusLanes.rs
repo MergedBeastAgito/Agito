@@ -367,7 +367,7 @@ fn the_vendored_copy_says_what_the_sibling_checkout_says() {
 		return;
 	};
 
-	for File in ["Observation.json", "Questions.json"] {
+	for File in ["Templates/Observation.json", "Templates/Questions.json"] {
 		let Copied = fs::read_to_string(Vendored().join(File))
 			.unwrap_or_else(|Why| panic!("the vendored {File} is unreadable: {Why}"));
 		let Beside = fs::read_to_string(Real.join(File))

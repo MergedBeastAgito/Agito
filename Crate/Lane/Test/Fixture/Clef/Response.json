@@ -1,0 +1,27 @@
+{
+	"budget": 1,
+	"response": {
+		"success": true,
+		"result": {
+			"model": "clef-flash",
+			"answers": {
+				"course": {
+					"type": "choice",
+					"choice": "closer",
+					"probabilities": {
+						"closer": 0.71,
+						"farther": 0.29
+					}
+				},
+				"disagreement": {
+					"type": "score",
+					"score": 2
+				}
+			},
+			"usage": {
+				"input_tokens": 375,
+				"output_tokens": 0
+			}
+		}
+	}
+}
