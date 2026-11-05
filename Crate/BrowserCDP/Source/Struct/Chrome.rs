@@ -106,9 +106,28 @@ impl Chrome {
 	/// A browser whose handler is already being polled, bound to `Want`.
 	async fn Bind(mut Browser:Browser, Handler:Handler, Want:PageWant<'_>) -> Result<Arc<dyn Transport>, Error> {
 		let Endpoint = Browser.websocket_address().clone();
+		// The flag the task and the transport share. A handler that stops
+		// leaves a connection that accepts commands and never answers them, so
+		// the end of the stream is the one thing this transport must be told
+		// about: without it every later call waits out its own deadline and the
+		// failure is reported as a slow page rather than a dead socket.
+		let Closed = Arc::new(AtomicBool::new(false));
+		let Mark = Closed.clone();
 		let Task = tokio::spawn(async move {
 			let mut Handler = Handler;
-			while Handler.next().await.is_some() {}
+			loop {
+				match Handler.next().await {
+					Some(Ok(())) => {},
+					// A message this client could not read is worth a word: the
+					// stream carries on, but a browser that keeps sending
+					// unreadable messages is a browser this version of the
+					// protocol has moved past.
+					Some(Err(Why)) => eprintln!("browse: unreadable message from the browser: {Why}"),
+					None => break,
+				}
+			}
+			eprintln!("browse: the connection to the browser ended");
+			Mark.store(true, Ordering::SeqCst);
 		});
 		let Page = match Want {
 			PageWant::Fresh(Url) => Browser.new_page(Url).await.map_err(|Why| Classify(&Why))?,
@@ -149,7 +168,7 @@ impl Chrome {
 			Browser:Mutex::new(Some(Browser)),
 			Handler:Mutex::new(Some(Task)),
 			Endpoint,
-			Closed:AtomicBool::new(false),
+			Closed,
 		}))
 	}
 }
@@ -198,7 +217,12 @@ struct ChromeTransport {
 	Browser:Mutex<Option<Browser>>,
 	Handler:Mutex<Option<JoinHandle<()>>>,
 	Endpoint:String,
-	Closed:AtomicBool,
+	/// Whether this session's side of the connection is gone.
+	///
+	/// Shared with the handler task, which sets it when the stream ends: a
+	/// connection that accepts commands and never answers them must be reported
+	/// as closed, not waited on.
+	Closed:Arc<AtomicBool>,
 }
 
 impl ChromeTransport {

@@ -323,7 +323,7 @@ the three errors the manifest declares are the only failures it can raise.
 | --- | --- |
 | `packages/skill-contract/module.json` | port `agentic.skill.validate`, errors `unparsable`, `unlisted-reference`, `uncited`, state `stateless` |
 | `packages/skill-contract/src/index.ts` | an empty entry point |
-| `/Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/TimeLine/Documentation/Skill/Skill-Authoring/Reference/SkillContract.mjs` | a working implementation of the same idea in another repository: read it for the rules, do not copy its file layout |
+| `../TimeLine/Documentation/Skill/Skill-Authoring/Reference/SkillContract.mjs` | a working implementation of the same idea in another repository: read it for the rules, do not copy its file layout |
 | `docs/Design.md` | why a capability owns its port and imports no adapter |
 
 # Required behaviour
@@ -470,7 +470,7 @@ Read those five before writing anything. They are the requirement.
 - `packages/spacetime-catalog/**`
 - `docs/Spacetime-Catalog.md`
 
-Nothing else. **Do not edit anything under `/Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/TimeLine`** -
+Nothing else. **Do not edit anything under `../TimeLine`** -
 that repository is read-only for this card, and a change there is a defect even if it
 looks correct.
 
@@ -487,7 +487,7 @@ looks correct.
    with a valid digest appends a generation and the previous one is untouched.
 6. `npm run check` at the workspace root → exit `0`.
 7. `pnpm exec prettier --check packages/spacetime-catalog docs/Spacetime-Catalog.md` → clean.
-8. `cd /Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/TimeLine && git status --short` → unchanged from before the card, and say so in the handoff.
+8. `cd ../TimeLine && git status --short` → unchanged from before the card, and say so in the handoff.
 
 # Standing constraints
 
@@ -555,7 +555,7 @@ it must be expanded before its subtree exists.
 - `Agentic/.hermes/tmp/format.mjs` (the renderer, which grows a tree section)
 
 Nothing else. In particular: **do not edit anything under
-`/Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/TimeLine`**, and do not
+`../TimeLine`**, and do not
 touch `~/.hermes/skills/**`. Both hold copies of these tools that are synced later.
 
 # Verification
@@ -571,7 +571,7 @@ touch `~/.hermes/skills/**`. Both hold copies of these tools that are synced lat
 5. **The Mermaid block is well formed**: it starts with `flowchart TD`, every edge is
    `A --> B`, every node id appears in a label.
 6. `npm run check` at the workspace root → exit `0`.
-7. `cd /Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/TimeLine && git status --short` → unchanged, and say so in the handoff.
+7. `cd ../TimeLine && git status --short` → unchanged, and say so in the handoff.
 
 # Standing constraints
 

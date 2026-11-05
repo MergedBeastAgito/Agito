@@ -30,15 +30,15 @@ sources: 20
 
 Hermes Research Share Finished 12s
 
-HIGH — Architectural boundary (reasoned recommendation, not
+HIGH - Architectural boundary (reasoned recommendation, not
 repository-verified): keep the CDN shell public and independently useful; put
 authentication, private data, subscription state, and mutations inside one
 client island. The tension is not static versus realtime rendering, but
 build-time HTML versus user-specific truth that arrives later. Astro explicitly
 supports separately hydrated islands; a realtime island need not turn the rest
 of the site into an application. Check: block the realtime backend and load
-every public route—the public content must remain
-usable.[astro](https://docs.astro.build/en/concepts/islands/) HIGH — Hydration
+every public route-the public content must remain
+usable.[astro](https://docs.astro.build/en/concepts/islands/) HIGH - Hydration
 (factual basis plus inference): prerendered HTML cannot contain the visiting
 user’s request-time authenticated state. Nothing inherently breaks if both the
 HTML and the island’s initial render say “Checking session”; problems arise when
@@ -48,7 +48,7 @@ this can produce hydration disagreement, replacement, or misleading flashes.
 Prefer a deterministic initial placeholder; client-only rendering avoids
 reconciling prerendered component markup but still needs a useful static
 fallback. Check: load with JavaScript disabled, then with delayed authentication
-and socket establishment.astro+1 HIGH — First-paint socket failure (reasoned
+and socket establishment.astro+1 HIGH - First-paint socket failure (reasoned
 failure model): the shell can paint successfully while the authenticated surface
 never receives its first result. Treating “no result yet” as an empty collection
 falsely reports “you have no records”; waiting forever produces an apparently
@@ -56,7 +56,7 @@ broken application. Distinguish checking session, signed out, connecting,
 live-with-result, stale-with-snapshot, and unavailable-without-snapshot; an
 authenticated empty result is a separate successful state. Check: block only the
 WebSocket endpoint while allowing HTML, JavaScript, and authentication to load.
-HIGH — Readiness (reasoned recommendation): an open socket is transport
+HIGH - Readiness (reasoned recommendation): an open socket is transport
 readiness, not proof that the user is authenticated or the required subscription
 has returned. Declare the surface ready only after authenticated data arrives;
 put a deadline on the initial waiting experience, not necessarily on background
@@ -64,7 +64,7 @@ reconnection. Convex exposes connection-state observation and token handling,
 which are useful inputs but do not replace the application’s data-readiness
 condition. Check: separately delay token acquisition and the first query result,
 and confirm neither displays a false empty
-state.[convex](https://docs.convex.dev/api/classes/browser.ConvexClient) HIGH —
+state.[convex](https://docs.convex.dev/api/classes/browser.ConvexClient) HIGH -
 Service-worker boundary (factual): a service worker can serve cached HTML and
 assets, but it is not a cache/proxy for WebSocket frames; the WebSocket
 handshake specifies service-workers mode “none.” Its lifecycle is also
@@ -72,16 +72,16 @@ event-driven and browsers may terminate it, so it is not a dependable
 always-running connection owner. Keep the database client in the page/island by
 default; worker shutdown should not govern its socket. Check: stop the service
 worker in browser tooling while the page is connected, then separately
-disconnect the socket.w3+1 MEDIUM — Offline boot (reasoned consequence): caching
+disconnect the socket.w3+1 MEDIUM - Offline boot (reasoned consequence): caching
 the shell solves “can the application open?”, not “does it know the current
 database state?” A previously installed service worker can make an offline
 revisit fast, but cannot bootstrap a genuinely uncached first-ever visit. Ensure
 the island’s versioned JavaScript is cached too; cached HTML pointing to
 unavailable chunks yields a shell that never starts. Check: after a successful
 online visit, close the tab, disable networking, and reopen the authenticated
-route—not merely disconnect an already-running
+route-not merely disconnect an already-running
 page.[developer.mozilla](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation)
-HIGH — Offline honesty (reasoned recommendation): without a persisted,
+HIGH - Offline honesty (reasoned recommendation): without a persisted,
 authorized snapshot, show “Data unavailable offline,” not fabricated emptiness.
 With one, label it “Saved locally; freshness unverified” with its last
 successful sync time, partition it by account, and clear or quarantine it on
@@ -90,15 +90,15 @@ automatic benefit of a service worker. Convex explicitly distinguishes
 reconnecting through network blips from providing full offline sync; verify the
 chosen database client’s persistence guarantees rather than assuming
 equivalence. Check: reload offline, switch accounts, and confirm no previous
-account’s records appear.[convex](https://www.convex.dev/sync) HIGH — Mutations
+account’s records appear.[convex](https://www.convex.dev/sync) HIGH - Mutations
 (reasoned trade-off): for this single surface, default to disabling
 authoritative writes until synchronization is available. Offline editing is
 possible, but adds a separate contract for durable pending operations,
 deduplication, conflict resolution, authorization after reconnect, and an honest
-“pending—not saved” display. A reconnecting socket alone does not settle any of
+“pending-not saved” display. A reconnecting socket alone does not settle any of
 those questions. Check: interrupt a write before acknowledgment, reload, and
 reconnect; the UI must not claim success without confirmation or silently
-execute the operation twice. MEDIUM — Cold-load placement (reasoned
+execute the operation twice. MEDIUM - Cold-load placement (reasoned
 recommendation): load the realtime/auth bundle only on the authenticated
 surface; hydrate promptly there, but do not make public navigation or first
 paint await it. Use one client/provider for that surface rather than independent
@@ -129,7 +129,7 @@ forty modules.
 
 Read less Finished 14s
 
-HIGH — Design review, not repository findings: the sketch has the right
+HIGH - Design review, not repository findings: the sketch has the right
 dependency direction, but “ports at the centre” risks making interfaces the
 product. Put domain policy and use cases at the centre; let those consumers own
 the ports they need. Cockburn’s goal is an application independently testable
@@ -137,13 +137,13 @@ from external devices, not a universal catalogue of interchangeable providers.
 Verification: run capability tests without provider SDKs, network access, or
 application
 bootstrap.[alistair.cockburn](https://alistair.cockburn.us/hexagonal-architecture)
-HIGH — Port ownership is under-specified: a central ports package can become the
+HIGH - Port ownership is under-specified: a central ports package can become the
 forty-module dependency magnet, accumulating optional fields and provider-shaped
 methods. Recommendation from principle: keep ports local to the consuming
 capability; extract a shared contract only when consumers genuinely share
 semantics and evolution policy. Verification: change one capability’s
 requirement and inspect the affected build/test set; unrelated capabilities
-should not need coordinated edits. HIGH — “No provider or transport knowledge”
+should not need coordinated edits. HIGH - “No provider or transport knowledge”
 is correct, but “data shapes” alone are insufficient: the dependency rule also
 excludes provider-generated types from inner layers. Specify domain errors,
 ordering, pagination, cancellation, idempotency, consistency, and resource
@@ -151,13 +151,13 @@ ownership where relevant; otherwise two adapters type-check while behaving
 differently. Verification: inspect exported signatures for SDK types, then run
 the same behavioral cases against both
 implementations.[cleancoder](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-HIGH — Interchangeability must be bounded, not asserted: inferred two-year
+HIGH - Interchangeability must be bounded, not asserted: inferred two-year
 failure is a lowest-common-denominator port plus provider-specific escape
 hatches. A transactional store and an eventually consistent service cannot
 promise identical behavior merely because both implement save(). Declare minimum
 guarantees; split meaningfully different capabilities rather than passing
 arbitrary provider options. Verification: test failure/retry and
-read-after-write behavior against each advertised guarantee. HIGH — Dependency
+read-after-write behavior against each advertised guarantee. HIGH - Dependency
 declaration is not necessarily injection: a constructor or factory taking narrow
 port values exposes requirements; accepting a registry and calling
 resolve("store") hides them again. Fowler explicitly distinguishes
@@ -166,33 +166,33 @@ assembly code and inject the actual dependencies; reserve dynamic discovery for
 a genuine plugin requirement. Verification: search capability code for
 container/registry access and test construction using only explicit
 arguments.[martinfowler](https://martinfowler.com/articles/injection.html)
-MEDIUM — A service bus and a service locator are different concerns:
-recommendation from principle—remove self-registration side effects, not
+MEDIUM - A service bus and a service locator are different concerns:
+recommendation from principle-remove self-registration side effects, not
 legitimate messaging. An event bus can itself be an injected port, but delivery,
 ordering, retry, and subscription lifetime need contracts. Inferred failure
 after forty modules: implicit event chains become invisible control flow even
 though the import graph is clean. Verification: trace one workflow end-to-end
-and test duplicate delivery and subscriber failure. HIGH — “Only the composition
+and test duplicate delivery and subscriber failure. HIGH - “Only the composition
 root names adapters” needs scope: production assembly should name concrete
 implementations, but adapter tests and adapter definitions necessarily do too.
 Recommendation from principle: permit one root per executable/deployment plus
 private assembly helpers; prohibit application logic from selecting concrete
 providers. Inferred failure otherwise: one enormous root with every workflow’s
 configuration and lifecycle. Verification: assemble each workflow independently
-and check that unused providers need not initialize. MEDIUM — The
+and check that unused providers need not initialize. MEDIUM - The
 adapter-to-adapter ban is a useful default, not a hexagonal law: tracing,
 caching, and retry decorators legitimately wrap another implementation through a
 port; concrete adapter imports usually need not follow. Allow reusable
 outer-layer technical helpers, and let assembly inject decorated
 implementations. Verification: construct a caching wrapper around an in-memory
 port implementation without importing a concrete database adapter; this
-preserves inward dependency direction.aws.amazon+1 HIGH — Provider co-location
-needs an ownership boundary: recommendation from principle—keep integration
+preserves inward dependency direction.aws.amazon+1 HIGH - Provider co-location
+needs an ownership boundary: recommendation from principle-keep integration
 translation beside the provider integration, but keep the provider SDK wrapper
 separate from each consumer-specific adapter when meanings differ. Otherwise
 “the provider package” gradually imports every domain and becomes a hub.
 Verification: inspect its transitive dependencies; a low-level provider client
-should not pull in workflow policy or unrelated capability packages. HIGH — One
+should not pull in workflow policy or unrelated capability packages. HIGH - One
 contract test is not a contract-testing strategy: use a reusable conformance
 suite for in-process port semantics, run against real adapters as well as fakes.
 For independently deployed HTTP/message boundaries, consumer-driven contracts
@@ -200,27 +200,27 @@ verify the interactions consumers actually use; Pact describes that separate
 purpose. Neither substitutes for production-representative integration tests.
 Verification: deliberately break serialization, authorization, or error
 translation and establish which test detects each
-break.[pact](https://docs.pact.io/) HIGH — Add lifecycle and operational policy
-before scaling: recommendation from principle—declare who opens/closes clients,
+break.[pact](https://docs.pact.io/) HIGH - Add lifecycle and operational policy
+before scaling: recommendation from principle-declare who opens/closes clients,
 owns transactions, sets deadlines, retries, and carries tenant/request context.
 Inferred two-year failure: nested retries multiply attempts, singleton adapters
 leak tenant state, and tests pass with fakes that never disconnect.
 Verification: inject timeouts and partial failures, count attempts, run
-concurrent tenant requests, and assert shutdown releases resources. HIGH — The
-import checker is necessary but incomplete: recommendation from principle—check
+concurrent tenant requests, and assert shutdown releases resources. HIGH - The
+import checker is necessary but incomplete: recommendation from principle-check
 resolved package exports, re-exports, aliases, dynamic imports, cycles, and
 transitive boundary violations; distinguish production from test dependencies.
 Also test runtime composition, because two modules can form a call cycle
 entirely through ports. Verification: maintain intentionally forbidden
 dependency fixtures that must fail CI, plus a smoke test for every supported
-assembly. MEDIUM — Forty modules need not mean forty published packages:
-recommendation from principle—separate logical boundaries from release
+assembly. MEDIUM - Forty modules need not mean forty published packages:
+recommendation from principle-separate logical boundaries from release
 boundaries. Keep modules together when they change and ship together; publish
 packages when independent consumers, ownership, or compatibility commitments
 justify it. Otherwise every small refactor becomes release choreography.
 Verification: audit recent changes for packages that always move together and
 for “independent” packages that only work with workspace source aliases. MEDIUM
-— Monorepo versus polyrepo is a coordination trade-off, not an architectural
+- Monorepo versus polyrepo is a coordination trade-off, not an architectural
 purity test: Google documents a common source of truth supported by substantial
 tooling, alongside its trade-offs. Inference for your scale: a monorepo makes
 coordinated contract migrations easier but can conceal lockstep coupling;
@@ -228,19 +228,19 @@ polyrepos expose version skew but add release and compatibility work.
 Verification: test built package artifacts against explicitly supported
 dependency versions, not only the current monorepo
 checkout.[research](https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/)
-HIGH — Add contract ownership and retirement rules: recommendation from
-principle—name an owner, supported consumers, compatibility policy, and
+HIGH - Add contract ownership and retirement rules: recommendation from
+principle-name an owner, supported consumers, compatibility policy, and
 migration path for each public port. Inferred year-two failure is not “too many
 adapters”; it is abandoned interfaces, divergent near-duplicates, and nobody
 authorized to remove old versions. Verification: generate an inventory of ports,
 implementations, consumers, owners, and supported versions; investigate every
-orphan or unexplained duplicate. MEDIUM — Smallest useful revision: keep inward
+orphan or unexplained duplicate. MEDIUM - Smallest useful revision: keep inward
 dependencies, explicit injection, adapter-local translation, behavioral
 conformance tests, and automated boundaries; remove universal-port ambitions and
 mandatory package-per-module splitting. Add per-workflow assembly, lifecycle
 guarantees, compatibility ownership, and artifact-level consumer tests.
 Verification: add a second workflow and replace one provider without modifying
-the original capability’s policy; record every exception—that exercise tests
+the original capability’s policy; record every exception-that exercise tests
 actual reuse rather than architectural vocabulary.
 
 5:06 PM
@@ -253,67 +253,67 @@ should be shaped so they do not rot. Take the space you need.
 
 Finished 3s
 
-HIGH — …unrelated capabilities should not need coordination. The failure to
+HIGH - …unrelated capabilities should not need coordination. The failure to
 watch for is a shared ports package that becomes everybody’s dependency: adding
 one workflow requirement forces changes through otherwise unrelated modules.
 Recommendation from principle: let the consuming capability own its ports;
 promote a contract to shared ownership only when consumers share semantics, not
 merely similarly shaped methods. Verification: change one use case and inspect
-which packages must change, rebuild, or release. HIGH — Domain policy belongs at
+which packages must change, rebuild, or release. HIGH - Domain policy belongs at
 the centre, not an interface catalogue: hexagonal architecture separates an
 application from the technologies driving it and serving it; the dependency rule
 makes source dependencies point toward policy. Ports are boundaries around
 meaningful application behavior, not an end in themselves. Verification: run the
 capability’s policy tests without provider SDKs, network access, or the
-production composition root.alistair.cockburn+1 HIGH — The likely two-year
+production composition root.alistair.cockburn+1 HIGH - The likely two-year
 failure is semantic leakage behind clean types: forty modules can agree on a
 Storage interface while disagreeing about ordering, atomicity, missing records,
 authorization, and whether retries duplicate writes. Recommendation from
 principle: document and test observable guarantees, not only data shapes.
 Verification: run identical failure, concurrency, and retry cases against every
-implementation advertised as interchangeable. HIGH — Remove the ambition to make
-every port universal: recommendation from principle—a port should express what a
+implementation advertised as interchangeable. HIGH - Remove the ambition to make
+every port universal: recommendation from principle-a port should express what a
 consumer needs, not everything a provider offers. If one workflow requires
 transactional writes and another only best-effort delivery, do not conceal that
 difference behind optional flags and provider-specific options. Verification:
 inspect contracts for arbitrary option bags, unsupported-operation exceptions,
-and branches on provider identity. HIGH — Keep constructor or factory injection,
+and branches on provider identity. HIGH - Keep constructor or factory injection,
 but distinguish it from dependency declarations: accepting a list of service
 names and resolving them later is still locator-style access. Fowler’s
 distinction is useful because explicit constructor dependencies reveal
 requirements without searching implementation code. Verification: construct a
 capability with ordinary test doubles; it must not need a registry, global
 container, or bootstrap side
-effect.[martinfowler](https://martinfowler.com/articles/injection.html) MEDIUM —
+effect.[martinfowler](https://martinfowler.com/articles/injection.html) MEDIUM -
 Remove self-registration as the default, not messaging as a legitimate
-abstraction: recommendation from principle—a service bus routes messages; a
+abstraction: recommendation from principle-a service bus routes messages; a
 service locator finds dependencies. Either can become hidden coupling, but they
 are not the same mechanism. An injected event publisher can be a sound port if
 delivery and failure semantics are explicit. Verification: trace a workflow’s
 subscribers, duplicate handling, and failure propagation without relying on
-import order. HIGH — Shape composition roots per executable or deployment, not
-per repository: recommendation from principle—each application, CLI, worker, or
+import order. HIGH - Shape composition roots per executable or deployment, not
+per repository: recommendation from principle-each application, CLI, worker, or
 test harness owns the assembly it actually runs. A repository-wide root tends to
 accumulate unrelated configuration and initialize unused providers.
 Verification: start each entry point independently and confirm it neither
 requires credentials for nor opens connections to providers it does not use.
-HIGH — Allow private assembly helpers beneath each root: recommendation from
-principle—“only the root names concrete adapters” should describe the assembly
+HIGH - Allow private assembly helpers beneath each root: recommendation from
+principle-“only the root names concrete adapters” should describe the assembly
 boundary, not demand one enormous file. Helpers may construct a coherent
 subsystem, but should accept configuration and explicit dependencies rather than
 reach into a global container. Verification: import each helper in isolation and
-assert that importing it performs no network I/O or registration. HIGH — Keep
-workflow decisions out of roots: recommendation from principle—assembly decides
+assert that importing it performs no network I/O or registration. HIGH - Keep
+workflow decisions out of roots: recommendation from principle-assembly decides
 which implementation satisfies a requirement; application policy decides what a
 workflow does. A root full of tenant rules, fallback decisions, or business
 branches is an application hiding in configuration. Verification: change a
 business rule and check whether the root must change; if so, identify whether
-policy has escaped its capability. HIGH — Give roots explicit lifecycle
-responsibility: recommendation from principle—assembly must establish who owns
+policy has escaped its capability. HIGH - Give roots explicit lifecycle
+responsibility: recommendation from principle-assembly must establish who owns
 startup, readiness, disposal, and failure cleanup. Otherwise forty modules each
 create their own connection pools, retry loops, and shutdown handlers.
 Verification: fail startup halfway through, then assert previously acquired
-resources close; run shutdown twice and verify safe behavior. MEDIUM — Relax the
+resources close; run shutdown twice and verify safe behavior. MEDIUM - Relax the
 absolute adapter-to-adapter prohibition into a precise dependency policy: a
 decorator may wrap another implementation through its port without importing
 that implementation. Hexagonal architecture requires separation and inward
@@ -321,49 +321,49 @@ dependencies, not a blanket prohibition on all outer-layer cooperation.
 Recommendation: share technical helpers where appropriate, but keep concrete
 implementation selection in assembly. Verification: wrap an in-memory adapter
 with tracing or caching without importing the production database
-adapter.docs.aws.amazon+1 HIGH — Define module categories in machine-readable
-metadata: recommendation from principle—classify capabilities, contracts,
+adapter.docs.aws.amazon+1 HIGH - Define module categories in machine-readable
+metadata: recommendation from principle-classify capabilities, contracts,
 provider clients, adapters, assembly, and tests, then maintain a small explicit
 allowed-dependency matrix. Directory naming alone becomes unreliable after
 moves, aliases, and re-exports. Verification: generate the resolved dependency
-graph and reject unclassified modules as well as forbidden edges. HIGH — Check
+graph and reject unclassified modules as well as forbidden edges. HIGH - Check
 the graph that the compiler and runtime actually resolve: recommendation from
-principle—include package exports, workspace aliases, re-exports, dynamic
+principle-include package exports, workspace aliases, re-exports, dynamic
 imports where statically resolvable, and transitive SDK leakage. A capability
 importing a “shared” barrel that re-exports adapters is still coupled to
 adapters. Verification: add deliberately forbidden fixtures for each supported
-import mechanism and require the architecture check to reject them. HIGH —
+import mechanism and require the architecture check to reject them. HIGH -
 Prevent the checker itself from becoming ceremonial: recommendation from
-principle—make exceptions narrow, owned, justified, and time-bounded; do not
+principle-make exceptions narrow, owned, justified, and time-bounded; do not
 permit broad ignore directories. Review changes to the dependency policy
 separately from code that would violate it. Verification: report exception count
 and age in CI, and demonstrate that removing each exception exposes the specific
-intended violation. HIGH — Accept what an import graph cannot prove:
-recommendation from principle—ports can conceal runtime call cycles,
+intended violation. HIGH - Accept what an import graph cannot prove:
+recommendation from principle-ports can conceal runtime call cycles,
 incompatible lifetimes, hidden service discovery, and event feedback loops.
 Supplement static checks with assembly smoke tests and representative workflow
 traces, rather than claiming the graph proves architectural independence.
 Verification: boot every supported assembly and exercise a complete workflow
-with dependency failures injected. HIGH — Split testing into distinct
+with dependency failures injected. HIGH - Split testing into distinct
 obligations: reusable conformance tests establish port behavior; adapter
 integration tests establish translation against the actual provider; assembly
 tests establish wiring. Consumer-driven contract tests address interactions
 across independently deployed HTTP or message boundaries, which is Pact’s stated
-scope—not a substitute for all three. Verification: intentionally break one
+scope-not a substitute for all three. Verification: intentionally break one
 guarantee in each layer and identify the test that
-fails.[docs.pact](https://docs.pact.io/) HIGH — Do not let a fake certify
-itself: recommendation from principle—run the same conformance suite against
+fails.[docs.pact](https://docs.pact.io/) HIGH - Do not let a fake certify
+itself: recommendation from principle-run the same conformance suite against
 production adapters, and include cases the convenient in-memory implementation
 tends to omit: cancellation, duplicates, partial failure, pagination, and
 concurrent callers. Verification: demonstrate at least one real-provider
 behavior that originally differed from the fake and retain it as a regression
-case. MEDIUM — Remove package-per-module as an implicit goal: recommendation
-from principle—logical boundaries, publication boundaries, and deployment
+case. MEDIUM - Remove package-per-module as an implicit goal: recommendation
+from principle-logical boundaries, publication boundaries, and deployment
 boundaries solve different problems. Forty capabilities do not automatically
 justify forty independently versioned packages. Verification: inspect which
 packages always change together and which have actual external consumers; merge
 release boundaries that create coordination without providing independence.
-MEDIUM — Monorepo federation does not eliminate versioning; polyrepo federation
+MEDIUM - Monorepo federation does not eliminate versioning; polyrepo federation
 does not create independence: Google’s monorepo account describes a common
 source of truth supported by substantial infrastructure, not a free scaling
 property. Inference for this design: a monorepo can hide lockstep assumptions,
@@ -371,19 +371,19 @@ while polyrepos turn them into delayed compatibility failures. Verification:
 build package artifacts and test supported consumer/provider version
 combinations outside workspace source
 resolution.[research](https://research.google/pubs/why-google-stores-billions-of-lines-of-code-in-a-single-repository/)
-HIGH — Assign ownership to public contracts before forty modules arrive:
-recommendation from principle—each contract needs an owner, known consumers,
+HIGH - Assign ownership to public contracts before forty modules arrive:
+recommendation from principle-each contract needs an owner, known consumers,
 compatibility expectations, and a retirement process. Otherwise near-duplicate
 ports proliferate because nobody can safely change the original, while obsolete
 versions remain forever. Verification: generate an inventory linking every
 public port to its implementations, consumers, owner, and supported versions.
-HIGH — The two-year warning signs are operational, not aesthetic: inferred
+HIGH - The two-year warning signs are operational, not aesthetic: inferred
 indicators include roots that require every provider’s credentials, contract
 changes touching unrelated workflows, adapter-specific flags in capabilities,
 growing checker exceptions, and tests that pass only inside the workspace. These
 are hypotheses, not findings about your repository. Verification: measure those
 indicators periodically and investigate changes rather than counting interfaces
-as evidence of reuse. MEDIUM — The revised minimum is smaller than a framework:
+as evidence of reuse. MEDIUM - The revised minimum is smaller than a framework:
 consumer-owned ports with behavioral guarantees; explicit constructor/factory
 injection; adapters that translate rather than dictate policy; per-entry-point
 assembly with lifecycle ownership; and a resolved import-policy check backed by
@@ -415,7 +415,7 @@ inference.
 
 Read less Finished 24s
 
-HIGH — (1) Execution model: “reactor-style” is a reasonable analogy for
+HIGH - (1) Execution model: “reactor-style” is a reasonable analogy for
 requests/system events invoking handlers, but the documented architectural
 description is more precise: each database is a single-threaded actor, with
 transactions in that database executed serially; different databases can execute
@@ -424,7 +424,7 @@ with earlier parallel MVCC execution. Established from the architecture article,
 not reproduced; check: distinguish per-database reducer execution from
 networking, procedures, replication, and execution in other
 databases.[spacetimedb](https://spacetimedb.com/blog/how-does-spacetime-scale)
-HIGH — Transaction guarantees are not scheduling guarantees: every reducer
+HIGH - Transaction guarantees are not scheduling guarantees: every reducer
 invocation is an atomic transaction; it cannot observe partially committed
 changes from another reducer. Neither those guarantees nor single-threaded
 execution establishes a global FIFO order matching requests from different
@@ -434,14 +434,14 @@ documentation; the caution about inferring ordering is reasoning from principle.
 Check: make application ordering explicit with sequence/version preconditions
 where it
 matters.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
-MEDIUM — Where “reactor” appears: I found no architectural use of that word in
+MEDIUM - Where “reactor” appears: I found no architectural use of that word in
 the official transaction documentation or the architecture article inspected;
 the latter says “actor.” Search did find an official example described as a
 “reactor game,” referring to an energy-generating game object, not the server
 architecture. This is a bounded search finding, not proof that the word never
 appears anywhere in the repository. Check: search the pinned
 documentation/source revision before claiming a specifically named Reactor
-implementation.spacetimedb+1 HIGH — (2) Formal frame: use an action-conditioned
+implementation.spacetimedb+1 HIGH - (2) Formal frame: use an action-conditioned
 partially observable model for discovery, and a separate disclosure policy for
 authorization. A belief state is a distribution over possible hidden states;
 actions produce observations that update that distribution. This matches “learn
@@ -450,7 +450,7 @@ actions. If properties remain fixed and actions only reveal them, an epistemic
 MDP is a particularly close special case. Established mathematical model; its
 application to your capabilities is
 inference.[lamsade.dauphine](https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf)
-MEDIUM — The mechanism is Bayesian filtering: $b_{t+1}(s')\propto O(o_{t+1}\mid
+MEDIUM - The mechanism is Bayesian filtering: $b_{t+1}(s')\propto O(o_{t+1}\mid
 s',a_t)\sum_s T(s'\mid s,a_t)b_t(s)$. Here $s$ includes latent capability
 properties, $a_t$ is a probe/invocation, and $o_{t+1}$ is the authorized
 observation. For fixed properties, the transition can be the identity. Unknown
@@ -458,21 +458,21 @@ observation likelihoods require estimation or explicit uncertainty; merely
 storing a confidence number does not establish a calibrated probabilistic model.
 Equation established in the cited treatment; capability interpretation
 inferred.[lamsade.dauphine](https://www.lamsade.dauphine.fr/~lang/papers/slr-aaai07.pdf)
-MEDIUM — Epistemic logic answers a different question: use it to express what
+MEDIUM - Epistemic logic answers a different question: use it to express what
 each actor knows and what they know about others’ knowledge; use probabilities
 for degrees of belief rather than equating “likely” with “known.” The two
 approaches can be combined. If other actors strategically choose what to
 disclose or how to behave, a single-agent POMDP with a fixed environment model
 may be insufficient; your model must represent those choices or declare its
 approximation. Established distinction with an inferred modeling
-recommendation.[hal](https://hal.science/hal-05109660/document) HIGH — Separate
+recommendation.[hal](https://hal.science/hal-05109660/document) HIGH - Separate
 three things in your implementation: latent truth, authorized evidence, and
-actor belief. Reasoning from principle—a worker may actually be unreliable, a
+actor belief. Reasoning from principle-a worker may actually be unreliable, a
 trace may provide one failure observation, and an actor may infer a 30% failure
 probability; these are different records with different authority. Another
 actor’s statement is testimony, not automatically a mutation of truth. Check:
 ensure a reported claim can be disputed without overwriting either the
-underlying property or the original evidence. MEDIUM — Netrunner’s concrete
+underlying property or the original evidence. MEDIUM - Netrunner’s concrete
 lesson is rule-governed access, not simply face-down storage: hidden information
 includes cards in HQ/R&D and face-down cards, and players cannot inspect it
 without an applicable rule, effect, or communication. HQ/R&D access is
@@ -480,7 +480,7 @@ constrained by breach/access rules, rather than allowing arbitrary inspection of
 a chosen secret. Established from the current community-maintained
 continuation’s comprehensive rules; application to your design is analogy.
 Check: every reveal must name the rule authorizing its target, audience, and
-extent.[rules.nullsignal](https://rules.nullsignal.games/) HIGH — Fair
+extent.[rules.nullsignal](https://rules.nullsignal.games/) HIGH - Fair
 disclosure, inferred from that structure: make existence, public metadata,
 inspection costs, legal targets, audiences, and reveal consequences legible
 before an actor commits. Bound repeated probing, or cheap repeatable
@@ -488,7 +488,7 @@ observations can eliminate the hidden-information mechanic. Do not secretly
 reroll a persistent property whenever someone examines it; distinguish
 discovering a pre-existing trait from sampling a fresh stochastic outcome.
 Check: calculate what repeated probes reveal and whether one action strictly
-dominates all alternatives. HIGH — “Hidden again” cannot mean “unknown again”:
+dominates all alternatives. HIGH - “Hidden again” cannot mean “unknown again”:
 Netrunner distinguishes current hidden status from information a player can
 derive after seeing a card, while identity tracking can be disrupted by movement
 into an unknown position. For software, assume recipients can retain every byte.
@@ -496,13 +496,13 @@ Revoking access or removing a subscription row cannot erase prior knowledge;
 stable identifiers can make old evidence linkable indefinitely. Established game
 distinction plus security inference. Check: model shuffle/identity changes
 explicitly rather than clearing a UI field and calling it forgotten.nullsignal+1
-HIGH — (3) Never publish a secret-bearing row and rely on client-side
+HIGH - (3) Never publish a secret-bearing row and rely on client-side
 concealment: SpacetimeDB subscriptions synchronize authorized rows into the
 client cache. Private tables are inaccessible to clients, while server-side
 views can filter by caller and project only permitted columns. A client’s chosen
 subscription predicate is not your security boundary. Established from
 documentation; check: connect as an adversarial client and request every public
-table/view, ignoring the intended UI.spacetimedb+1 HIGH — Proposed relational
+table/view, ignoring the intended UI.spacetimedb+1 HIGH - Proposed relational
 design, inferred: CapabilityPublic(capability_id, public_kind, public_status)
 contains only intentionally public facts; CapabilitySecret(capability_id,
 property_key, property_version, value) is private; Observation(observation_id,
@@ -511,7 +511,7 @@ disclosed_value_or_evidence, observed_at, rule_id) is private and indexed by
 audience_identity. Keep disclosure policy and any secret random state private
 too. If even capability existence is hidden, CapabilityPublic must also become
 an audience-filtered private source rather than a public table. Check: inspect
-each field for whether its existence, not only its value, is disclosable. HIGH —
+each field for whether its existence, not only its value, is disclosable. HIGH -
 Subscription surface: expose my_observations through a caller-aware ViewContext,
 fetching Observation rows by ctx.sender and returning only an approved
 projection. Do not make Observation public merely because it has an audience
@@ -520,7 +520,7 @@ precisely this private-table plus caller-indexed-view pattern. Established
 mechanism; proposed schema inferred. Check: subscribe as identities A and B and
 verify neither receives the other’s
 observations.[spacetimedb](https://spacetimedb.com/docs/tables/access-permissions/)
-HIGH — Reducer-level rule, inferred: observe(target, action) authenticates
+HIGH - Reducer-level rule, inferred: observe(target, action) authenticates
 ctx.sender, checks target visibility and the action’s prerequisites/budget,
 reads the private property, computes only the permitted disclosure, and inserts
 the audience-specific Observation in the same transaction as charging the
@@ -529,20 +529,20 @@ authorization. Atomic reducer transactions make “pay and reveal” all-or-noth
 Check: race two probes against a one-use allowance and verify the configured
 allowance cannot be
 exceeded.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
-HIGH — Prefer recorded disclosure over a live join to secret truth: reasoning
-from principle—if a view joins an old grant to the current secret value, that
+HIGH - Prefer recorded disclosure over a live join to secret truth: reasoning
+from principle-if a view joins an old grant to the current secret value, that
 grant may silently authorize future changes too. A recorded observation tied to
 property_version states exactly what was learned when; continued visibility of
 current truth should be a separate, explicit entitlement. Check: change the
 secret after a one-time reveal and verify the old observer receives no new
-value. HIGH — Traces are another subscription surface: reasoning from
-principle—do not emit private property values into globally readable step
+value. HIGH - Traces are another subscription surface: reasoning from
+principle-do not emit private property values into globally readable step
 titles, source labels, error strings, result sizes, or audit events. Keep raw
 evidence private and produce audience-specific trace projections using the same
 disclosure rules. The earlier append-only trace design makes accidental
 publication especially consequential because hiding a later projection does not
 undo delivery. Check: plant a secret canary and inspect every client-visible
-row, trace, failure response, and exported artifact. HIGH — Nonleakage target,
+row, trace, failure response, and exported artifact. HIGH - Nonleakage target,
 proposed formally: before an authorized reveal, two database states differing
 only in a protected property should induce the same observable subscription
 transcript for an unauthorized actor, or the same distribution when randomness
@@ -550,7 +550,7 @@ is involved. “Same visible values” is insufficient if row existence, update
 timing, counts, IDs, or success/failure differ. This is an inferred security
 specification, not a documented SpacetimeDB guarantee. Check: run paired worlds
 with different secrets and compare complete client-observable transcripts. HIGH
-— Where leakage is unavoidable: authorized observations intentionally reveal
+- Where leakage is unavoidable: authorized observations intentionally reveal
 information; observable behavior may also reveal traits by inference. Timing,
 traffic size, shared-resource contention, and a trusted server/operator’s access
 are outside a simple row-filtering guarantee. You must either accept those
@@ -558,7 +558,7 @@ channels, constrain the threat model, or add batching/padding/isolation and
 verify their costs. Even perfect filtering cannot stop an authorized recipient
 sharing information with another actor. Check: document allowed leakage
 explicitly rather than claiming the relational schema provides total secrecy.
-MEDIUM — Bottom line, design judgment: use SpacetimeDB as the trusted
+MEDIUM - Bottom line, design judgment: use SpacetimeDB as the trusted
 transactional disclosure authority; use private truth plus audience-scoped
 immutable evidence as the data model; use beliefs as derived, actor-specific
 interpretations. Netrunner supplies useful disclosure discipline, not a database
@@ -713,7 +713,7 @@ predictions below are inferred, not reproduced. “:?” means an unlocated or
 proposed file; commands are read-only checks to run, not evidence I already
 collected - command: `git ls-files Maintain .github '*package.json' '*SKILL.md'`
 
-Maintain/Source:勘 - HIGH, Q1: no—the useful end state is a **runtime** with
+Maintain/Source:勘 - HIGH, Q1: no-the useful end state is a **runtime** with
 typed adapters and explicit composition roots; templates generate wiring, and
 types constrain wiring, but neither establishes whether a borrowed browser
 session is still authorized, uncontaminated, exclusive, and safe to return. Your
@@ -746,14 +746,14 @@ top-level keys; omit descriptive metadata from admission decisions - command:
 Agentic/manifest:勘 - HIGH, inferred: preparation inputs must identify
 everything that changes what “prepared” means: artifact digest, relevant
 configuration, runtime/tool versions, workspace snapshot where required, and
-credential identity/scope/version—not secret values. Cache keys that omit
+credential identity/scope/version-not secret values. Cache keys that omit
 environmental inputs are unsound; Bazel’s action model illustrates why reusable
 results must depend on declared inputs.
 [bazel](https://bazel.build/versions/9.0.0/extending/rules) - command:
 `rg -n 'process\.env|process\.cwd|Date\.now|readFile|exec|spawn' Maintain/Source`
 
 Agentic/manifest:勘 - HIGH, Q2: the field people forget is
-validity—specifically, what invalidates preparation and what must be checked
+validity-specifically, what invalidates preparation and what must be checked
 again at admission. Require an admission probe, invalidation dependencies, and
 an explicit freshness policy; “warm succeeded” is historical evidence, not
 present permission to execute. Startup and readiness are distinct checks in
@@ -863,7 +863,7 @@ JSON/Table/Text, small configuration utilities, individual selectors, tests,
 workflows, and the 26 package scripts as internal modules or entry points unless
 an actual independent consumer appears. Keep Figma acquisition, MCP calls,
 Spacetime local setup, maintenance operations, and chat research as
-workflow/adaptor candidates—not mandatory packages - command:
+workflow/adaptor candidates-not mandatory packages - command:
 `rg -n '^import|^export' Maintain/Source/CLI Maintain/Source/Output Maintain/Source/Configuration; git ls-files .github/workflows`
 
 Agentic/runtime:勘 - MEDIUM, inferred sequencing: implement the lease harness as
@@ -879,7 +879,7 @@ split earlier because Astro needs portable read models; verification may remain
 site-specific; RFC-board may never deserve extraction; browser workloads may
 need separate transport packages if their runtime dependencies differ. Import
 edges, change coupling, consumer requirements, and measured startup cost would
-settle these—not the inventory counts - command:
+settle these-not the inventory counts - command:
 `rg -n '^import|^export' Maintain/Source; git log --format='commit %h' --name-only -- Maintain`
 
 Agentic:勘 - LOW, inferred migration gate: establish these boundaries inside the
@@ -1355,7 +1355,7 @@ SpacetimeDB does not turn a row inserted into a “table definition” table int
 new native table. Physical table and reducer changes require publishing an
 updated module. Consequently, runtime schema modification needs either a
 bounded, interpreted logical-schema layer or an authorized build-and-publish
-controller—not a reducer executing arbitrary
+controller-not a reducer executing arbitrary
 DDL.[spacetimedb](https://spacetimedb.com/docs/intro/faq)
 
 My recommendation is a **hybrid**: native tables for operational facts and
@@ -1690,7 +1690,7 @@ claim_task_and_resources(taskId, browserId, agentInstanceId, requestId):
   commit
 ```
 
-The claim is one reducer transaction—not “read availability in a client, then
+The claim is one reducer transaction-not “read availability in a client, then
 write ownership.” SpacetimeDB’s transactional execution and key constraints
 provide the database-side foundation for this
 exclusion.[spacetimedb](https://spacetimedb.com/docs/databases/transactions-atomicity/)
@@ -1814,7 +1814,7 @@ For physical changes, use this separate flow:
 
 Compatible changes may migrate automatically; more complicated changes can
 require successor tables and incremental migration. Publishing an updated
-module—not editing catalog rows—is the documented mechanism for physical schema
+module-not editing catalog rows-is the documented mechanism for physical schema
 evolution.[spacetimedb](https://spacetimedb.com/docs/intro/faq)
 
 There is a hard trust limit: the publisher can replace the authorization
@@ -1992,28 +1992,28 @@ an optimistic UI change.
 I read the transport implementations and followed their calls into
 Browser/Session, Browser/Selector, and the CDP client. The references below are
 repository-relative file-and-line references to the versions retrieved in this
-pass. These are source findings and inferred failure scenarios—not browser
+pass. These are source findings and inferred failure scenarios-not browser
 reproductions.
 
 ## Post identity is stable, but article position is not
 
 The selector explicitly acknowledges that the page recycles articles as you
 scroll; it provides ID-based lookup for that reason
-(`Maintain/Source/Browser/Selector/Post.ts:8–10, 94–96`). Initial resolution by
+(`Maintain/Source/Browser/Selector/Post.ts:8-10, 94-96`). Initial resolution by
 `--id` uses that protection: `withTarget()` passes the requested ID into
-`snapshot()` (`Maintain/Source/Transport/CDP/Post.ts:63–64, 137`).
+`snapshot()` (`Maintain/Source/Transport/CDP/Post.ts:63-64, 137`).
 
 But the first mutation does not preserve that identity. `toggle()` sends only
 the article index and control, and `settle()` also polls by index. The selector
 chooses by ID only when the request includes one; otherwise it selects the
 current article at that index
-(`Maintain/Source/Browser/Session/Post.ts:112–136`;
-`Maintain/Source/Browser/Selector/Post.ts:204–205`).
+(`Maintain/Source/Browser/Session/Post.ts:112-136`;
+`Maintain/Source/Browser/Selector/Post.ts:204-205`).
 
 The inference is a time-of-check/time-of-use failure: if article A occupied
 index 0 during the initial read, but article B occupies it when the click
 executes, the click can affect B. The returned post identity still comes from
-the original context, A (`Maintain/Source/Transport/CDP/Post.ts:196–203`).
+the original context, A (`Maintain/Source/Transport/CDP/Post.ts:196-203`).
 
 This can be silent. The code checks that an article and button were found, not
 that the clicked article has the original ID. A later read by A’s ID does not
@@ -2028,13 +2028,13 @@ live-account mutation.
 
 For `--url`, validation merely checks whether `idFromHref()` finds
 `/status/<digits>` anywhere in the string. It does not validate the URL’s host
-or scheme (`Maintain/Source/Model/Post/Post.ts:24–26`;
-`Maintain/Source/Transport/CDP/Post.ts:69–74`).
+or scheme (`Maintain/Source/Model/Post/Post.ts:24-26`;
+`Maintain/Source/Transport/CDP/Post.ts:69-74`).
 
 More importantly, `wanted` is populated only for the `id` target variant. A URL
 target therefore waits for any article and snapshots index 0, rather than
 selecting the ID embedded in the URL
-(`Maintain/Source/Transport/CDP/Post.ts:63–64, 116–137`).
+(`Maintain/Source/Transport/CDP/Post.ts:63-64, 116-137`).
 
 What I am reading: there is no requested-ID check on the URL path through
 `withTarget()`.
@@ -2054,12 +2054,12 @@ post is 123, regardless of article order.
 `withTarget()` waits up to 25 seconds for
 `document.querySelectorAll("article").length > 0`. Absence produces a named
 `no-post` failure; presence proceeds directly to the snapshot
-(`Maintain/Source/Transport/CDP/Post.ts:116–150`).
+(`Maintain/Source/Transport/CDP/Post.ts:116-150`).
 
 That proves the existence of an article, not that its text, author, controls, or
 media have finished rendering. The selector supplies empty text, an empty author
 handle, null time, and empty media when the corresponding nodes are absent
-(`Maintain/Source/Browser/Selector/Post.ts:104–138`).
+(`Maintain/Source/Browser/Selector/Post.ts:104-138`).
 
 Consequently:
 
@@ -2080,7 +2080,7 @@ when the transport returns with when the fixture becomes complete.
 The reading depends on relative permalinks matching `/handle/status/digits`,
 specific `data-testid` values, and English metric keywords. These are not merely
 cosmetic selectors: they determine identity, control state, and numeric values
-(`Maintain/Source/Browser/Selector/Post.ts:55–79, 83–90, 104–123, 140–157, 208–235`).
+(`Maintain/Source/Browser/Selector/Post.ts:55-79, 83-90, 104-123, 140-157, 208-235`).
 
 Some consequences are directly visible:
 
@@ -2091,7 +2091,7 @@ Some consequences are directly visible:
   `kind: "video"`.
 
 Those behaviors are implemented at
-`Maintain/Source/Browser/Selector/Post.ts:55–65, 119–132, 208–235`.
+`Maintain/Source/Browser/Selector/Post.ts:55-65, 119-132, 208-235`.
 
 The inference is that a selector change, localized count format, or delayed
 rendering can turn “not observed” into apparently valid data. For example,
@@ -2110,29 +2110,29 @@ merely assert that extraction returns an object.
 There is a deliberate workaround for lazy media: `reveal()` enables focus
 emulation and an active lifecycle state. But it is called only when the target
 was addressed by ID and the tool opened a temporary tab
-(`Maintain/Source/Transport/CDP/Post.ts:33–45, 63–64, 129–135`).
+(`Maintain/Source/Transport/CDP/Post.ts:33-45, 63-64, 129-135`).
 
 A URL target can also open a temporary tab, but does not take that branch. An ID
 target that reuses an already-open background tab does not take it either
-(`Maintain/Source/Transport/CDP/Post.ts:82–85, 97–111`).
+(`Maintain/Source/Transport/CDP/Post.ts:82-85, 97-111`).
 
 The source itself explains that hidden detail tabs can otherwise report empty
 media. What remains an inference is how often current browser/page behavior
 exposes this discrepancy. In addition, both reveal commands swallow errors, so a
 failed workaround has no warning
-(`Maintain/Source/Transport/CDP/Post.ts:38–44`).
+(`Maintain/Source/Transport/CDP/Post.ts:38-44`).
 
 I would compare the same photo post through `read({id})` and `read({url})`,
 first with no existing detail tab and then with a pre-existing background tab.
 That would establish whether the representations diverge in the current
 environment.
 
-## “Network idle” means no recent event—not no outstanding request
+## “Network idle” means no recent event-not no outstanding request
 
 The session updates one timestamp on request start, finish, or failure.
 `waitForIdle()` returns true once that timestamp has been quiet long enough; it
 does not maintain a set of in-flight requests
-(`Maintain/Source/Browser/Session/Session.ts:75–90, 139–147`).
+(`Maintain/Source/Browser/Session/Session.ts:75-90, 139-147`).
 
 Therefore a request can start, remain pending longer than the quiet interval,
 and still satisfy this implementation’s idle condition. That follows from the
@@ -2141,7 +2141,7 @@ algorithm; it does not require speculation about X.
 The practical consequence is inferred: a reload or tab close can occur while a
 mutation request remains outstanding. If the Network domain is unavailable, the
 session silently degrades further to a timed quiet window
-(`Maintain/Source/Browser/Session/Session.ts:81–89`).
+(`Maintain/Source/Browser/Session/Session.ts:81-89`).
 
 I would attach to a local fixture that starts a fetch whose server response is
 deliberately held open, then measure `waitForIdle({quiet: 600})`. If it resolves
@@ -2152,7 +2152,7 @@ while the request remains pending, it proves the semantic gap.
 The mutation path contains useful safeguards: no click if the observed state
 already matches, named failures for missing article/button, and reload-based
 verification for temporary tabs
-(`Maintain/Source/Browser/Session/Post.ts:112–133, 64–97`).
+(`Maintain/Source/Browser/Session/Post.ts:112-133, 64-97`).
 
 But it also contains several weaker assumptions:
 
@@ -2164,8 +2164,8 @@ But it also contains several weaker assumptions:
 - Existing user tabs are not reloaded for persistence verification.
 
 These behaviors are explicit in
-`Maintain/Source/Browser/Session/Post.ts:135–146`; the persistence fallback is
-at `:69–97`.
+`Maintain/Source/Browser/Session/Post.ts:135-146`; the persistence fallback is
+at `:69-97`.
 
 Thus `now: true` need not mean “the server accepted and retained the change.” In
 the missing-control branch it can mean “the caller wanted true and verification
@@ -2186,14 +2186,14 @@ temporary-tab reload fail. Neither requires clicking a real account.
 The underlying client rejects protocol errors, times out individual commands,
 and rejects pending calls when the socket closes. Those become `cdp-error` or
 `cdp-unreachable`, rather than indefinite pending operations
-(`Maintain/Source/Browser/CDP/Client.ts:107–136, 139–179`).
+(`Maintain/Source/Browser/CDP/Client.ts:107-136, 139-179`).
 
 Page evaluation also turns JavaScript exceptions into named `cdp-error` failures
-(`Maintain/Source/Browser/CDP/Command/Evaluate.ts:30–42`).
+(`Maintain/Source/Browser/CDP/Command/Evaluate.ts:30-42`).
 
 However, `Session.waitFor()` catches every evaluation error and keeps
-polling—not only the transient execution-context destruction mentioned in its
-comment (`Maintain/Source/Browser/Session/Session.ts:149–163`).
+polling-not only the transient execution-context destruction mentioned in its
+comment (`Maintain/Source/Browser/Session/Session.ts:149-163`).
 
 That is a reasonable navigation-recovery strategy with a diagnostic cost: a
 permanently invalid expression or dead connection can emerge as a generic
@@ -2209,11 +2209,11 @@ caller.
 
 `withTarget()` encloses attachment in its `try/finally`, so it attempts to close
 a temporary tab even if attachment fails
-(`Maintain/Source/Transport/CDP/Post.ts:68, 115, 162–172`).
+(`Maintain/Source/Transport/CDP/Post.ts:68, 115, 162-172`).
 
 `withPage()` attaches before entering its cleanup `try`. If it has opened a tab
 and attachment rejects, that cleanup block is never reached
-(`Maintain/Source/Browser/Session/Page.ts:57–85, 113–123`).
+(`Maintain/Source/Browser/Session/Page.ts:57-85, 113-123`).
 
 That is a source-confirmed cleanup gap. Its practical manifestation would be a
 leaked tab after an attachment failure. Both cleanup paths also suppress close
@@ -2228,15 +2228,15 @@ run that deliberately leaves tabs in your browser.
 
 The transport correctly separates “live browser” from “shadow archive”: the view
 transport refuses browser operations and mutations, and requires an ID for
-archived reads (`Maintain/Source/Transport/View/Transport.ts:59–95`). Transport
+archived reads (`Maintain/Source/Transport/View/Transport.ts:59-95`). Transport
 selection also rejects unsupported declared requirements before command
-execution (`Maintain/Source/Transport/Select.ts:47–58`).
+execution (`Maintain/Source/Transport/Select.ts:47-58`).
 
 The weakness is not that the subsystem lacks failures. It is that its strongest
 failure signals concern connection and element availability, while its weakest
 signals concern the meaning of a successful result. The most valuable tests
 would therefore adversarially change identity, delay completeness, and reject
-persistence—not just disconnect CDP.
+persistence-not just disconnect CDP.
 
 Trace the failure modes when CDP execution races Examine how
 Maintain/Source/Browser handles selector drift Audit the next subsystem for
@@ -2488,7 +2488,7 @@ a script in with its parameters declared.
 1. **Which compiler.** Benchmarked in the research thread launched alongside this
    card: OXC, SWC, esbuild, Biome, Bun's transpiler, `tsgo` and any other
    Rust-embeddable candidate. The card records the numbers it found and the
-   reason for the pick — not just the winner.
+   reason for the pick - not just the winner.
 2. **Embedding shape.** A `build.rs` that transpiles `Source/Script/**/*.ts` into
    `OUT_DIR`, plus a macro (`script!("Expressions/ReadAnswers")`) that
    `include_str!`s the compiled JavaScript. No network at build time, no
@@ -2503,17 +2503,17 @@ a script in with its parameters declared.
 
 ## Scope
 
-**Phase 1 —** spike in a scratch crate: compile one real expression
+**Phase 1 -** spike in a scratch crate: compile one real expression
 (`ReadAnswers`) with each shortlisted compiler, measure cold and warm time, output
 size, and whether the output is byte-stable across runs.
 
-**Phase 2 —** the `build.rs` + macro in `Crate/ChatDriver`, with
+**Phase 2 -** the `build.rs` + macro in `Crate/ChatDriver`, with
 `Source/Script/*.ts` as the source of truth and `include_str!` removed.
 
-**Phase 3 —** templating, with the parameter list per script derived from the
+**Phase 3 -** templating, with the parameter list per script derived from the
 current Rust signatures.
 
-**Phase 4 —** migrate `Crate/Workflow/Source/Fn/Measure.rs` the same way.
+**Phase 4 -** migrate `Crate/Workflow/Source/Fn/Measure.rs` the same way.
 
 ## Gates
 
@@ -2524,7 +2524,7 @@ current Rust signatures.
 
 ## Out of scope
 
-- Deleting the TypeScript packages — the sibling card.
+- Deleting the TypeScript packages - the sibling card.
 - Changing what any expression does.
 
 --- FILE: .hermes/tmp/card-consolidate.md ---
@@ -2832,7 +2832,7 @@ same rules, a second toolchain, and a second set of gates. This card removes it.
 `README.md` currently says the TypeScript packages are *the specification, not a
 predecessor to delete*, and the differential parity suite compares the two
 implementations. Deleting them retires that oracle: after this card the Rust tests
-are the only statement of the contract. That is the intent — record it in the
+are the only statement of the contract. That is the intent - record it in the
 README and in `docs/Parity.md` rather than leaving stale prose claiming a
 comparison that no longer exists.
 
@@ -2844,7 +2844,7 @@ comparison that no longer exists.
 | `scenarios/*` | 7 | delete the `.mjs` runners; the `.json` fixtures stay, read by Rust |
 | `Scripts/*` | 3 | delete; port each gate to Rust or drop it with a reason |
 | `prettier.config.mjs` | 1 | delete with the toolchain |
-| `.hermes/*` | 11 | **keep** — gitignored local tooling, not part of the build |
+| `.hermes/*` | 11 | **keep** - gitignored local tooling, not part of the build |
 
 Toolchain files to remove with them: `package.json`, `pnpm-workspace.yaml`,
 `pnpm-lock.yaml`, `node_modules/` (9.7 MB).
@@ -3038,7 +3038,7 @@ is, with the evidence.
 The driver reads an answer with `innerText`. That keeps a table's cells as
 tab-separated lines with no pipes, drops the structure of lists, renders KaTeX as
 one positioned glyph per line, and can lose `pre > code` entirely. The captured
-text is not wrong — it is unformatted — but a note built from it is not the answer
+text is not wrong - it is unformatted - but a note built from it is not the answer
 the product gave.
 
 Measured on the benchmark research thread: 19,940 characters captured, three
@@ -3053,26 +3053,26 @@ A DOM-to-Markdown serializer that runs in the page and replaces the `innerText`
 read, in the same expression that already reads the answer (so the observation
 stream and the completion rule are untouched).
 
-1. **Tables** — `<table>` to a Markdown table: header row from `<thead>` or the
+1. **Tables** - `<table>` to a Markdown table: header row from `<thead>` or the
    first `<tr>`, a separator sized to the column count, cells with `|` escaped.
    Nested tables are flattened, not nested.
-2. **Code** — `pre > code` to a fenced block, language from
+2. **Code** - `pre > code` to a fenced block, language from
    `class="language-…"` when present, fence length chosen so the body cannot
    close it early.
-3. **Maths** — a KaTeX formula to `$…$` or `$$…$$` read from
+3. **Maths** - a KaTeX formula to `$…$` or `$$…$$` read from
    `annotation[encoding="application/x-tex"]`. The rendered glyphs must never be
    emitted; `innerText` on a formula is hundreds of characters of nothing.
-4. **Lists, headings, links, emphasis** — ordered and unordered lists, `#` levels,
+4. **Lists, headings, links, emphasis** - ordered and unordered lists, `#` levels,
    `[text](href)` for an anchor whose href is not a citation marker.
-5. **Prose** — paragraphs separated by one blank line, inline whitespace
+5. **Prose** - paragraphs separated by one blank line, inline whitespace
    collapsed, no trailing spaces.
 
 ## Shape
 
 - A `Format` selector-level option: `markdown` (new default for a capture) and
   `text` (today's behaviour, kept for anything that compares against it).
-- The serializer is JavaScript, so it belongs in the extracted script sources —
-  `Crate/ChatDriver/Source/Script/Extract.js` — not in a Rust format string. If
+- The serializer is JavaScript, so it belongs in the extracted script sources -
+  `Crate/ChatDriver/Source/Script/Extract.js` - not in a Rust format string. If
   the build-time compilation card has landed, it compiles like every other script.
 - `agentic chat` gains `--format markdown|text`; the default stays `text` until the
   parity scenarios are re-baselined, then flips.
@@ -3084,7 +3084,7 @@ stream and the completion rule are untouched).
   table with the right row count, a fenced block with its language, and `$…$`
   whose content equals the annotation's text.
 - Re-fetching the benchmark thread produces the three tables with 4, 12 and 10
-  rows — the counts the repaired note already has — without any repair step.
+  rows - the counts the repaired note already has - without any repair step.
 - The observation stream's `chars` changes (Markdown is longer) and the
   completion rule still settles: it compares text to text, not length to length.
 - Parity scenarios still pass with the default format unchanged.
@@ -3092,7 +3092,7 @@ stream and the completion rule are untouched).
 ## Out of scope
 
 - Changing which element is captured, or the turn-correlation rule.
-- Rewriting the already-repaired note by hand — the re-fetch replaces it.
+- Rewriting the already-repaired note by hand - the re-fetch replaces it.
 
 ## Note
 
@@ -3192,7 +3192,7 @@ TimeLine, `pnpm install` works from the workspace file, `npm run check` still pa
 
 # What to mirror, and what to adapt
 
-Read these in `/Volumes/CORSAIR/Developer/macOS/Application/TimeLine-DELO/TimeLine`
+Read these in `../TimeLine`
 and copy the *shape*, not the content. **Do not modify TimeLine.**
 
 | File | What it gives Agentic |
@@ -3252,7 +3252,7 @@ source files. You may edit `package.json` scripts and `rust/Cargo.toml`.
    not source.
 4. `git status --short` in TimeLine → empty. Paste it; the mirror must not have touched it.
 5. `README.md` names every folder that exists: `for d in packages rust docs Scripts; do grep -q "$d" README.md || echo "missing $d"; done` → no output.
-6. No absolute paths anywhere new: `grep -rn "/Users/\|/Volumes/" README.md CONTRIBUTING.md .vscode .editorconfig` → no hits.
+6. No absolute paths anywhere new: `grep -rn "/Users\|/Volumes" README.md CONTRIBUTING.md .vscode .editorconfig` → no hits.
 
 # Standing constraints
 
@@ -3381,7 +3381,7 @@ literals has to become source.
 Today the Rust workspace is nested one level deeper than it needs to be
 (`rust/Crate/*`), the TypeScript packages sit beside it under `packages/*` with a
 different internal shape (`src/`), and the browser expressions the driver sends
-are assembled inside `Fn::Expressions` and `Fn::Measure` as Rust format strings —
+are assembled inside `Fn::Expressions` and `Fn::Measure` as Rust format strings -
 JavaScript that no editor, linter or compiler ever sees.
 
 ## Target layout
@@ -3397,7 +3397,7 @@ Documentation/
 `Crate/` moves up and its `.cargo/config.toml` moves to the root so `Target/`
 stays a single build directory.
 
-## Phase 1 — inventory, no moves
+## Phase 1 - inventory, no moves
 
 Produce `.hermes/notes/restructure-inventory.md`:
 
@@ -3412,28 +3412,28 @@ Produce `.hermes/notes/restructure-inventory.md`:
 
 Change nothing in this phase.
 
-## Phase 2 — `Crate/` to the root
+## Phase 2 - `Crate/` to the root
 
 1. `git mv rust/Crate Crate`, `git mv rust/.cargo .cargo`, remove `rust/`.
 2. Workspace `members = ["Crate/*"]` and every `path = "Crate/..."` dependency
    stay correct because they were already relative to the workspace root; verify
    rather than assume.
-3. Update every reference to `rust/` — 31 files, including the command lines in
+3. Update every reference to `rust/` - 31 files, including the command lines in
    `Documentation/Skill/**` and the `Scripts/*.mjs` gates.
 
 Gate: `cargo test` passes with the same count, from the new root.
 
-## Phase 3 — `Package/` beside it, mirroring the crate shape
+## Phase 3 - `Package/` beside it, mirroring the crate shape
 
 1. `git mv packages Package`.
 2. Per package: `src/` → `Source/`, keeping file names; `Test/` already matches.
 3. Update `pnpm-workspace.yaml` (`packages/*` → `Package/*`), every import path
    inside the packages, and the `Scripts/*.mjs` walkers.
 
-Gate: `pnpm run check` passes, or — if the TypeScript layer is being removed by
-the sibling card — the packages still typecheck under `tsc --noEmit`.
+Gate: `pnpm run check` passes, or - if the TypeScript layer is being removed by
+the sibling card - the packages still typecheck under `tsc --noEmit`.
 
-## Phase 4 — extract the embedded JavaScript
+## Phase 4 - extract the embedded JavaScript
 
 1. One file per expression under a directory that mirrors the Rust path:
    `Crate/ChatDriver/Source/Script/<Name>.js`, and
@@ -3458,6 +3458,6 @@ compares against are byte-identical to before (this is a move, not a rewrite).
 
 ## Out of scope
 
-- Choosing or wiring a TypeScript compiler — the sibling card.
-- Deleting the TypeScript layer — the sibling card.
+- Choosing or wiring a TypeScript compiler - the sibling card.
+- Deleting the TypeScript layer - the sibling card.
 - Renaming crates, ports or the `agentic` binary.
