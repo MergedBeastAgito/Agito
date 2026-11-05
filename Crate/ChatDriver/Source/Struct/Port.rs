@@ -92,6 +92,12 @@ pub struct Question {
 /// What a settled turn produced.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Answer {
+	/// The URL of the page the answer was read from.
+	///
+	/// The page's own, not the one the caller asked for. A caller that binds a
+	/// tab supplies a URL as a fallback only, and a note filed under that
+	/// fallback would name a thread the answer did not come from.
+	pub Url:String,
 	/// The answer's text, read once the page stopped changing it.
 	pub Text:String,
 	/// The work the answer reports having done, in the order it did it.

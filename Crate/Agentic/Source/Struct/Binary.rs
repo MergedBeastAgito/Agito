@@ -7,3 +7,4 @@
 //! every manifest.
 
 pub mod Command;
+pub mod Shape;

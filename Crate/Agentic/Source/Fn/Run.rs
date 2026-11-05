@@ -20,7 +20,11 @@ use crate::{
 		Discover,
 		VerifyModule::{ReadinessJSON, VerifyModule},
 	},
-	Struct::{Binary::Command::Verb, Manifest::All},
+	Struct::{
+		Binary::{Command::Verb, Shape::Shape},
+		Manifest::All,
+		Note::Given,
+	},
 };
 
 /// Run one verb, answering the text to print or the reason it could not be run.
@@ -120,6 +124,11 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			Bind,
 			Selectors: Overrides,
 			Format: Wanted,
+			Thread,
+			Title,
+			Project,
+			Account,
+			Captured,
 			Observe,
 			Timeout,
 		} => {
@@ -138,20 +147,40 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			// caller who typed it meant it - and a flag that
 			// silently lost to a file would capture a whole
 			// thread in a format they had already ruled out.
-			if let Some(Named) = &Wanted {
-				match AgenticChatDriver::Format::From(Named) {
-					Some(Format) => Selectors.Format = Format,
-					None => {
-						let Accepted = AgenticChatDriver::Format::All()
+			let Shape = match &Wanted {
+				Some(Named) => {
+					Shape::From(Named).ok_or_else(|| {
+						let Accepted = Shape::All()
 							.iter()
-							.map(|Format| Format.Name())
+							.map(|Shape| Shape::Name(*Shape))
 							.collect::<Vec<&str>>()
-							.join(" or ");
-						return Err(format!("--format takes {Accepted}, not {Named:?}"));
-					},
-				}
-			}
+							.join(", ");
+						format!("--format takes {Accepted}, not {Named:?}")
+					})?
+				},
+				// No flag: the selector file's reading is also this call's
+				// output shape, which is what every call before `note` did.
+				None => Shape::Of(Selectors.Format),
+			};
+			// A shape decides the reading, not the other way round: `note`
+			// reads Markdown whatever the file said, because a note built from
+			// rendered text is a note whose formulas are glyphs.
+			Selectors.Format = Shape.Reading();
 			let Reading = Selectors.Format.Name();
+			let Given = Given { Thread, Title, Project, Account, Captured };
+			// A note is filed under the thread it came from, and the page's
+			// own URL is the only thing that says which one that was. With a
+			// bind that URL is not known until the page opens, so this check
+			// runs before the question when it can and after the answer when
+			// it cannot: a call that cannot file its note must not type into
+			// somebody's tab first.
+			if Shape == Shape::Note
+				&& Given.Thread.as_deref().is_none_or(|Thread| Thread.trim().is_empty())
+				&& Bind.is_none()
+				&& crate::Fn::Note::ThreadOf(&Url).is_none()
+			{
+				return Err(crate::Fn::Note::Unfiled(&Url));
+			}
 			let Driver = ChatOver(Browser(Headless()), ChatSpec { Url:Url.clone(), Attach, Bind, Selectors });
 			let Call = Budget(Timeout);
 			// An observer is a sink and a stop, the way a mutation observer is
@@ -179,8 +208,16 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				.Observe(Question { Text, Mode:Mode::Search, Model }, Call, &mut Seen)
 				.await
 				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
+			// A note is the whole of stdout: a caller redirecting the call
+			// gets a file a reader opens, not a document inside a JSON string.
+			if Shape == Shape::Note {
+				return crate::Fn::Note::Note(&Answer, Given);
+			}
 			Ok(serde_json::to_string_pretty(&json!({
-				"url": Url,
+				// The page's own URL, not the one this call was given: with a
+				// bind they are different, and the one that answered is the
+				// one a caller recording provenance needs.
+				"url": Answer.Url,
 				"format": Reading,
 				"text": Answer.Text,
 				"model": Answer.Model,

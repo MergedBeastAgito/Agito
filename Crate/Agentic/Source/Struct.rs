@@ -4,3 +4,4 @@ pub mod Binary;
 pub mod External;
 pub mod Kind;
 pub mod Manifest;
+pub mod Note;

@@ -30,6 +30,10 @@ agentic-sdk = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
+# `localtime_r`, and nothing else: a note is filed by the day the person
+# captured it, so its timestamp is local, and which offset a zone carries is the
+# operating system's fact rather than this crate's.
+libc = { workspace = true }
 
 # A third-party adapter implements this crate's trait, and the composition test
 # holds one as `Arc<dyn Adapter>` through the same path a consumer would take.
@@ -60,3 +64,7 @@ path = "Test/Extract.rs"
 [[test]]
 name = "Legend"
 path = "Test/Legend.rs"
+
+[[test]]
+name = "Note"
+path = "Test/Note.rs"

@@ -27,13 +27,18 @@ pub use crate::{
 	Fn::{
 		Composition::{Browser, Chat, Design},
 		Discover::Discover,
+		Note::{Note, ThreadOf},
 		Run::{Drive, Run},
 		VerifyModule::{Declared, Readiness, VerifyModule},
 	},
 	Struct::{
-		Binary::Command::{Command, Verb},
+		Binary::{
+			Command::{Command, Verb},
+			Shape::Shape,
+		},
 		External::External,
 		Kind::{Kinds, Known, Names},
 		Manifest::{All, Find, Manifest},
+		Note::Given,
 	},
 };

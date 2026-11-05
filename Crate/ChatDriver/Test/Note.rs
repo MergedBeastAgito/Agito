@@ -31,6 +31,7 @@ fn Meta() -> Meta {
 
 fn Answer() -> Answer {
 	Answer {
+		Url:"https://www.example.com/search/1f0c3d9a-6b1e-4a52-9d3e-2f7a1c8b4e60".to_string(),
 		Text:Capture.to_string(),
 		Trace:(0..3)
 			.map(|Depth| Step { Depth, Label:format!("Step {Depth}"), Detail:"1s".to_string() })

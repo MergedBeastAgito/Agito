@@ -79,6 +79,9 @@ fn returns_the_answer_its_trace_and_its_sources() {
 	assert_eq!(Answer.Mode, "search");
 	assert_eq!(Answer.Trace, vec![]);
 	assert_eq!(Answer.Sources, vec![]);
+	// The answer says which page it came from, because a note filed under the
+	// caller's fallback URL would name a thread the answer did not come from.
+	assert_eq!(Answer.Url, "https://chat.example/");
 }
 
 #[test]

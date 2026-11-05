@@ -414,7 +414,7 @@ impl Driver {
 			if Read.is_empty() { Question.Model.trim().to_string() } else { Read }
 		};
 
-		Ok(Answer { Text, Trace, Sources, Model, Mode:"search".to_string() })
+		Ok(Answer { Url:Target.Url.clone(), Text, Trace, Sources, Model, Mode:"search".to_string() })
 	}
 
 	/// The whole call, with the release guaranteed on every path.

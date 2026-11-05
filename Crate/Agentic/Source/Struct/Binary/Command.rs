@@ -87,11 +87,36 @@ pub enum Verb {
 		/// A JSON file of selector overrides, merged over the defaults.
 		#[arg(long)]
 		Selectors:Option<String>,
-		/// How the answer is read: `markdown` keeps the page's tables, fences
-		/// and TeX, `text` is the rendered text as it always was. Absent, the
-		/// selector file decides, and its default is `text`.
+		/// How the answer is printed. `text` and `markdown` are the JSON the
+		/// driver returns, with the answer read as rendered text or as the
+		/// page's own Markdown. `note` prints the research note instead -
+		/// frontmatter, a table of the same facts, then the transcript - and
+		/// reads the page as Markdown, because a note built from rendered text
+		/// carries a formula as one glyph per line. Absent, the selector file
+		/// decides, and its default is `text`.
 		#[arg(long)]
 		Format:Option<String>,
+		/// The thread a note is filed under. Absent, it is read from the
+		/// page's own URL when that URL ends in a thread identifier, and a
+		/// call whose URL names none is refused rather than filed under a
+		/// guess.
+		#[arg(long)]
+		Thread:Option<String>,
+		/// The note's title. Absent, the note is titled by its thread.
+		#[arg(long)]
+		Title:Option<String>,
+		/// The project the question was asked inside. Absent, the note states
+		/// an empty project rather than naming one.
+		#[arg(long)]
+		Project:Option<String>,
+		/// The label the page shows for the signed-in account. It is used to
+		/// strip that line out of the transcript and is never written down.
+		#[arg(long)]
+		Account:Option<String>,
+		/// When the capture was taken, as the note's `captured` fact. Absent,
+		/// the moment the answer settled is used.
+		#[arg(long)]
+		Captured:Option<String>,
 		/// Report every read of the thread as a JSON line on stderr while the
 		/// answer is being produced, instead of only the settled answer.
 		#[arg(long)]
