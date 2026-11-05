@@ -53,6 +53,10 @@ path = "Test/Request.rs"
 name = "Schema"
 path = "Test/Schema.rs"
 
+# The loader alone: the layout on disk, the discovery of lane files, and the
+# refusal that names the path or the id it was about. Separate from `Lane.rs`
+# because these cases need corpora that are deliberately broken, and a file
+# holding both a working round trip and nine refusals is a file nobody can read.
 [[test]]
-name = "Probe"
-path = "Test/Probe.rs"
+name = "Load"
+path = "Test/Load.rs"

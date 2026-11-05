@@ -77,30 +77,30 @@ pub fn SelectLane<'a>(Corpus:&'a Corpus, Context:&Context) -> Result<&'a Lane, S
 		0 => {},
 		_ => {
 			let Lanes:Vec<String> = Holding.iter().map(|Lane| Lane.Name.clone()).collect();
-			return Err(SelectError::AmbiguousMatch(
-				format!("{} lanes hold for this context and the corpus names no priority", Lanes.len()),
+			return Err(SelectError::AmbiguousMatch {
+				Message:format!("{} lanes hold for this context and the corpus names no priority", Lanes.len()),
 				Lanes,
-			));
+			});
 		},
 	}
 
 	match Catch.len() {
 		1 => Ok(Catch[0]),
 		0 => {
-			Err(SelectError::NoMatchingLane(
-				format!(
+			Err(SelectError::NoMatchingLane {
+				Message:format!(
 					"no lane's condition holds, and no lane is a catch-all (the corpus carries {})",
 					Conditional(Corpus)
 				),
-				Describe(Context),
-			))
+				Context:Describe(Context),
+			})
 		},
 		_ => {
 			let Lanes:Vec<String> = Catch.iter().map(|Lane| Lane.Name.clone()).collect();
-			Err(SelectError::AmbiguousMatch(
-				format!("{} lanes are catch-alls, so \"anything else\" names no lane", Lanes.len()),
+			Err(SelectError::AmbiguousMatch {
+				Message:format!("{} lanes are catch-alls, so \"anything else\" names no lane", Lanes.len()),
 				Lanes,
-			))
+			})
 		},
 	}
 }

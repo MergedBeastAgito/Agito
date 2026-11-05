@@ -12,11 +12,13 @@
 //!   *.json               any further lane file the corpus keeps at its root
 //! ```
 //!
-//! Which of the two shapes a caller has is answered by where `Observation.json`
-//! is, never by a name: a root that holds a `Templates/Observation.json` is read
-//! through it, and a root that holds the file itself is read as the templates
-//! directory. A corpus is a directory of files somebody copied somewhere, and
-//! the one that arrives without its wrapper is not a different corpus.
+//! Which of the two shapes a caller has is answered by the layout, never by a
+//! name: a root that holds a `Templates/` directory is read through it, and a
+//! root that does not is read as the templates directory itself. The wrapper's
+//! presence decides, not one file inside it, so a corpus that is missing a
+//! template file is still reported as the wrapped corpus it is. A corpus is a
+//! directory of files somebody copied somewhere, and the one that arrives
+//! without its wrapper is not a different corpus.
 //!
 //! The two template files are named, because the layout names them. The *lane*
 //! files are not: which file a corpus keeps its lanes in is the corpus's
@@ -113,11 +115,13 @@ struct Named {
 /// in `Templates/` that declares lanes is read as one. Nothing about the corpus
 /// is baked in except the layout itself.
 pub fn Load(Root:&Path) -> Result<Corpus, CorpusError> {
-	let Templates = if Root.join(TemplatesDir).join(ObservationFile).is_file() {
-		Root.join(TemplatesDir)
-	} else {
-		Root.to_path_buf()
-	};
+	// The shape is decided by whether the wrapper *is a directory*, not by
+	// whether one file inside it happens to be there: a corpus whose
+	// `Templates/Observation.json` is missing is still a wrapped corpus, and the
+	// refusal has to name the file inside the wrapper rather than one the caller
+	// never mentioned.
+	let Wrapper = Root.join(TemplatesDir);
+	let Templates = if Wrapper.is_dir() { Wrapper } else { Root.to_path_buf() };
 	let Observation = Named {
 		Path:Templates.join(ObservationFile),
 		Text:Text(&Templates.join(ObservationFile))?,
