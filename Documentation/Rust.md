@@ -4,16 +4,16 @@ How the five packages become a Cargo workspace, in the house style of `github.co
 `Source/` with `Fn/` and `Struct/` trees, PascalCase modules, one `Library.rs` per crate, `Target/`
 as the build directory.
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` throughout. The house style is unverified: the
-capture says the repository could not be retrieved and takes the description as specification
-(`:60`), so nothing here should be read as a measurement of that repository.
+**Source:** `.hermes/research/4ffde6d5.md` throughout. The house style is unverified: the capture
+says the repository could not be retrieved and takes the description as specification (`:192-194`),
+so nothing here should be read as a measurement of that repository.
 
 ## Crates
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §1 - the directory tree, the package and library
-names, and the decision that the five stay separate crates (`:56-58`, `:152-161`). The capture makes
-the workflow crate conditional on a real composition (`:133`); the rows below are the full proposed
-set.
+**Source:** `.hermes/research/4ffde6d5.md` §1 - the directory tree and the package and library names
+(`:198-304`), and the decision that the five stay separate crates (`:183-190`, `:300-303`). The
+capture makes the workflow crate conditional on a real composition (`:183-186`); the rows below are
+the full proposed set.
 
 | Directory             | Package                       | Library                     | Responsibility                          |
 | --------------------- | ----------------------------- | --------------------------- | --------------------------------------- |
@@ -40,8 +40,8 @@ where the two disagree, that file is the current one.
 
 ## Dependencies
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §1's dependency graph, and its reading of `Runtime`
-as a policy engine rather than a registry (`:163-187`).
+**Source:** `.hermes/research/4ffde6d5.md` §1's dependency graph (`:305-330`), and its reading of
+`Runtime` as a policy engine rather than a registry (`:330-331`).
 
 ```
 Agentic  → Runtime, BrowserCDP, ChatDriver, DesignVerification, SkillContract, Workflow
@@ -62,7 +62,7 @@ supplies the one that does.
 
 ## "Ports belong to their consumers", in Rust
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §1 (`:189-218`) - the two consumer-owned traits, the
+**Source:** `.hermes/research/4ffde6d5.md` §1 (`:333-375`) - the two consumer-owned traits, the
 root-owned wrapper, and the warning that a universal request type quietly becomes the ports crate.
 Whether the two traits actually differ is `Documentation/Open-Questions.md` Q22.
 
@@ -91,9 +91,9 @@ for.
 
 ## Module shape per crate
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §1 for the module paths (`:67-81`) and the
-house-style `.cargo/config.toml` values (`:25`, `:150`). One crate is reproduced here; the capture
-gives the tree for all seven.
+**Source:** `.hermes/research/4ffde6d5.md` §1 for the module paths (`:198-304`) and the house-style
+`.cargo/config.toml` values (`:63-65`, `:770-773`). One crate is reproduced here; the capture gives
+the tree for all seven.
 
 ```
 ChatDriver/
@@ -116,14 +116,13 @@ style: `opt-level 3`, `codegen-units 1`, `debug false`, `lto true`, `panic "abor
 
 ## Still open
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` - and the list below is stale against it. The
-capture answers 1 (`:220-281`), 2 (`:283-312`) and 3 (`:314-383`); it asserts 4 (`:58`) without
-specifying the check; it never reaches 5, because the answer is cut off at `:378`. The questions
-stay here as they were asked, and each is tracked with its experiment and blocker in
+**Source:** `.hermes/research/4ffde6d5.md` - the list below is the set of questions the request
+asked, and the capture answers every one: 1 (`:376-450`), 2 (`:451-493`), 3 (`:494-589`), 4
+(`:590-696`) and 5 (`:697-764`). What stays open is not the capture's answer but this repository's
+implementation of it, and each is tracked with its experiment and blocker in
 `Documentation/Open-Questions.md` Q18-Q24.
 
-These were asked. The capture answered the first three and left the rest below; nothing here should
-be built on a guess:
+These were asked, and the capture answers them. What is left is to hold this tree to each answer:
 
 1. **CDP in Rust or a TypeScript sidecar.** `chromiumoxide`, `headless_chrome`, or raw CDP over a
    websocket, against keeping a small TS process driven over stdio JSON-RPC. Each has different

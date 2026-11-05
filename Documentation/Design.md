@@ -12,8 +12,8 @@ Provenance convention: each section below opens with **Source:** naming the capt
 
 **Decision: this repository** - the 125 module / 13 skill / 17 script inventory, and the four
 capabilities it implies, are measurements of the consuming repository. No capture records them.
-`delo-e9b61659.md` is a research pass over one subsystem of that repository, which supports the
-premise in the opening paragraph rather than the numbers.
+`e9b61659.md` is a research pass over one subsystem of that repository, which supports the premise
+in the opening paragraph rather than the numbers.
 
 A repository of 125 TypeScript modules, 13 documentation skills and 17 reference scripts has
 capabilities that are useful outside it - browser control, chat research, design measurement, skill
@@ -22,7 +22,7 @@ capabilities out without lifting the product with them.
 
 ## The four layers
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` - the layer table, "the arrows point inward", "a
+**Source:** `.hermes/research/4ffde6d5.md` - the layer table, "the arrows point inward", "a
 capability importing an adapter is a defect" and "ports are owned by their consumers, not by a
 central crate" are stated there, and §1 answers the Cargo consequence: no shared ports crate, two
 consumer-owned `Browse` traits. **Decision: this repository** - the reason given for the defect (a
@@ -50,8 +50,8 @@ still behave differently.
 
 ## The manifest
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` - the four state classes and their admission role,
-the hashed `artefact` entry point and the cold/warm `cost` are stated there, and §3 answers how they
+**Source:** `.hermes/research/4ffde6d5.md` - the four state classes and their admission role, the
+hashed `artefact` entry point and the cold/warm `cost` are stated there, and §3 answers how they
 survive into Rust: a checked-in `module.json`, serde validation in CI, read by a harness that never
 starts the application. **Decision: this repository** - the observation each class implies: a
 liveness probe for `holds-transport`, a freshness check for `holds-identity`, a reset proof for
@@ -73,9 +73,9 @@ than guessing.
 
 **Decision: this repository** - the seven-step order, and the claim that preparation and admission
 are different acts. The captures supply the vocabulary (admission, leases, budgets, cancellation,
-cleanup) but not this sequence. `delo-e9b61659.md` supplies the failure the paragraph below is
-about: a completed click accepted as a write, and an article's existence accepted as readiness
-(`:40-54`, `:96-116`).
+cleanup) but not this sequence. `e9b61659.md` supplies the failure the paragraph below is about: a
+completed click accepted as a write (`:205-238`), and an article's existence accepted as readiness
+(`:107-132`).
 
 prepare reusable infrastructure → lease an isolated context → bind identity and task → validate
 credentials, connections and versions → execute within a fresh budget → persist only authorised
@@ -86,10 +86,10 @@ starts returning wrong answers quickly.
 
 ## Why the packages are these five
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` - the five packages with their kinds, state classes
-and errors, and §1's decision that all five stay separate crates rather than becoming modules of
-one. **Decision: this repository** - the build order, and each reason for building that package when
-it is built. The capture says which crates exist, not which one to write first.
+**Source:** `.hermes/research/4ffde6d5.md` - the five packages with their kinds, state classes and
+errors, and §1's decision that all five stay separate crates rather than becoming modules of one.
+**Decision: this repository** - the build order, and each reason for building that package when it
+is built. The capture says which crates exist, not which one to write first.
 
 Chosen in build order, each justified by a consumer that already exists:
 
@@ -118,7 +118,7 @@ default unless somebody refuses it.
 
 ## The two failures this design expects
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §2 for the ownership half -
+**Source:** `.hermes/research/4ffde6d5.md` §2 for the ownership half -
 `Ownership::{Attached, Launched}`, attach and launch as separate operations, disposal of an attached
 session that must not terminate the browser, and a disconnected session that invalidates warm
 readiness. **Decision: this repository** - the five-surface inventory, the global warm browser

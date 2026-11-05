@@ -7,8 +7,8 @@ The formal apparatus is worth using only up to a point; this note says where tha
 
 **Decision: this repository** - the term, the definition and the three things a safety claim may
 name. No capture uses "manifest-enforcement coherence". The observation-boundary half of the third
-item is the subject of `.hermes/research/research-575cb198.md`, which argues what an observation
-must name and record; no section here draws on it yet.
+item is the subject of `.hermes/research/575cb198.md`, which argues what an observation must name
+and record; no section here draws on it yet.
 
 **Manifest-enforcement coherence:** the capability manifest a runtime reports is the manifest it
 actually enforces.
@@ -22,8 +22,8 @@ equivalence theorem. A claim that names none of them is prose.
 
 **Decision: this repository** - the argument that a self-check has no independent basis, and the
 choice of the composition root plus the process that launches it as the party outside the mutation
-authority. **Source:** `.hermes/research/rust-4ffde6d5.md` §3 for the mechanism the section relies
-on: a source descriptor embedded in the crate and an external release descriptor binding it to the
+authority. **Source:** `.hermes/research/4ffde6d5.md` §3 for the mechanism the section relies on: a
+source descriptor embedded in the crate and an external release descriptor binding it to the
 delivered bytes, so a manifest read from the mutable store is not the only copy that exists.
 
 If the mutation path can rewrite the reporter, the enforcer and the verifier, an internal self-check
@@ -58,9 +58,8 @@ operation beside the invariant it must preserve, and a conformance run per gener
 ## Where the apparatus collapses
 
 **Decision: this repository** - the boundary at declarative records under a fixed interpreter, and
-the reduction to ordinary versioning. No capture discusses reflection; this is why
-`research-575cb198.md` cannot be read as the source of this section despite the name the brief gave
-it.
+the reduction to ordinary versioning. No capture discusses reflection; this is why `575cb198.md`
+cannot be read as the source of this section despite the name the brief gave it.
 
 If reflection only reads and replaces **declarative records under a fixed interpreter** - which is
 what this workspace is - then none of the higher-order machinery is needed. The requirement is
@@ -109,8 +108,8 @@ port, or across two interpreter versions. Congruence is the obligation when clai
 comparisons survive inspection and mutation contexts. Neither is needed to say "this generation
 enforces what it reports".
 
-**Source:** `.hermes/research/rust-4ffde6d5.md` §2 - the acceptance suite the capture requires
-before the TypeScript sidecar is removed (attach/launch, navigation races, evaluation timeout,
-disconnect, disposal, shared-browser ownership) is one such comparison, named concretely rather than
-gestured at. **Decision: this repository** - the bisimulation and congruence framing, and the claim
-that neither is needed for enforcement coherence.
+**Source:** `.hermes/research/4ffde6d5.md` §2 - the acceptance suite the capture requires before the
+TypeScript sidecar is removed (attach/launch, navigation races, evaluation timeout, disconnect,
+disposal, shared-browser ownership) is one such comparison, named concretely rather than gestured
+at. **Decision: this repository** - the bisimulation and congruence framing, and the claim that
+neither is needed for enforcement coherence.

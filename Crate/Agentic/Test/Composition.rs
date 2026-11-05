@@ -92,7 +92,10 @@ fn every_manifest_states_the_version_and_the_floor_the_workspace_builds() {
 	// A walk that visited nothing would satisfy every assertion above, so the
 	// count is part of the test: one `module.json` per crate. A twelfth crate
 	// is a deliberate edit here as well as in `All`.
-	assert_eq!(Seen, 11, "every crate under Crate/ carries a module.json");
+	assert_eq!(
+		Seen, 11,
+		"expected one module.json per crate under Crate/; update this count when a crate is added"
+	);
 }
 
 #[test]
