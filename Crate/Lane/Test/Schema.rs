@@ -308,10 +308,41 @@ fn a_corpus_round_trips_as_one_document() {
 	assert!(Corpus.Observed("verdict"), "a derived field is as sendable as a read one");
 	assert!(!Corpus.Observed("slip"), "and a field nobody declared is not");
 
+	// Two spellings change on the way back out, and both are the value rather
+	// than the text: a numeric bound writes as a number (`55` and `55.0` are one
+	// bound), and a lane that stated no condition writes `always`, which is the
+	// condition it carries.
+	let Expected = json!({
+		"version": 2,
+		"fields": { "speed": { "unit": "km/h" }, "steer": { "range": [-1, 1] } },
+		"derived": { "verdict": "one of moving, blocked" },
+		"templates": {
+			"corner.entry": {
+				"when": "approaching a turn",
+				"questions": {
+					"action": { "type": "choice", "instructions": "What next?",
+								"criteria": { "brake": "brake", "throttle": "go" } }
+				}
+			}
+		},
+		"lanes": {
+			"corner": {
+				"fields": ["speed", "steer"],
+				"templates": ["corner.entry"],
+				"select": { "op": "gt", "field": "speed", "than": 55.0 }
+			},
+			"cruise": {
+				"fields": ["speed"],
+				"templates": ["corner.entry"],
+				"select": { "op": "always" }
+			}
+		},
+		"order": ["cruise", "corner"]
+	});
 	assert_eq!(
 		serde_json::to_value(&Corpus).expect("the corpus writes"),
-		Written,
-		"a corpus prints back as the document it was read from"
+		Expected,
+		"every fact survives the round trip, in the value's spelling"
 	);
 }
 

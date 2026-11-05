@@ -112,8 +112,14 @@ fn Read(Body:&str, Ceiling:Option<u64>) -> Result<Answer, DecodeError> {
 	}
 
 	// The spend sits beside `answers` inside `result`; a top-level `usage` is
-	// read too, because a proxy in front of this endpoint may hoist it.
-	let Usage = Spend(Result.get("usage").or_else(|| Parsed.get("usage")), Ceiling)?;
+	// read too, because a proxy in front of this endpoint may hoist it. A
+	// `null` in either place is not a reported spend, so the other one is still
+	// consulted before the reply is called spendless.
+	let Usage = Result
+		.get("usage")
+		.filter(|Usage| !Usage.is_null())
+		.or_else(|| Parsed.get("usage").filter(|Usage| !Usage.is_null()));
+	let Usage = Spend(Usage, Ceiling)?;
 	let Model = Result
 		.get("model")
 		.or_else(|| Parsed.get("model"))

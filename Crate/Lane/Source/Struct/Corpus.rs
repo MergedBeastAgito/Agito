@@ -131,7 +131,11 @@ impl Corpus {
 	/// went stale when someone added a lane must not make the new lane invisible
 	/// to a caller that prints its policy.
 	pub fn Ordered(&self) -> Vec<(&String, &Lane)> {
-		let Named:Vec<(&String, &Lane)> = self.Order.iter().filter_map(|Name| Some((Name, self.Lanes.get(Name)?))).collect();
+		let Named:Vec<(&String, &Lane)> = self
+			.Order
+			.iter()
+			.filter_map(|Name| Some((Name, self.Lanes.get(Name)?)))
+			.collect();
 		let Rest:Vec<(&String, &Lane)> = self
 			.Lanes
 			.iter()

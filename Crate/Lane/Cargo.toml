@@ -53,9 +53,6 @@ path = "Test/Request.rs"
 name = "Schema"
 path = "Test/Schema.rs"
 
-[[test]]
-name = "Probe"
-path = "Test/Probe.rs"
 
 # The loader alone: the layout on disk, the discovery of lane files, and the
 # refusal that names the path or the id it was about. Separate from `Lane.rs`

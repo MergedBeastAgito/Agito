@@ -101,9 +101,9 @@ pub struct ObservationField {
 	/// The range the value stays within, when the corpus states one.
 	///
 	/// Read as numbers, so a bound written `0` and one written `0.0` are the same
-	/// bound and a round trip writes the decimal form. A range is a numeric fact
-	/// - the ingestion clamps against it - and keeping the file's spelling of an
-	/// integer would be a second, textual fact about the same number.
+	/// bound, and a round trip writes the decimal form. A range is a numeric
+	/// fact: the ingestion clamps against it, so keeping the file's spelling of
+	/// an integer would be a second, textual fact about the same number.
 	#[serde(rename = "range", default, skip_serializing_if = "Option::is_none")]
 	pub Range:Option<Vec<f64>>,
 	/// For an array, what its items are.
