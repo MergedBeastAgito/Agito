@@ -134,8 +134,8 @@ pub struct Case {
 	pub Observation:Value,
 }
 
-/// One state per lane, each chosen so the policy reaches that lane and no
-/// earlier one.
+/// One state per lane, each chosen so the corpus's conditions reach that lane
+/// and no earlier one.
 pub fn Cases() -> Vec<Case> {
 	vec![
 		Case {
@@ -174,7 +174,8 @@ pub fn Cases() -> Vec<Case> {
 				"speed_kmh": 96,
 				"heading_degrees": 210,
 				"route_cue_x": 0.31,
-				"yaw_rate": 0.62
+				"yaw_rate": 0.62,
+				"turned_degrees": 22
 			}),
 		},
 		Case {
@@ -190,6 +191,7 @@ pub fn Cases() -> Vec<Case> {
 				"route_cue_x": 0.5,
 				"route_cue_pixels": 24,
 				"road_band_motion": 18.4,
+				"lead_m": 34,
 				"traffic": [{ "ahead_m": 34.0, "right_m": 1.2, "speed_kmh": 52, "closing_kmh": 4 }]
 			}),
 		},

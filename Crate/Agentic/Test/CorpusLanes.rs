@@ -21,11 +21,11 @@
 //! # Where the corpus is read from
 //!
 //! `Test/CorpusRoot.rs` holds the discovery rule, the five expected lanes and
-//! the policy these cases are selected by, because `Test/CorpusDecide.rs` needs
-//! the same three and a second copy of any of them would be a second answer to
-//! "which corpus, and which lane wins". The two places the corpus can be - the
-//! sibling checkout, and the copy under `Test/Fixture/CorpusLanes/` read when it
-//! is absent - are described there, and
+//! the representative states, because `Test/CorpusDecide.rs` needs the same three
+//! and a second copy of any of them would be a second answer to "which corpus,
+//! and which lane wins". The two places the corpus can be - the sibling checkout,
+//! and the copy under `Test/Fixture/CorpusLanes/` read when it is absent - are
+//! described there, and
 //! [`the_vendored_copy_says_what_the_sibling_checkout_says`] is the test that
 //! keeps the copy from becoming a second source of truth.
 //!
@@ -39,7 +39,7 @@ mod CorpusRoot;
 use std::{collections::BTreeSet, fs};
 
 use AgenticLane::{Rules, Select, State};
-use CorpusRoot::{Cases, Directory, Expected, Line, Policy, Read, Relative, Sibling, Vendored};
+use CorpusRoot::{Cases, Directory, Expected, Line, Read, Relative, Sibling, Vendored};
 use serde_json::{Value, json};
 
 #[test]
@@ -101,16 +101,17 @@ fn the_corpus_on_disk_declares_exactly_the_five_lanes() {
 }
 
 #[test]
-fn every_lane_is_selected_by_the_policy_from_one_representative_state() {
+fn every_lane_is_selected_by_its_own_condition_from_one_representative_state() {
 	let (Dir, _) = Directory();
 	let Corpus = Read(&Dir);
-	let Policy = Policy();
 	let mut Selected = BTreeSet::new();
 
 	for Case in Cases() {
 		let Body = Line(&Case.Observation);
 		let State = State::Of(Case.Observation).expect("a case is a JSON object");
-		let Chosen = Select(&Corpus, &State, &Policy, &Rules::default())
+		// No rule list: the corpus's own `select` conditions are the policy, which
+		// is the claim this test exists to hold.
+		let Chosen = Select(&Corpus, &State, &Rules::default(), &Rules::default())
 			.unwrap_or_else(|Why| panic!("case '{}': {Why}", Case.Name));
 		println!(
 			"case {:<18} expected {:<24} selected {:<24} {}",
@@ -140,12 +141,13 @@ fn every_lane_is_selected_by_the_policy_from_one_representative_state() {
 }
 
 #[test]
-fn a_state_no_rule_names_falls_back_to_drive() {
+fn a_state_no_condition_holds_falls_back_to_drive() {
 	let (Dir, _) = Directory();
 	let Corpus = Read(&Dir);
 	let Body = json!({ "speed_kmh": 12, "gear": 2 });
 	let State = State::Of(Body.clone()).expect("the state is a JSON object");
-	let Chosen = Select(&Corpus, &State, &Policy(), &Rules::default()).expect("the fallback names a lane");
+	let Chosen = Select(&Corpus, &State, &Rules::default(), &Rules::default())
+		.expect("the corpus carries one catch-all");
 	println!(
 		"case {:<18} expected {:<24} selected {:<24} {}",
 		"nothing holds",

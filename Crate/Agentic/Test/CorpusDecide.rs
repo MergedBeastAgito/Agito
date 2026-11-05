@@ -60,7 +60,7 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use AgenticLane::{Answered, Budget, Create, DecidePort, Options, Poster, Rules, State};
 use AgenticRuntime::{BlockOn, Call, Never, Wall};
-use CorpusRoot::{Cases, Directory, Line, Policy, Read};
+use CorpusRoot::{Cases, Directory, Line, Read};
 use Fake::{Fixture, FixturePoster};
 use serde_json::Value;
 
@@ -119,7 +119,8 @@ fn every_lane_is_decided_against_the_corpus_with_the_fixture_poster() {
 			Poster.clone() as Arc<dyn Poster>,
 			Options {
 				Model:Model.to_string(),
-				Lanes:Policy(),
+				// No rule list: the corpus's own `select` conditions choose the lane.
+				Lanes:Rules::default(),
 				Templates:Rules::default(),
 				Budget:Budget::New(Poster.Budget(), 0),
 			},

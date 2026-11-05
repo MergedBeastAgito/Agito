@@ -3,7 +3,8 @@
 //! [`Create`] is the whole construction, and the three things it takes are the
 //! three things a caller has to decide: which corpus (data), which poster (a
 //! transport), and which rules (the caller's own knowledge of what its states
-//! mean). Nothing else is configurable, because nothing else differs between two
+//! mean - or none, when the corpus already states each lane's condition).
+//! Nothing else is configurable, because nothing else differs between two
 //! callers.
 //!
 //! # The meter, and why it is written around the call
@@ -51,6 +52,10 @@ pub struct Options {
 	/// into one would be paying the expensive model for the cheap lane.
 	pub Model:String,
 	/// The lane rules, in priority order.
+	///
+	/// Empty means "select by the corpus's own conditions": every lane states its
+	/// `select`, so a caller with nothing to add passes `Rules::default()` rather
+	/// than restating the corpus in Rust. A list that names anything wins outright.
 	pub Lanes:Rules,
 	/// The template rules, in priority order. A rule naming a template the
 	/// selected lane does not serve is skipped.
