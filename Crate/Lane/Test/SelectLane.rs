@@ -20,7 +20,21 @@
 
 use std::path::{Path, PathBuf};
 
-use AgenticLane::{Context, Corpus, CorpusError, Load, Predicate, Read, SelectError, SelectLane};
+use AgenticLane::{
+	Context,
+	Corpus,
+	CorpusError,
+	Load,
+	Predicate,
+	Read,
+	Rule,
+	Rules,
+	Select,
+	SelectError,
+	SelectLane,
+	State,
+	When,
+};
 use serde_json::{Value, json};
 
 /// The fixture corpus this crate ships beside its test.
@@ -313,4 +327,53 @@ fn a_context_reads_a_flat_path_and_a_nested_one_alike() {
 
 	assert!(Context::Of(json!([1, 2])).is_err(), "an array of readings has no field names");
 	assert_eq!(Context::New().Summary(), "an empty context");
+}
+
+#[test]
+fn an_empty_rule_list_selects_by_the_corpus_conditions() {
+	// `Select` takes the caller's rules, but a caller with nothing to add passes
+	// `Rules::default()` and gets the corpus's own `select`: the same lane
+	// `SelectLane` answers, with the template rules still applied. Two verbs, one
+	// question - and an empty list is not a policy of "nothing ever matches".
+	let Corpus = Load(&Directory()).expect("the fixture corpus loads");
+	let Cases = [
+		("steady", json!({ "speed": 60, "yaw": 1 })),
+		("turning", json!({ "speed": 60, "yaw": 12 })),
+		("fast", json!({ "speed": 200, "yaw": 12 })),
+		("blocked", json!({ "speed": 0, "blocked_ticks": 5 })),
+	];
+	for (Expected, Body) in Cases {
+		let Context = Of(Body.clone());
+		let State = State::Of(Body).expect("a JSON object is a state");
+		let Chosen = Select(&Corpus, &State, &Rules::default(), &Rules::default())
+			.unwrap_or_else(|Why| panic!("the corpus names a lane for {Context:?}: {Why}"));
+		let Lane = SelectLane(&Corpus, &Context).expect("exactly one lane holds");
+		assert_eq!(Chosen.Lane.Name, Lane.Name, "the corpus's conditions and its rules disagree");
+		assert_eq!(
+			Chosen.Lane.Name, Expected,
+			"the corpus's own condition for {Context:?} selects {Expected}"
+		);
+		assert_eq!(
+			Chosen.Template.Name,
+			Lane.Templates.first().expect("the lane serves a template").clone(),
+			"with no template rule, the lane's first template is its ordinary question"
+		);
+	}
+}
+
+#[test]
+fn a_rule_list_outranks_the_corpus_conditions() {
+	// The other half of the same bargain: a caller that states a policy is not
+	// asking for the corpus's, and its order is honoured even where the corpus
+	// would have named another lane.
+	let Corpus = Load(&Directory()).expect("the fixture corpus loads");
+	let State = State::Of(json!({ "speed": 200, "yaw": 12 })).expect("a JSON object is a state");
+	let Stated = Rules::New(vec![Rule::New("blocked", When::Always)]);
+	let Chosen = Select(&Corpus, &State, &Stated, &Rules::default()).expect("the caller's rule holds");
+	assert_eq!(
+		Chosen.Lane.Name, "blocked",
+		"the caller's rule names the lane, and the corpus's `fast` does not overrule it"
+	);
+	let Corpus_Says = SelectLane(&Corpus, &Context::from(&State)).expect("the corpus names one lane");
+	assert_eq!(Corpus_Says.Name, "fast", "while the corpus, left alone, still says fast");
 }

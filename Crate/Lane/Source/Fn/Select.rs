@@ -18,18 +18,45 @@
 //! lane's ordinary question", and a rule naming a template this lane does not
 //! serve is skipped rather than refused - one rule list for every lane is the
 //! ordinary case.
+//!
+//! # No lane rules means the corpus's own conditions
+//!
+//! A caller with nothing to add passes [`Rules::default`], and selection then
+//! reads each lane's `select` ([`crate::Fn::SelectLane::SelectLane`]) instead of
+//! answering `no-match`. The two are one function because they answer one
+//! question - "which lane is this reading" - and a caller that had to know which
+//! of them its empty list would reach would be reading this crate's internals to
+//! call it. A rule list that names anything at all still wins outright: a caller
+//! that states a policy is not asking for the corpus's.
+//!
+//! The template rules are honoured in both cases. A lane's conditions and its
+//! templates are different questions, and a corpus that states one does not
+//! thereby state the other.
 
-use crate::Struct::{
-	Corpus::Corpus,
-	Error::Error,
-	Lane::{Lane, Selection},
-	Rule::Rules,
-	State::State,
-	Template::Template,
+use crate::{
+	Fn::SelectLane::SelectLane,
+	Struct::{
+		Context::Context,
+		Corpus::Corpus,
+		Error::Error,
+		Lane::{Lane, Selection},
+		Rule::Rules,
+		State::State,
+		Template::Template,
+	},
 };
 
 /// The lane and the template this state selects.
 pub fn Select(Corpus:&Corpus, State:&State, Lanes:&Rules, Templates:&Rules) -> Result<Selection, Error> {
+	// Nothing to add: the corpus states each lane's condition, so this is the
+	// whole policy. `SelectLane` refuses an ambiguous or empty corpus rather
+	// than taking the first lane the map sorted, which is the same refusal a
+	// rule list with no match gives.
+	if Lanes.IsEmpty() {
+		let Lane = SelectLane(Corpus, &Context::from(State))?;
+		let Template = Choose(Corpus, Lane, State, Templates)?;
+		return Ok(Selection { Lane:Lane.clone(), Template:Template.clone() });
+	}
 	for Rule in &Lanes.Ordered {
 		if Rule.When.Holds(State) {
 			let Lane = Corpus.Lane(&Rule.Name).ok_or_else(|| Unknown(&Rule.Name, Corpus))?;
