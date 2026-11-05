@@ -1,7 +1,7 @@
 //! What the caller observed, named the way the corpus names it.
 //!
 //! A state is a map and not a struct, because the fields belong to the corpus
-//! rather than to this crate: a game names `speed_kmh`, a page names
+//! rather than to this crate: a game names `altitude`, a page names
 //! `scroll_y`, and a crate that grew a field for each would be a crate per
 //! caller. The map is the only shape that lets one loader serve both.
 //!
@@ -9,8 +9,8 @@
 //!
 //! - **A field that is not there is not zero.** [`State::Get`] answers `None`
 //!   for a missing field *and* for a field that is `null`, so a predicate
-//!   written over it is false rather than true-by-accident. A car parked at the
-//!   origin and a car the ingestion could not read must not look alike.
+//!   written over it is false rather than true-by-accident. A reading of zero
+//!   and a reading the ingestion could not take must not look alike.
 //! - **A lane sends the fields it names, and no others.** [`State::Keep`]
 //!   answers every field the lane lists - with `null` when the state does not
 //!   carry it - so the request says "this was not observed" instead of silently

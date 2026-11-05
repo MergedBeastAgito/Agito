@@ -39,6 +39,12 @@ no implementation - the workspace already has one substrate - and declares no er
 code belongs to the adapter that reports it rather than to the shape it implements. Dependencies:
 `agentic-runtime`, `serde_json`.
 
+**`agentic-lane`** - `Crate/Lane/`, library `AgenticLane`. `agentic.lane.decide`: a template corpus
+as data - loaded, selected by predicate, composed into a decision-model request and read back as
+typed answers under a metered budget. The round trip leaves through a `Poster` the crate declares
+and never implements, so the suite answers from a fixture and the crate itself opens no socket.
+Dependencies: `agentic-runtime`, `serde_json`.
+
 **`agentic-spacetime-catalog`** - `Crate/SpacetimeCatalog/`, library `AgenticSpacetimeCatalog`. The
 database model as data and rules: six tables described as records, seven reducers over a five-member
 `Context`, and the three refusal codes a module's manifest declares. Dependencies: none - not the
@@ -72,8 +78,15 @@ this tree implements: a third-party adapter depends on the facade and on nothing
 it implements has to be reachable here. Dependencies: `agentic-runtime`, `agentic-browser-cdp`,
 `agentic-chat-driver`, `agentic-design-verification`, `agentic-skill-contract`, `agentic-adapter`.
 
+It does not carry the four ports outside that flow - `agentic.lane.decide`, `agentic.catalog.rules`,
+`agentic.workflow`, `agentic.compose` - and that is curation rather than an omission. Those four are
+what the composition root asks for rather than what a consumer calls, and `agentic-workflow` is the
+sharpest case: it depends on `agentic-browser-cdp`, so re-exporting it would hand every consumer the
+substrate choices this crate exists to hide. `Crate/Sdk/Test/Facade.rs` holds the set to exactly the
+six, so widening it is an edit to that test rather than a line that arrives with the next crate.
+
 **`agentic`** - `Crate/Agentic/`. Wiring, the manifest table and the executable. Dependencies: all
-eight above, `clap`, `tokio`, `serde_json`, and `agentic-adapter` in its tests only - the binary
+nine above, `clap`, `tokio`, `serde_json`, and `agentic-adapter` in its tests only - the binary
 holds no adapter, because `agentic verify` decides whether a manifest is well formed without running
 the code behind it.
 
@@ -82,9 +95,10 @@ the code behind it.
 ## The three rules the dependency graph enforces
 
 **A capability's required surface is runtime-neutral.** `agentic-chat-driver`,
-`agentic-skill-contract`, `agentic-design-verification` and `agentic-spacetime-catalog` do not name
-`tokio` in their dependency lists, and nothing they pull in resolves it. Time arrives as a `Call` (a
-deadline and a cancellation) and a `Pace` (a clock and a wait) supplied by the composition root.
+`agentic-skill-contract`, `agentic-design-verification`, `agentic-spacetime-catalog` and
+`agentic-lane` do not name `tokio` in their dependency lists, and nothing they pull in resolves it.
+Time arrives as a `Call` (a deadline and a cancellation) and a `Pace` (a clock and a wait) supplied
+by the composition root.
 
 **No capability imports an adapter.** `agentic-chat-driver` declares its own `Page` trait and
 `agentic-design-verification` its own `Browse`; `agentic-workflow` owns the bindings that implement

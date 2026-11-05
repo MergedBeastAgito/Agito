@@ -51,7 +51,7 @@ use serde_json::{Value, json};
 fn Budget() -> Call { Call::Within(Duration::from_secs(1), &Wall, Arc::new(Never)) }
 
 /// The fixture corpus this crate ships beside its test.
-fn Directory() -> PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("Fixture/Corpus") }
+fn Directory() -> PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("Test/Fixture/Corpus") }
 
 /// A reply the endpoint actually answered, kept as the bytes a poster returns.
 ///
@@ -134,6 +134,40 @@ fn Moving(Depth:f64) -> State {
 	let mut State = State::New();
 	State.Set("depth", Depth);
 	State
+}
+
+/// The manifest's error list, in the order it names them, against the type's
+/// own list.
+///
+/// `agentic verify --module` compares the same two things, but it compares them
+/// with a built binary; this holds the claim where the crate is edited, so a
+/// code added to `Code::All()` and not to `module.json` fails the suite rather
+/// than a release check. Order is part of the claim: the manifest's list is the
+/// order a harness prepares, and two lists that agree only as sets can still
+/// describe different sequences.
+#[test]
+fn the_port_declares_exactly_the_errors_the_manifest_promises() {
+	let Declared:Vec<&str> = Code::All().into_iter().map(Code::Name).collect();
+	assert_eq!(
+		Declared,
+		vec![
+			"corpus-unreadable",
+			"corpus-invalid",
+			"unknown-lane",
+			"no-match",
+			"budget-exhausted",
+			"post-failed",
+			"unparseable",
+		]
+	);
+	let Manifest:Value = serde_json::from_str(include_str!("../module.json")).expect("the manifest parses");
+	let Named:Vec<&str> = Manifest["provides"]["errors"]
+		.as_array()
+		.expect("the manifest names its errors as a list")
+		.iter()
+		.map(|Code| Code.as_str().expect("every code is a string"))
+		.collect();
+	assert_eq!(Named, Declared, "the manifest names the same codes in the same order");
 }
 
 #[test]

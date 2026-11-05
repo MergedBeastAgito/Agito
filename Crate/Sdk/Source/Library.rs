@@ -45,6 +45,20 @@
 //!   adapter spawns its handler on tokio. A consumer that reached for it would
 //!   panic inside a launch that had already succeeded, so the executor stays the
 //!   consumer's to choose and the adapter's to require.
+//! - **The four ports outside the consumer's flow.** `agentic.lane.decide`,
+//!   `agentic.catalog.rules`, `agentic.workflow` and `agentic.compose` are not
+//!   re-exported here, and that is curation rather than an omission: this crate
+//!   answers what a consumer imports to browse a page, ask a chat, check a
+//!   design and validate a corpus, while those four are what the composition
+//!   root asks for. `agentic-workflow` is the sharpest case - it depends on
+//!   `agentic-browser-cdp`, so re-exporting it would hand every consumer the
+//!   substrate choices this crate exists to hide. `agentic.compose` is the root,
+//!   which nothing in this tree may name. `agentic.lane.decide` leaves its round
+//!   trip through a `Poster` the caller supplies, and `agentic.catalog.rules` is
+//!   the model a manifest is checked against rather than a call a consumer
+//!   makes. `Crate/Sdk/Test/Facade.rs` holds the set to exactly these six, so
+//!   widening it is an edit to that test rather than a line that arrives with
+//!   the next crate.
 //!
 //! # Six ports, five `Error` types, one at the root
 //!

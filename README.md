@@ -65,6 +65,10 @@ the TypeScript compiled into the JavaScript sent to a page, PascalCase module na
 - **`agentic-adapter`** - the port shape a substrate this workspace did not write implements: the
   `Adapter` trait, the claim check its manifest needs, and a scripted stand-in. No behaviour, and no
   substrate of its own.
+- **`agentic-lane`** - `agentic.lane.decide`: a template corpus as data, selected by predicate,
+  composed into a decision-model request and read back as typed answers under a metered budget. The
+  round trip leaves through a `Poster` the crate declares and never implements, so the suite answers
+  from a fixture and the crate opens no socket.
 - **`agentic-spacetime-catalog`** - the database model as data: six tables, seven rules, and no
   dependency at all, not even the server SDK. No dependencies.
 - **`agentic-skill-contract`** - corpus discovery, validation and a stable digest.
@@ -80,7 +84,7 @@ the TypeScript compiled into the JavaScript sent to a page, PascalCase module na
   facade cannot reach any other way.
 - **`agentic`** - wiring, the manifest table and the executable.
 
-**A capability's required surface stays runtime-neutral.** The four capability crates do not name
+**A capability's required surface stays runtime-neutral.** The five capability crates do not name
 `tokio` and nothing they pull in resolves it: time arrives as a `Call` (a deadline and a
 cancellation) and a `Pace` (a clock and a wait), both supplied by the composition root. **No
 capability imports an adapter**: each declares the trait it needs, and the workflow owns the

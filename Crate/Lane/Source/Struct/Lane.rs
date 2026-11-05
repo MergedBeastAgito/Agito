@@ -3,13 +3,13 @@
 //! A lane is not a request. It is the answer to "which fields does this question
 //! actually read", and it exists because sending all sixteen every tick costs
 //! tokens, latency and money for fields the question never reads. Measured on
-//! `clef-flash` with one template: the three-field `drive` lane sent 375 input
-//! tokens where the full state sent 499, and the round trip did not get faster -
-//! so the lane's saving is the context budget, and the speed comes from asking
+//! `clef-flash` with one template: the three-field lane sent 375 input tokens
+//! where the full state sent 499, and the round trip did not get faster - so
+//! the lane's saving is the context budget, and the speed comes from asking
 //! less often.
 //!
 //! The `cadence` and `why` fields are the corpus's own prose and are carried
-//! rather than interpreted: a driver printing its policy is the reader, and a
+//! rather than interpreted: a caller printing its policy is the reader, and a
 //! lane whose reason is only in the corpus author's head is a lane nobody can
 //! argue with.
 

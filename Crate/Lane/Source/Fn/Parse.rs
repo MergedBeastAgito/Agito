@@ -70,16 +70,16 @@ pub fn Parse(Body:&str) -> Result<Answer, Error> {
 /// because the distribution is what makes it a choice: an answer with a
 /// `choice` word and no probabilities is a word this crate cannot threshold.
 fn Read(One:&Value) -> Answered {
-	if let Some(Probabilities) = One.get("probabilities").and_then(Value::as_object) {
-		if let Some(Choice) = One.get("choice").and_then(Value::as_str) {
-			return Answered::Choice {
-				Choice:Choice.to_string(),
-				Probabilities:Probabilities
-					.iter()
-					.filter_map(|(Option, Share)| Share.as_f64().map(|Share| (Option.clone(), Share)))
-					.collect(),
-			};
-		}
+	if let Some(Probabilities) = One.get("probabilities").and_then(Value::as_object)
+		&& let Some(Choice) = One.get("choice").and_then(Value::as_str)
+	{
+		return Answered::Choice {
+			Choice:Choice.to_string(),
+			Probabilities:Probabilities
+				.iter()
+				.filter_map(|(Option, Share)| Share.as_f64().map(|Share| (Option.clone(), Share)))
+				.collect(),
+		};
 	}
 	if let Some(Score) = One.get("score").and_then(Value::as_f64) {
 		return Answered::Score { Score, Legend:Legend(One.get("legend")) };

@@ -29,7 +29,7 @@ use crate::Struct::{
 };
 
 /// The lane and the template this state selects.
-pub fn Select<'a>(Corpus:&'a Corpus, State:&State, Lanes:&Rules, Templates:&Rules) -> Result<Selection, Error> {
+pub fn Select(Corpus:&Corpus, State:&State, Lanes:&Rules, Templates:&Rules) -> Result<Selection, Error> {
 	for Rule in &Lanes.Ordered {
 		if Rule.When.Holds(State) {
 			let Lane = Corpus.Lane(&Rule.Name).ok_or_else(|| Unknown(&Rule.Name, Corpus))?;
@@ -52,7 +52,7 @@ pub fn Select<'a>(Corpus:&'a Corpus, State:&State, Lanes:&Rules, Templates:&Rule
 pub fn Choose<'a>(Corpus:&'a Corpus, Lane:&Lane, State:&State, Rules:&Rules) -> Result<&'a Template, Error> {
 	for Rule in &Rules.Ordered {
 		// A rule about another lane's template is not a rule about this one.
-		if !Lane.Templates.iter().any(|Served| *Served == Rule.Name) || !Rule.When.Holds(State) {
+		if !Lane.Templates.contains(&Rule.Name) || !Rule.When.Holds(State) {
 			continue;
 		}
 		return Corpus.Template(&Rule.Name).ok_or_else(|| {
@@ -102,7 +102,7 @@ fn DescribeRules(Rules:&Rules) -> String {
 	}
 }
 
-/// A state as words, for the same reason: `speed_kmh=38, gear=3`.
+/// A state as words, for the same reason: `depth=38, heading=90`.
 fn DescribeState(State:&State) -> String {
 	if State.IsEmpty() {
 		return "an empty state".to_string();

@@ -16,7 +16,7 @@
 //! - [`Fn::Load::Load`] reads the directory and validates it against itself: a
 //!   lane naming a field the observation does not carry, or a template that
 //!   does not exist, is a corpus that cannot answer and is refused at load
-//!   rather than at 40 km/h;
+//!   rather than mid-run;
 //! - [`Fn::Select::Select`] picks the lane and, inside it, the template - by a
 //!   predicate over the state, never by guessing which question is current;
 //! - [`Fn::Compose::Compose`] builds `{model, state, questions}` from the

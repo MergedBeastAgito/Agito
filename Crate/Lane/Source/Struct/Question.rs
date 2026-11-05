@@ -1,9 +1,9 @@
 //! One typed question, which is the difference between a decision and a parse.
 //!
-//! A model that answers in free text has to be parsed, and a parse failure at
-//! 40 km/h is a crash. A typed question cannot answer outside its options: it
-//! returns a probability per option, so "steer left at 0.11, throttle at 0.53"
-//! is a decision a caller thresholds rather than interprets.
+//! A model that answers in free text has to be parsed, and a parse failure
+//! mid-run is a crash. A typed question cannot answer outside its options: it
+//! returns a probability per option, so "left at 0.11, right at 0.53" is a
+//! decision a caller thresholds rather than interprets.
 //!
 //! Three shapes, and the third is the one that keeps the corpus honest:
 //!

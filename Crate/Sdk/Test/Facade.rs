@@ -196,25 +196,46 @@ fn the_facade_declares_its_own_kind_and_is_not_an_entry_in_the_table() {
 	assert_eq!(Module["kind"], "facade");
 	assert_eq!(Module["name"], "@agentic/sdk");
 	// A facade provides no port, so it has nothing a harness would prepare for -
-	// which is why it is not one of the eight and why `agentic verify --module`
+	// which is why it is not one of the ten and why `agentic verify --module`
 	// does not answer for it.
 	assert!(Module["provides"]["port"].is_null(), "{Module}");
 	assert!(!All.iter().any(|One| One.Name == "@agentic/sdk"));
 	// What it does declare is the ports it re-exports, which is the statement
-	// this crate is: a path over five of them.
+	// this crate is: one path over six ports.
 	let Required:Vec<&str> = Module["requires"]["ports"]
 		.as_array()
 		.map(|Ports| Ports.iter().filter_map(serde_json::Value::as_str).collect())
 		.unwrap_or_default();
-	for Port in [
-		"agentic.runtime",
+	// The set, not a subset. The facade is a curated surface - the flow a
+	// consumer performs - so a seventh port arriving here by accident would be a
+	// dependency the consumer did not ask for. Widening it is an edit to this
+	// list, which is the point of listing it.
+	let mut Declared = Required.clone();
+	Declared.sort_unstable();
+	let mut Expected = vec![
+		"agentic.adapter",
 		"agentic.browse",
 		"agentic.chat.ask",
-		"agentic.verify.design",
+		"agentic.runtime",
 		"agentic.skill.validate",
-		"agentic.adapter",
+		"agentic.verify.design",
+	];
+	Expected.sort_unstable();
+	assert_eq!(Declared, Expected, "the facade re-exports the consumer's flow and nothing else");
+	// The four it leaves out are ports the workspace really ships, so each
+	// omission is a decision about a module rather than a name that never
+	// existed: the composition root is what carries them.
+	for Port in [
+		"agentic.lane.decide",
+		"agentic.catalog.rules",
+		"agentic.workflow",
+		"agentic.compose",
 	] {
-		assert!(Required.contains(&Port), "{Port} is not declared: {Required:?}");
+		assert!(
+			All.iter().any(|One| One.Port == Port),
+			"{Port} is outside the facade but no module in the table provides it"
+		);
+		assert!(!Required.contains(&Port), "{Port} is outside the consumer's flow");
 	}
 	// A port this crate says it re-exports must be a port some module in the
 	// table provides, or the surface promises something nothing answers for.

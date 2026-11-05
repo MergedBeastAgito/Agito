@@ -3,7 +3,7 @@
 //!
 //! This is the predicate a lane and a template are selected by. It is a small
 //! closed set rather than an expression language, and that is a decision: a
-//! string evaluated at run time is a parse failure at 40 km/h, a second syntax
+//! string evaluated at run time is a parse failure mid-run, a second syntax
 //! nobody's editor checks, and a way for a corpus file to run arbitrary logic.
 //! A closed set can only be wrong in ways the type system shows.
 //!
@@ -16,9 +16,10 @@
 //! # Missing is not a value
 //!
 //! Every comparison answers `false` when the field is absent or null: an
-//! unobserved speed is not a speed of zero, and a predicate that treated it as
-//! one would select a lane for a car nobody can see. `Absent` is the predicate
-//! for "we could not read it", and it is the only one that is true in that case.
+//! unobserved field is not a field of zero, and a predicate that treated it as
+//! one would select a lane for an observation nobody made. `Absent` is the
+//! predicate for "we could not read it", and it is the only one that is true in
+//! that case.
 
 use serde_json::Value;
 

@@ -3,7 +3,7 @@
 //! Three decisions, and each is a refusal of something easier:
 //!
 //! - **Only the lane's fields travel.** The state a caller observes is usually
-//!   larger than the question reads - a full car against three numbers - and
+//!   larger than the question reads - a full observation against three numbers - and
 //!   sending the full state every tick is what a lane exists to avoid. The
 //!   fields the lane names are kept even when the state does not carry them, as
 //!   `null`: "this was not observed" is a fact the model may weigh, while a

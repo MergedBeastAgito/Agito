@@ -20,6 +20,7 @@ set.
 | `BrowserCDP/`         | `agentic-browser-cdp`         | `AgenticBrowserCDP`         | concrete browser substrate              |
 | `ChatDriver/`         | `agentic-chat-driver`         | `AgenticChatDriver`         | chat use case and its browse contract   |
 | `DesignVerification/` | `agentic-design-verification` | `AgenticDesignVerification` | measurement and evidence                |
+| `Lane/`               | `agentic-lane`                | `AgenticLane`               | template corpus and typed answers       |
 | `SkillContract/`      | `agentic-skill-contract`      | `AgenticSkillContract`      | corpus discovery, validation, packaging |
 | `Runtime/`            | `agentic-runtime`             | `AgenticRuntime`            | execution policy and resource ownership |
 | `Workflow/`           | `agentic-workflow`            | `AgenticWorkflow`           | adapter-independent compositions        |
@@ -30,6 +31,13 @@ import-direction rule into a convention inside a single compiler boundary, which
 rule exists to prevent. Their internal operations - attach/launch/dispose, ask/verify/read,
 discover/validate/package - stay modules.
 
+The table is the capture's proposed set, not the tree's current inventory. `Adapter/`,
+`SpacetimeCatalog/`, `Lane/` and `Sdk/` were added after the capture and answer needs it did not
+reach: the port shape a substrate outside this tree implements, the database model as data, the
+template corpus a decision-model call reads its questions from, and the facade a consumer outside
+this workspace names. `Crate/README.md` is the inventory and the statement of each dependency list;
+where the two disagree, that file is the current one.
+
 ## Dependencies
 
 **Source:** `.hermes/research/rust-4ffde6d5.md` §1's dependency graph, and its reading of `Runtime`
@@ -38,11 +46,19 @@ as a policy engine rather than a registry (`:163-187`).
 ```
 Agentic  → Runtime, BrowserCDP, ChatDriver, DesignVerification, SkillContract, Workflow
 Workflow → ChatDriver, DesignVerification, SkillContract
-BrowserCDP, ChatDriver, DesignVerification, SkillContract, Runtime → no domain crate
+Lane     → Runtime, serde_json
+BrowserCDP, ChatDriver, DesignVerification, SkillContract, Lane, Runtime → no domain crate
 ```
 
 `Runtime` is a policy engine, not a registry: it does not import every capability. The root
 registers capability invocations and cleanup operations with it.
+
+`Lane` is not in the capture's graph - it was added to the tree afterwards, so its edges are read
+from `Crate/Lane/Cargo.toml` rather than from the capture - and it has the same shape as the other
+capabilities: it names the runtime for the `Call` a poster is bounded by and the `FutureBox` its
+port returns, the serialiser for the corpus, and nothing else. The round trip leaves through a
+`Poster` the crate declares and never implements, so `Lane` opens no socket and the composition root
+supplies the one that does.
 
 ## "Ports belong to their consumers", in Rust
 

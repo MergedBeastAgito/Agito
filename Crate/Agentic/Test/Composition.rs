@@ -49,6 +49,53 @@ fn every_manifest_names_exactly_the_errors_its_crate_declares() {
 }
 
 #[test]
+fn every_manifest_states_the_version_and_the_floor_the_workspace_builds() {
+	// The manifest is hand-written JSON beside a crate whose version and rust
+	// floor are inherited from `[workspace.package]`, so nothing but a test
+	// keeps the two in step. The floor is the field that drifts first: `1.85`
+	// is edition 2024's minimum, not this workspace's, so it is the number a
+	// manifest reaches for when nobody checks it against the crate it sits in.
+	// And because the table `include_str!`s these bytes, whatever a stale
+	// manifest says is what this binary reports as the workspace's answer.
+	//
+	// Read from disk rather than from the table on purpose: the facade is a
+	// crate with a manifest and is deliberately not one of the ten, so the
+	// invariant is about every crate rather than about every row.
+	let Version = env!("CARGO_PKG_VERSION");
+	let Floor = format!("rust>={}", env!("CARGO_PKG_RUST_VERSION"));
+	let Crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+	let mut Seen = 0;
+	for Entry in fs::read_dir(&Crates).expect("the crate directory is readable") {
+		let Manifest = Entry.expect("a directory entry").path().join("module.json");
+		if !Manifest.is_file() {
+			continue;
+		}
+		let Text = fs::read_to_string(&Manifest).expect("the manifest is readable");
+		let Parsed:Value = serde_json::from_str(&Text).expect("the manifest parses");
+		assert_eq!(
+			Parsed.get("version").and_then(Value::as_str),
+			Some(Version),
+			"{}: the manifest's version is not the workspace's {Version}",
+			Manifest.display()
+		);
+		assert_eq!(
+			Parsed
+				.get("artefact")
+				.and_then(|Artefact| Artefact.get("runtime"))
+				.and_then(Value::as_str),
+			Some(Floor.as_str()),
+			"{}: the manifest's floor is not the crate's {Floor}",
+			Manifest.display()
+		);
+		Seen += 1;
+	}
+	// A walk that visited nothing would satisfy every assertion above, so the
+	// count is part of the test: one `module.json` per crate. A twelfth crate
+	// is a deliberate edit here as well as in `All`.
+	assert_eq!(Seen, 11, "every crate under Crate/ carries a module.json");
+}
+
+#[test]
 fn the_error_vocabulary_of_each_crate_is_the_one_the_manifest_promises() {
 	assert_eq!(
 		Declared("@agentic/runtime").unwrap(),

@@ -1,7 +1,7 @@
 {
 	"name": "@agentic/spacetime-catalog",
 	"kind": "capability",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"provides": {
 		"port": "agentic.catalog.rules",
 		"errors": ["admission-refused", "lease-held", "budget-exhausted"]

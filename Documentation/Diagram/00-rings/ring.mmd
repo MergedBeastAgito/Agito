@@ -13,6 +13,7 @@ flowchart TD
   subgraph Ring1["Ring 1 - capabilities"]
     C["chat-driver"]:::hook
     D["design-verification"]:::hook
+    L["lane<br>a corpus as data"]:::hook
     S["skill-contract"]:::hook
   end
   subgraph Ring0["Ring 0 - substrate and policy"]
@@ -28,4 +29,5 @@ flowchart TD
   W ==> S
   C -.-> B
   D -.-> B
+  L -.-> R
   R -.-> P
