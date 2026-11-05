@@ -541,7 +541,7 @@ fn a_lane_that_names_a_template_nobody_wrote_is_refused_at_load() {
 	let Directory = Written(&Lanes(Always(), Corner(), Race()).replace("corner.entry", "corner.apex"));
 
 	let Why = Load(Directory.Root()).expect_err("a lane cannot serve a template that does not exist");
-	let CorpusError::UnknownTemplateRef { lane, template_id } = &Why else {
+	let CorpusError::UnknownTemplateRef { lane, template_id, .. } = &Why else {
 		panic!("an unknown template is UnknownTemplateRef, not {Why:?}");
 	};
 	assert_eq!(lane, "corner", "the refusal names the lane to open");
@@ -556,7 +556,7 @@ fn a_lane_that_sends_a_field_nobody_observes_is_refused_at_load() {
 	let Directory = Written(&Lanes(Always(), Corner(), Race()).replace("\"yaw_rate\"", "\"yaw_rate_typo\""));
 
 	let Why = Load(Directory.Root()).expect_err("a lane cannot send a field the observation does not carry");
-	let CorpusError::UnknownFieldRef { lane, field } = &Why else {
+	let CorpusError::UnknownFieldRef { lane, field, .. } = &Why else {
 		panic!("an unknown field is UnknownFieldRef, not {Why:?}");
 	};
 	assert_eq!(lane, "corner", "the refusal names the lane");

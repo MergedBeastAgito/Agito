@@ -52,6 +52,10 @@ pub enum CorpusError {
 	MalformedJson {
 		/// The path that was read.
 		path:PathBuf,
+		/// Which file of the layout it is, in the corpus's own words ("the
+		/// observation file"), so the sentence says what the reader was
+		/// expecting to find there rather than only where the bytes came from.
+		role:&'static str,
 		/// What the parser said, with its line and column.
 		source:serde_json::Error,
 	},
@@ -93,6 +97,9 @@ pub enum CorpusError {
 		lane:String,
 		/// The template id the lane names.
 		template_id:String,
+		/// Every template the corpus does declare, so the refusal says what
+		/// the lane could have named instead of only what it got wrong.
+		available:Vec<String>,
 	},
 	/// A lane sends a field the observation neither reads nor derives.
 	UnknownFieldRef {
@@ -100,6 +107,9 @@ pub enum CorpusError {
 		lane:String,
 		/// The field the lane names.
 		field:String,
+		/// Every field the observation does carry (read or derived), so the
+		/// reader sees the vocabulary the lane was written against.
+		available:Vec<String>,
 	},
 	/// A lane states a condition the corpus's vocabulary cannot express.
 	///
@@ -195,17 +205,17 @@ impl CorpusError {
 		match self {
 			CorpusError::MissingFile { path } => format!("{} is missing", path.display()),
 			CorpusError::Io { path, .. } => format!("{} could not be read", path.display()),
-			CorpusError::MalformedJson { path, .. } => format!("{} is not JSON", path.display()),
+			CorpusError::MalformedJson { path, role, .. } => format!("{role} {} is not JSON", path.display()),
 			CorpusError::UnexpectedShape { path, what, .. } => {
 				format!("{}: {what} is not the shape the corpus layout puts there", path.display())
 			},
 			CorpusError::NoLanes { .. } => "the corpus declares no lane".to_string(),
 			CorpusError::DuplicateLane { lane, .. } => format!("the lane {lane} is declared twice"),
-			CorpusError::UnknownTemplateRef { lane, template_id } => {
+			CorpusError::UnknownTemplateRef { lane, template_id, .. } => {
 				format!("lane {lane} names the template {template_id}, which does not exist")
 			},
-			CorpusError::UnknownFieldRef { lane, field } => {
-				format!("lane {lane} sends the field {field}, which the observation neither reads nor derives")
+			CorpusError::UnknownFieldRef { lane, field, .. } => {
+				format!("lane {lane} sends the field {field}, which the observation does not carry")
 			},
 			CorpusError::BadCondition { lane, .. } => {
 				format!("lane {lane} states a condition this crate cannot read")
@@ -221,7 +231,7 @@ impl CorpusError {
 				format!("the choice {template}/{question} offers no option")
 			},
 			CorpusError::ScoreWithoutScale { template, question } => {
-				format!("the score {template}/{question} has fewer than two words of scale")
+				format!("the score {template}/{question} names no scale: a position needs two words at least")
 			},
 		}
 	}
@@ -230,14 +240,26 @@ impl CorpusError {
 	/// the files that were searched, the id that was not found.
 	pub fn Detail(&self) -> String {
 		match self {
-			CorpusError::MissingFile { .. } => "the corpus layout needs this file".to_string(),
+			CorpusError::MissingFile { path } => {
+				format!("the corpus layout requires the file {}", path.display())
+			},
 			CorpusError::Io { source, .. } => source.to_string(),
 			CorpusError::MalformedJson { source, .. } => source.to_string(),
 			CorpusError::UnexpectedShape { found, .. } => found.clone(),
 			CorpusError::NoLanes { searched } => Names(searched),
 			CorpusError::DuplicateLane { first, second, .. } => format!("{} and {}", first.display(), second.display()),
-			CorpusError::UnknownTemplateRef { template_id, .. } => template_id.clone(),
-			CorpusError::UnknownFieldRef { field, .. } => field.clone(),
+			CorpusError::UnknownTemplateRef { template_id, available, .. } => {
+				format!(
+					"{template_id} is not one of the templates the corpus declares: {}",
+					Listed(available)
+				)
+			},
+			CorpusError::UnknownFieldRef { field, available, .. } => {
+				format!(
+					"{field} is not one of the fields the observation carries: {}",
+					Listed(available)
+				)
+			},
 			CorpusError::BadCondition { message, detail, .. } => format!("{message}: {detail}"),
 			CorpusError::LaneWithoutTemplate { lane } => lane.clone(),
 			CorpusError::TemplateAsksNothing { template } => template.clone(),
@@ -281,6 +303,14 @@ impl From<CorpusError> for Error {
 			Error::CorpusInvalid(Message, Detail)
 		}
 	}
+}
+
+/// A list of names as one line, for an error that has to say what was available.
+fn Listed(Items:&[String]) -> String {
+	if Items.is_empty() {
+		return "none".to_string();
+	}
+	Items.join(", ")
 }
 
 /// A list of paths as one line, which is what an error can carry.

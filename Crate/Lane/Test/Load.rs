@@ -217,7 +217,7 @@ fn a_lane_naming_a_template_nobody_wrote_is_refused_by_lane_and_id() {
 		&[("Templates/Observation.json", Observation), ("Templates/Questions.json", Lanes)],
 	);
 	let Why = Load(&Root).expect_err("a lane serves a template that exists");
-	let CorpusError::UnknownTemplateRef { lane, template_id } = &Why else {
+	let CorpusError::UnknownTemplateRef { lane, template_id, .. } = &Why else {
 		panic!("an unknown template is UnknownTemplateRef, not {Why:?}");
 	};
 	assert_eq!(lane, "plain");
@@ -326,7 +326,7 @@ fn a_lane_sending_a_field_the_corpus_never_names_is_refused() {
 		&[("Templates/Observation.json", Observation), ("Templates/Questions.json", Lanes)],
 	);
 	let Why = Load(&Root).expect_err("a lane may not send a field nobody named");
-	let CorpusError::UnknownFieldRef { lane, field } = &Why else {
+	let CorpusError::UnknownFieldRef { lane, field, .. } = &Why else {
 		panic!("an unknown field is UnknownFieldRef, not {Why:?}");
 	};
 	assert_eq!(lane, "plain");

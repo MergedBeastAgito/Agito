@@ -69,7 +69,7 @@
 //! only what they say.
 
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, BTreeSet},
 	fs,
 	io,
 	path::{Path, PathBuf},
@@ -103,6 +103,9 @@ pub const QuestionsFile:&str = "Questions.json";
 struct Named {
 	/// Where the text came from.
 	Path:PathBuf,
+	/// Which file of the layout it is, in the corpus's own words, so a refusal
+	/// can say "the observation file" rather than only naming a path.
+	Role:&'static str,
 	/// The text itself.
 	Text:String,
 }
@@ -124,9 +127,14 @@ pub fn Load(Root:&Path) -> Result<Corpus, CorpusError> {
 	let Templates = if Wrapper.is_dir() { Wrapper } else { Root.to_path_buf() };
 	let Observation = Named {
 		Path:Templates.join(ObservationFile),
+		Role:"the observation file",
 		Text:Text(&Templates.join(ObservationFile))?,
 	};
-	let Questions = Named { Path:Templates.join(QuestionsFile), Text:Text(&Templates.join(QuestionsFile))? };
+	let Questions = Named {
+		Path:Templates.join(QuestionsFile),
+		Role:"the question file",
+		Text:Text(&Templates.join(QuestionsFile))?,
+	};
 
 	// Every other JSON file the layout puts beside the templates. The two files
 	// above are skipped by path, not by name, so a corpus that keeps its lanes
@@ -137,7 +145,7 @@ pub fn Load(Root:&Path) -> Result<Corpus, CorpusError> {
 			if Path == Observation.Path || Path == Questions.Path {
 				continue;
 			}
-			Lanes.push(Named { Path:Path.clone(), Text:Text(&Path)? });
+			Lanes.push(Named { Path:Path.clone(), Role:"the lane file", Text:Text(&Path)? });
 		}
 	}
 
@@ -168,8 +176,16 @@ fn Directories(Root:&Path, Templates:&Path) -> Vec<PathBuf> {
 /// separate lane file reads it from disk with [`Load`].
 pub fn Read(Observation:&str, Questions:&str) -> Result<Corpus, CorpusError> {
 	Assemble(
-		Named { Path:PathBuf::from(ObservationFile), Text:Observation.to_string() },
-		Named { Path:PathBuf::from(QuestionsFile), Text:Questions.to_string() },
+		Named {
+			Path:PathBuf::from(ObservationFile),
+			Role:"the observation file",
+			Text:Observation.to_string(),
+		},
+		Named {
+			Path:PathBuf::from(QuestionsFile),
+			Role:"the question file",
+			Text:Questions.to_string(),
+		},
 		Vec::new(),
 	)
 }
@@ -276,7 +292,7 @@ fn Candidates(Directory:&Path) -> Result<Vec<PathBuf>, CorpusError> {
 /// One named text as JSON.
 fn Json(Source:&Named) -> Result<Value, CorpusError> {
 	serde_json::from_str(&Source.Text)
-		.map_err(|Why| CorpusError::MalformedJson { path:Source.Path.clone(), source:Why })
+		.map_err(|Why| CorpusError::MalformedJson { path:Source.Path.clone(), role:Source.Role, source:Why })
 }
 
 /// An operating-system refusal, with a missing path kept apart from the rest.
@@ -286,6 +302,19 @@ fn Problem(Path:&Path, Why:io::Error) -> CorpusError {
 	} else {
 		CorpusError::Io { path:Path.to_path_buf(), source:Why }
 	}
+}
+
+/// Every field a lane may send: the ones the observation reads and the ones it
+/// derives, in one sorted list, so a refusal can show the vocabulary the lane
+/// was written against.
+fn Available(Fields:&BTreeMap<String, Value>, Derived:&BTreeMap<String, Value>) -> Vec<String> {
+	Fields
+		.keys()
+		.chain(Derived.keys())
+		.cloned()
+		.collect::<BTreeSet<String>>()
+		.into_iter()
+		.collect()
 }
 
 /// One lane, checked against the observation and the templates.
@@ -302,7 +331,11 @@ fn ReadLane(
 		// A derived condition is as sendable as a read field: the lane's job is
 		// to send what the question reads, and `verdict` is what it reads.
 		if !Fields.contains_key(Field) && !Derived.contains_key(Field) {
-			return Err(CorpusError::UnknownFieldRef { lane:Name.to_string(), field:Field.clone() });
+			return Err(CorpusError::UnknownFieldRef {
+				lane:Name.to_string(),
+				field:Field.clone(),
+				available:Available(Fields, Derived),
+			});
 		}
 	}
 	let Served = Strings(Body.get("templates"), Source, &format!("lane {Name}'s templates"))?;
@@ -311,7 +344,11 @@ fn ReadLane(
 	}
 	for One in &Served {
 		if !Templates.contains_key(One) {
-			return Err(CorpusError::UnknownTemplateRef { lane:Name.to_string(), template_id:One.clone() });
+			return Err(CorpusError::UnknownTemplateRef {
+				lane:Name.to_string(),
+				template_id:One.clone(),
+				available:Templates.keys().cloned().collect(),
+			});
 		}
 	}
 	// The lane's own condition. Reading it here is what makes a lane pure data:
@@ -365,7 +402,11 @@ fn ReadSelect(
 	})?;
 	for Field in Condition.Fields() {
 		if !Fields.contains_key(Field) && !Derived.contains_key(Field) {
-			return Err(CorpusError::UnknownFieldRef { lane:Lane.to_string(), field:Field.to_string() });
+			return Err(CorpusError::UnknownFieldRef {
+				lane:Lane.to_string(),
+				field:Field.to_string(),
+				available:Available(Fields, Derived),
+			});
 		}
 	}
 	Ok(match Condition {

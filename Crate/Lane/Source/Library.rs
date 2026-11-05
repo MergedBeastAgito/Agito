@@ -34,6 +34,11 @@
 //!   what is left of it ([`Struct::Answer::Usage`]). [`Fn::Parse::Parse`] is the
 //!   same reading reported as the port's own code, with the decoder's reason
 //!   kept inside it.
+//! - [`Fn::Decide::Decide`] is those four in one call: corpus and state in, a
+//!   typed answer out. It is the whole of what a consumer that does not want to
+//!   choose a lane, compose a body or read a reply itself has to know, and
+//!   [`Fn::Decide::DecideOn`] is the same call when a lane's condition reads
+//!   more than the request sends.
 //!
 //! # A refusal names the field it was about
 //!
@@ -95,6 +100,7 @@ pub use crate::{
 	Fn::{
 		Ask::Ask,
 		Compose::Compose,
+		Decide::{Decide, DecideOn},
 		Decode::{Decode, DecodeBytes, DecodeWithin},
 		Load::{Load, Read},
 		Model::{Bare, Models, Price, Route},
@@ -113,7 +119,7 @@ pub use crate::{
 		Error::{Code, Error},
 		Lane::{Lane, Selection},
 		Observation::{Observation, ObservationField},
-		Port::{Decide, Failure, Poster},
+		Port::{Decide as DecidePort, Failure, Poster},
 		Predicate::Predicate,
 		Question::Question,
 		Request::Request,

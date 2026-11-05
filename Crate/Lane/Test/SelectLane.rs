@@ -265,7 +265,7 @@ fn a_condition_over_a_field_the_observation_does_not_carry_is_refused_at_load() 
 	});
 	let Why = Read(Observed, &Questions.to_string()).expect_err("the lane can never hold");
 	assert!(
-		matches!(&Why, CorpusError::UnknownFieldRef { lane, field } if lane == "ghost" && field == "ghost_field"),
+		matches!(&Why, CorpusError::UnknownFieldRef { lane, field, .. } if lane == "ghost" && field == "ghost_field"),
 		"{Why}"
 	);
 	assert!(Why.to_string().contains("ghost_field"), "the refusal names the field: {Why}");

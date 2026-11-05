@@ -29,7 +29,13 @@ use crate::{
 };
 
 /// Post one request and return the answer it caused.
-pub async fn Ask(Request:&Request, Poster:&dyn Poster, Call:Call) -> Result<Answer, Error> {
+///
+/// Generic over the poster rather than taking a trait object, so a caller
+/// holding a concrete adapter - or a test holding a fixture - pays no
+/// indirection, while a caller holding `&dyn Poster` still works: a trait object
+/// implements its own trait, so `?Sized` covers both. [`crate::Struct::Decider::Decider`]
+/// is the second kind.
+pub async fn Ask<P: Poster + ?Sized>(Request:&Request, Poster:&P, Call:Call) -> Result<Answer, Error> {
 	if Call.Cancelled() {
 		return Err(Error::PostFailed(
 			"the caller cancelled before the request was posted",
