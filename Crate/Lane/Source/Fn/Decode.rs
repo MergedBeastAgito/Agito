@@ -131,28 +131,45 @@ fn Read(Body:&str, Ceiling:Option<u64>) -> Result<Answer, DecodeError> {
 
 /// One question's answer.
 ///
-/// A choice is recognised by its `probabilities` rather than by its `type`
-/// alone, because the distribution is what makes it a choice: an answer with a
-/// `choice` word and no probabilities is a word this crate cannot threshold.
+/// A declared type this crate does not interpret - `noul` is one the endpoint
+/// knows and this crate does not - is carried whole rather than read as a
+/// choice that happens to be missing its distribution. Only an undeclared type
+/// is recognised by shape, because then the shape is all there is: an answer
+/// carrying `probabilities` is a distribution, and one carrying `score` is a
+/// position on a scale.
 fn OneAnswer(Name:&str, One:&Value) -> Result<Answered, DecodeError> {
 	let One = One
 		.as_object()
 		.ok_or_else(|| DecodeError::Shape(Name.to_string(), format!("the answer is {}, not an object", Kind(One))))?;
 	let Declared = One.get("type").and_then(Value::as_str).unwrap_or_default();
 
-	if Declared == "choice" || One.contains_key("choice") || One.contains_key("probabilities") {
+	match Declared {
+		"choice" => return Choice(Name, One),
+		"score" => return Position(Name, One),
+		"" => {},
+		// A type this crate cannot turn into a probability or a position is
+		// kept as it arrived: dropping it would be an answer that is not one,
+		// and refusing it would be this crate claiming a vocabulary it lacks.
+		_ => return Ok(Answered::Other(Value::Object(One.clone()))),
+	}
+	if One.contains_key("probabilities") {
 		return Choice(Name, One);
 	}
-	if Declared == "score" || One.contains_key("score") {
-		let Score = One.get("score").and_then(Value::as_f64).ok_or_else(|| {
-			DecodeError::Shape(
-				format!("{Name}.score"),
-				format!("the score is {}, not a number", One.get("score").map(Kind).unwrap_or("absent")),
-			)
-		})?;
-		return Ok(Answered::Score { Score, Legend:Legend(One.get("legend")) });
+	if One.contains_key("score") {
+		return Position(Name, One);
 	}
 	Ok(Answered::Other(Value::Object(One.clone())))
+}
+
+/// A score: the value, and the legend it sits on.
+fn Position(Name:&str, One:&Map<String, Value>) -> Result<Answered, DecodeError> {
+	let Score = One.get("score").and_then(Value::as_f64).ok_or_else(|| {
+		DecodeError::Shape(
+			format!("{Name}.score"),
+			format!("the score is {}, not a number", One.get("score").map(Kind).unwrap_or("absent")),
+		)
+	})?;
+	Ok(Answered::Score { Score, Legend:Legend(One.get("legend")) })
 }
 
 /// A choice: the option named, and the distribution it was named from.

@@ -238,6 +238,32 @@ fn a_reply_that_answered_no_question_is_empty() {
 }
 
 #[test]
+fn a_question_type_this_crate_does_not_interpret_is_carried_not_refused() {
+	// `noul` is a type the endpoint knows and this crate does not. Refusing it
+	// would be this crate claiming a vocabulary it lacks; dropping it would be
+	// an answer that is not one.
+	let Body = r#"{
+		"success": true,
+		"result": {
+			"answers": {
+				"confidence": { "type": "noul", "choice": "sure", "probabilities": { "sure": 0.9, "unsure": 0.1 } }
+			},
+			"usage": { "input_tokens": 5, "output_tokens": 0 }
+		}
+	}"#;
+	let Answer = Decode(Body).expect("a type this crate cannot read is still an answer");
+	let Answered::Other(Raw) = Answer.Answer("confidence").expect("answered") else {
+		panic!("expected Other, got {:?}", Answer.Answer("confidence"))
+	};
+	assert_eq!(Raw["type"], "noul", "the answer arrives as it was written");
+	assert_eq!(
+		Answer.Choice("confidence"),
+		None,
+		"this crate does not threshold a type it does not know"
+	);
+}
+
+#[test]
 fn the_ports_error_keeps_the_decoders_reason() {
 	// The port speaks `module.json`'s seven codes, so an unreadable reply is
 	// `unparseable` - but the reason it was unreadable is not flattened into

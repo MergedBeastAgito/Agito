@@ -31,7 +31,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use crate::Struct::Error::Error;
+use crate::Struct::Error::{Code, Error};
 
 /// Every way reading a corpus can fail.
 #[derive(Debug)]
@@ -164,6 +164,15 @@ impl CorpusError {
 			_ => None,
 		}
 	}
+
+	/// The port's own code for this failure.
+	///
+	/// The same split [`CorpusError::Unreadable`] makes, stated in the vocabulary
+	/// `module.json` fixes: a corpus that could not be read at all, or one that
+	/// was read and disagrees with itself. A caller that branches on the code gets
+	/// the seven-code answer; a caller that wants to say which file was wrong
+	/// keeps the `CorpusError` it came from.
+	pub fn Code(&self) -> Code { if self.Unreadable() { Code::CorpusUnreadable } else { Code::CorpusInvalid } }
 
 	/// Whether the corpus could not be read at all, as opposed to having been
 	/// read and found to disagree with itself.
