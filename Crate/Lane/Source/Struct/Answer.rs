@@ -17,13 +17,48 @@ use serde_json::Value;
 
 use crate::Struct::Request::Request;
 
-/// What a reply reported spending.
+/// What a reply reported spending, and what is left of the caller's ceiling.
+///
+/// The counts are the reply's own; [`Usage::Consumed`] and [`Usage::Remaining`]
+/// are the meter's view of the same numbers, computed once at decode time so
+/// that two callers cannot disagree about what a run has left. A remaining
+/// without a ceiling is `None` rather than zero: "unknown" and "nothing left"
+/// are the two answers a caller must not confuse, because one of them ends a
+/// run.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Usage {
 	/// Input tokens, as the reply counts them.
 	pub Input:u64,
 	/// Output tokens, as the reply counts them.
 	pub Output:u64,
+	/// Tokens this reply consumed, as the meter charges them: input + output.
+	pub Consumed:u64,
+	/// What the caller's token ceiling has left after this reply, floored at
+	/// zero. `None` when the decoder was given no ceiling.
+	pub Remaining:Option<u64>,
+}
+
+impl Usage {
+	/// A reply's counts, seen against the caller's ceiling.
+	///
+	/// A reply that spent past the ceiling reports `Some(0)` remaining rather
+	/// than a wrapped `u64`: the overrun is a fact for the meter to refuse the
+	/// *next* call with, not a number to subtract from.
+	pub fn Of(Input:u64, Output:u64, Ceiling:Option<u64>) -> Self {
+		let Consumed = Input.saturating_add(Output);
+		Self {
+			Input,
+			Output,
+			Consumed,
+			Remaining:Ceiling.map(|Ceiling| Ceiling.saturating_sub(Consumed)),
+		}
+	}
+
+	/// Whether this reply used up the ceiling it was measured against.
+	///
+	/// `false` when no ceiling was declared, because an unbounded run cannot
+	/// have reached one.
+	pub fn Exhausted(&self) -> bool { self.Remaining == Some(0) }
 }
 
 /// One question's answer.

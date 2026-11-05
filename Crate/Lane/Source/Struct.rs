@@ -4,13 +4,16 @@
 pub mod Answer;
 pub mod Budget;
 pub mod Corpus;
+pub mod CorpusError;
 pub mod Decider;
 pub mod Error;
 pub mod Lane;
 pub mod Port;
+pub mod Predicate;
 pub mod Question;
 pub mod Request;
 pub mod Rule;
+pub mod SelectError;
 pub mod State;
 pub mod Template;
 pub mod When;

@@ -68,3 +68,11 @@ path = "Test/Legend.rs"
 [[test]]
 name = "Note"
 path = "Test/Note.rs"
+
+# The one test that reads a corpus this workspace did not write. It sits here
+# rather than beside `Crate/Lane` because the corpus's vocabulary is a game's,
+# and `Crate/Lane/Test/Lane.rs` states that a game name inside the crate would
+# be the crate claiming a caller it does not have.
+[[test]]
+name = "CorpusLanes"
+path = "Test/CorpusLanes.rs"

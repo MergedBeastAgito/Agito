@@ -11,12 +11,17 @@ description = "A template corpus as data: load it, select a lane by predicate, c
 name = "AgenticLane"
 path = "Source/Library.rs"
 
-# Two dependencies, and the short list is the claim: no HTTP client, no
+# Three dependencies, and the short list is the claim: no HTTP client, no
 # executor, no browser. The poster that reaches the endpoint is behind
 # `Struct::Port::Poster`, so the round trip is testable from a fixture and the
 # crate itself never opens a socket.
 [dependencies]
 agentic-runtime = { workspace = true }
+# The request's JSON form is a derive, not a hand-built `json!` literal: three
+# named fields are three keys, and a field added to the struct is a key added to
+# the body. `serde_json` is the value layer the corpus and the state already
+# speak; `serde` is what lets the request be written down once.
+serde = { workspace = true }
 serde_json = { workspace = true }
 
 [lints.rust]

@@ -2,7 +2,9 @@
 //! answers from a captured body.
 //!
 //! No network and no browser: the corpus is the fixture beside this test, the
-//! reply is a string, and a cancelled call is a signal the test fired. Every
+//! reply is a string, and a cancelled call is a signal the test fired. The
+//! poster is `Test/Fake.rs` - it answers from a captured body and records what
+//! it was asked, which is how a call that was never posted stays visible. Every
 //! case below is a claim the crate makes in prose somewhere, stated as an
 //! assertion instead - and the refusals matter as much as the answers, because
 //! a corpus that disagrees with itself is the failure this crate exists to find
@@ -14,9 +16,11 @@
 
 #![allow(non_snake_case, non_upper_case_globals)]
 
+mod Fake;
+
 use std::{
 	path::{Path, PathBuf},
-	sync::{Arc, Mutex},
+	sync::Arc,
 	time::Duration,
 };
 
@@ -29,14 +33,12 @@ use AgenticLane::{
 	Compose,
 	Create,
 	Decide,
-	Failure,
 	Load,
 	Options,
 	Parse,
 	Poster,
 	Price,
 	Read,
-	Request,
 	Route,
 	Rule,
 	Rules,
@@ -44,35 +46,15 @@ use AgenticLane::{
 	State,
 	When,
 };
-use AgenticRuntime::{BlockOn, Call, FutureBox, Never, Signal, Wall};
+use AgenticRuntime::{BlockOn, Call, Never, Signal, Wall};
 use serde_json::{Value, json};
+use Fake::{Captured, Fake as Scripted};
 
 /// One call's budget, on the wall clock.
 fn Budget() -> Call { Call::Within(Duration::from_secs(1), &Wall, Arc::new(Never)) }
 
 /// The fixture corpus this crate ships beside its test.
 fn Directory() -> PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("Test/Fixture/Corpus") }
-
-/// A reply the endpoint actually answered, kept as the bytes a poster returns.
-///
-/// Captured rather than composed, because the parser's job is to read what the
-/// endpoint writes - a body this crate built for itself would agree with its own
-/// assumptions and prove nothing.
-const Captured:&str = r#"{
-	"success": true,
-	"result": {
-		"model": "clef-flash",
-		"answers": {
-			"course": {
-				"type": "choice",
-				"choice": "closer",
-				"probabilities": { "closer": 0.62, "farther": 0.38 }
-			},
-			"disagreement": { "type": "score", "score": 2 }
-		},
-		"usage": { "input_tokens": 375, "output_tokens": 0 }
-	}
-}"#;
 
 /// The observation and the questions of a corpus small enough to read inline,
 /// for the cases that mutate one of them into a refusal.
@@ -94,40 +76,6 @@ const MinimalQuestions:&str = r#"{
 	},
 	"lanes": { "narrow": { "fields": ["depth"], "templates": ["focused"] } }
 }"#;
-
-/// A poster that answers what the test scripted, and records what it was asked.
-struct Fake {
-	/// The reply to return, or the failure to report.
-	Reply:Option<Result<String, Failure>>,
-	/// Every request it was handed, as the path and the body it would send.
-	Asked:Mutex<Vec<(String, String)>>,
-}
-
-impl Fake {
-	/// A poster that answers with one body.
-	fn Answering(Body:&str) -> Arc<Self> {
-		Arc::new(Self { Reply:Some(Ok(Body.to_string())), Asked:Mutex::new(Vec::new()) })
-	}
-
-	/// A poster that reports one failure.
-	fn Failing(Message:&str, Detail:&str) -> Arc<Self> {
-		Arc::new(Self { Reply:Some(Err(Failure::Of(Message).With(Detail))), Asked:Mutex::new(Vec::new()) })
-	}
-
-	/// Every request posted so far.
-	fn Posted(&self) -> Vec<(String, String)> { self.Asked.lock().unwrap().clone() }
-}
-
-impl Poster for Fake {
-	fn Post<'a>(&'a self, Request:&'a Request, _Call:Call) -> FutureBox<'a, Result<String, Failure>> {
-		self.Asked.lock().unwrap().push((Request.Path(), Request.Text()));
-		let Reply = self
-			.Reply
-			.clone()
-			.unwrap_or_else(|| Err(Failure::Of("the fake was given no reply")));
-		Box::pin(std::future::ready(Reply))
-	}
-}
 
 /// A state that carries one number, for a rule to read.
 fn Moving(Depth:f64) -> State {
@@ -282,7 +230,7 @@ fn a_question_type_this_crate_does_not_interpret_is_carried_not_dropped() {
 	let Question = Template.Questions.get("order").expect("the question is carried");
 	assert_eq!(Question.Type(), "rank");
 	let Selection = AgenticLane::Selection { Lane:Lane.clone(), Template:Template.clone() };
-	let Request = Compose(&Selection, &State::New(), "clef-flash").expect("composed");
+	let Request = Compose(&Selection, &State::New()).expect("composed");
 	let Body = Request.Body();
 	assert_eq!(
 		Body["questions"]["order"],
@@ -384,7 +332,7 @@ fn the_lane_decides_which_fields_travel_and_a_missing_one_arrives_as_null() {
 
 	let Narrow = Rules::New(Vec::new()).Falling("narrow");
 	let Selection = Select(&Corpus, &State, &Narrow, &Rules::default()).expect("a lane holds");
-	let Request = Compose(&Selection, &State, "clef-flash").expect("composed");
+	let Request = Compose(&Selection, &State).expect("composed");
 	assert_eq!(
 		Request.State.Fields().cloned().collect::<Vec<String>>(),
 		vec!["depth".to_string()],
@@ -403,7 +351,7 @@ fn the_lane_decides_which_fields_travel_and_a_missing_one_arrives_as_null() {
 		Partial.Set("heading", 90);
 		Partial
 	};
-	let Request = Compose(&Selection, &Partial, "clef-flash").expect("composed");
+	let Request = Compose(&Selection, &Partial).expect("composed");
 	assert_eq!(Request.Body()["state"], json!({ "depth": 42, "heading": 90, "note": null }));
 }
 
@@ -424,7 +372,9 @@ fn the_body_names_the_bare_model_and_the_path_carries_the_prefix() {
 	let State = Moving(60.0);
 	let Lanes = Rules::New(Vec::new()).Falling("narrow");
 	let Selection = Select(&Corpus, &State, &Lanes, &Rules::default()).expect("a lane holds");
-	let Request = Compose(&Selection, &State, "@cf/cloudflare/clef-flash").expect("composed");
+	// The model is the lane's now, not an argument: the fixture corpus names
+	// none, so the crate's own fallback stands in.
+	let Request = Compose(&Selection, &State).expect("composed");
 	assert_eq!(Request.Model, "clef-flash");
 	assert_eq!(Request.Path(), format!("{Route}clef-flash"));
 	assert_eq!(Request.Path(), "/ai/run/@cf/cloudflare/clef-flash");
@@ -482,7 +432,7 @@ fn a_score_reply_without_a_legend_is_filled_from_the_request() {
 	let State = Moving(60.0);
 	let Lanes = Rules::New(Vec::new()).Falling("wide");
 	let Selection = Select(&Corpus, &State, &Lanes, &Rules::default()).expect("a lane holds");
-	let Request = Compose(&Selection, &State, "clef-flash").expect("composed");
+	let Request = Compose(&Selection, &State).expect("composed");
 	let Filled = Parsed.Filled(&Request);
 	let Answered::Score { Legend, .. } = Filled.Answer("disagreement").expect("answered") else {
 		panic!("a score reply is a score");
@@ -502,8 +452,8 @@ fn the_round_trip_posts_through_the_port_and_the_body_is_the_lanes() {
 	let State = Moving(60.0);
 	let Lanes = Rules::New(Vec::new()).Falling("narrow");
 	let Selection = Select(&Corpus, &State, &Lanes, &Rules::default()).expect("a lane holds");
-	let Request = Compose(&Selection, &State, "clef-flash").expect("composed");
-	let Poster = Fake::Answering(Captured);
+	let Request = Compose(&Selection, &State).expect("composed");
+	let Poster = Scripted::Answering(Captured);
 
 	let Answer = BlockOn(Ask(&Request, &*Poster, Budget())).expect("answered");
 	assert_eq!(Answer.Choice("course"), Some(("closer", 0.62)));
@@ -522,8 +472,8 @@ fn a_cancelled_call_is_never_posted() {
 	let State = Moving(60.0);
 	let Lanes = Rules::New(Vec::new()).Falling("narrow");
 	let Selection = Select(&Corpus, &State, &Lanes, &Rules::default()).expect("a lane holds");
-	let Request = Compose(&Selection, &State, "clef-flash").expect("composed");
-	let Poster = Fake::Answering(Captured);
+	let Request = Compose(&Selection, &State).expect("composed");
+	let Poster = Scripted::Answering(Captured);
 
 	let Signal = Signal::New();
 	Signal.Fire();
@@ -539,7 +489,7 @@ fn a_run_stops_at_its_ceiling_and_reports_what_it_spent() {
 	let Corpus = Load(&Directory()).expect("the fixture corpus loads");
 	let State = Moving(60.0);
 	let Lanes = Rules::New(Vec::new()).Falling("narrow");
-	let Poster = Fake::Answering(Captured);
+	let Poster = Scripted::Answering(Captured);
 	let Decider = Create(
 		Corpus,
 		Poster.clone() as Arc<dyn Poster>,
@@ -573,7 +523,7 @@ fn a_failed_post_is_counted_as_a_request() {
 	let Corpus = Load(&Directory()).expect("the fixture corpus loads");
 	let State = Moving(60.0);
 	let Lanes = Rules::New(Vec::new()).Falling("narrow");
-	let Poster = Fake::Failing("the socket closed", "dial tcp: connection refused");
+	let Poster = Scripted::Failing("the socket closed", "dial tcp: connection refused");
 	let Decider = Create(
 		Corpus,
 		Poster.clone() as Arc<dyn Poster>,

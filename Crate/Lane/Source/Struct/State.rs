@@ -19,12 +19,18 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::Struct::Error::Error;
 
 /// One observation, as the corpus names its fields.
-#[derive(Clone, Debug, Default, PartialEq)]
+///
+/// `transparent`, so the state *is* the object it carries: a request's `state`
+/// key holds these fields directly rather than a `{"fields": {...}}` wrapper
+/// nobody would write.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct State(BTreeMap<String, Value>);
 
 impl State {

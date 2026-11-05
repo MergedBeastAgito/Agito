@@ -21,7 +21,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use AgenticRuntime::{Call, FutureBox};
 
 use crate::{
-	Fn::{Ask::Ask, Compose::Compose, Model::Models, Select::Select},
+	Fn::{
+		Ask::Ask,
+		Compose::Compose,
+		Model::{Bare, Models},
+		Select::Select,
+	},
 	Struct::{
 		Answer::Answer,
 		Budget::Budget,
@@ -37,8 +42,13 @@ use crate::{
 /// What a caller configures once.
 #[derive(Clone, Debug)]
 pub struct Options {
-	/// The model to ask, as the caller names it. The body gets the bare name and
-	/// the route gets the same one; see [`crate::Fn::Model::Bare`].
+	/// The model a lane that names none asks, as the caller names it. The body
+	/// gets the bare name and the route gets the same one; see
+	/// [`crate::Fn::Model::Bare`].
+	///
+	/// This is a default rather than an override: a corpus that names a model
+	/// per lane has already decided, and a run that flattened those decisions
+	/// into one would be paying the expensive model for the cheap lane.
 	pub Model:String,
 	/// The lane rules, in priority order.
 	pub Lanes:Rules,
@@ -66,7 +76,7 @@ pub struct Decider {
 	Corpus:Corpus,
 	/// The transport, as the port that hides it.
 	Poster:Arc<dyn Poster>,
-	/// The model every request names.
+	/// The model a lane that names none asks.
 	Model:String,
 	/// The lane rules.
 	Lanes:Rules,
@@ -77,7 +87,19 @@ pub struct Decider {
 }
 
 /// Build the port's value.
-pub fn Create(Corpus:Corpus, Poster:Arc<dyn Poster>, Options:Options) -> Decider {
+///
+/// The corpus is taken by value because it is written to once here: every lane
+/// whose corpus named no model is stamped with [`Options::Model`], which is what
+/// makes the caller's default reach [`Compose`] without a third argument. A lane
+/// that did name a model keeps it - the corpus is data, and the caller's default
+/// is only what silence falls back to.
+pub fn Create(mut Corpus:Corpus, Poster:Arc<dyn Poster>, Options:Options) -> Decider {
+	let Default = Bare(&Options.Model);
+	for Lane in Corpus.Lanes.values_mut() {
+		if Lane.Model.trim().is_empty() {
+			Lane.Model = Default.clone();
+		}
+	}
 	Decider {
 		Corpus,
 		Poster,
@@ -93,7 +115,7 @@ impl Decider {
 	/// loaded rather than what it meant to load.
 	pub fn Corpus(&self) -> &Corpus { &self.Corpus }
 
-	/// The model every request names.
+	/// The model a lane that names none asks.
 	pub fn Model(&self) -> &str { &self.Model }
 }
 
@@ -115,7 +137,7 @@ impl Decide for Decider {
 				let Line = self.Budget().Line();
 				return Err(Error::BudgetExhausted("this run has asked enough", Line));
 			}
-			let Request = Compose(Selection, State, &self.Model)?;
+			let Request = Compose(Selection, State)?;
 			match Ask(&Request, &*self.Poster, Call).await {
 				Ok(Answer) => {
 					Lock(&self.Budget).Charge(Answer.Usage.Input, Answer.Usage.Output);

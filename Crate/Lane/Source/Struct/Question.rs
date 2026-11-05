@@ -17,6 +17,7 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as DeError};
 use serde_json::{Value, json};
 
 /// One question, as the corpus declares it.
@@ -109,6 +110,57 @@ impl Question {
 				})
 			},
 			Question::Other { Body, .. } => Body.clone(),
+		}
+	}
+}
+
+/// A question on the wire is the [`Question::Body`] value.
+///
+/// Delegated rather than described a second time: a question written one way for
+/// the poster and another for a test would be two shapes that agree until one of
+/// them is edited.
+impl Serialize for Question {
+	fn serialize<S:Serializer>(&self, Serializer:S) -> Result<S::Ok, S::Error> { self.Body().serialize(Serializer) }
+}
+
+/// The inverse of [`Question::Body`], and deliberately only that.
+///
+/// Deserialisation reads a *shape*. It does not re-apply the corpus's policy - a
+/// choice with no option, a score with a one-word scale - because those refusals
+/// belong to [`crate::Fn::Load::Read`], which holds the file and the name and can
+/// say which question is wrong. A second authority over the same rule is one
+/// that can disagree with the first.
+impl<'de> Deserialize<'de> for Question {
+	fn deserialize<D:Deserializer<'de>>(Deserializer:D) -> Result<Self, D::Error> {
+		let Body = Value::deserialize(Deserializer)?;
+		let Type = Body
+			.get("type")
+			.and_then(Value::as_str)
+			.ok_or_else(|| DeError::custom("a question names no type"))?
+			.to_string();
+		let Instructions = Body.get("instructions").and_then(Value::as_str).unwrap_or_default().to_string();
+		match Type.as_str() {
+			"choice" => {
+				let Criteria = Body
+					.get("criteria")
+					.and_then(Value::as_object)
+					.ok_or_else(|| DeError::custom("a choice carries no criteria object"))?
+					.iter()
+					.map(|(Option, Sentence)| (Option.clone(), Sentence.as_str().unwrap_or_default().to_string()))
+					.collect();
+				Ok(Question::Choice { Instructions, Criteria })
+			},
+			"score" => {
+				let Criteria = Body
+					.get("criteria")
+					.and_then(Value::as_array)
+					.ok_or_else(|| DeError::custom("a score carries no criteria list"))?
+					.iter()
+					.map(|Word| Word.as_str().unwrap_or_default().to_string())
+					.collect();
+				Ok(Question::Score { Instructions, Criteria })
+			},
+			_ => Ok(Question::Other { Type, Body }),
 		}
 	}
 }

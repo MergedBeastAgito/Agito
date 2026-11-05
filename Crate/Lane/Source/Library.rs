@@ -6,21 +6,27 @@
 //! option. The shape is the same for every game, every page and every device -
 //! what differs is the vocabulary, and that vocabulary is a corpus on disk.
 //!
-//! # Three files' worth of knowledge, in one place
+//! # A directory's worth of knowledge, in one place
 //!
-//! A corpus is two files in one directory: an *observation* naming every field
-//! a caller may send, and a *question* file naming the lanes, the templates and
-//! the questions themselves. Everything this crate does is a function of those
-//! two files:
+//! A corpus is a directory: a `Templates/` holding an *observation* naming every
+//! field a caller may send and a *question* file naming the templates, with the
+//! lanes either inline in that file or in a JSON file of their own beside it.
+//! Everything this crate does is a function of those files:
 //!
 //! - [`Fn::Load::Load`] reads the directory and validates it against itself: a
-//!   lane naming a field the observation does not carry, or a template that
-//!   does not exist, is a corpus that cannot answer and is refused at load
-//!   rather than mid-run;
+//!   lane naming a field the observation neither reads nor derives, or a
+//!   template that does not exist, is a corpus that cannot answer and is refused
+//!   at load rather than mid-run. Its failure is [`Struct::CorpusError::CorpusError`],
+//!   which names the path or the id that was wrong, and which narrows to the
+//!   port's own [`Struct::Error::Error`] with `?`;
 //! - [`Fn::Select::Select`] picks the lane and, inside it, the template - by a
 //!   predicate over the state, never by guessing which question is current;
 //! - [`Fn::Compose::Compose`] builds `{model, state, questions}` from the
-//!   selection, sending only the fields the lane names;
+//!   selection, sending only the fields the lane names and asking the model the
+//!   lane names. Those three keys are [`Struct::Request::Request`]'s three
+//!   fields and nothing else: the body is a derive, so a chat-completions
+//!   payload - `messages`, `temperature` - is not a shape this crate can write
+//!   or read;
 //! - [`Fn::Ask::Ask`] posts it through a [`Struct::Port::Poster`] and
 //!   [`Fn::Parse::Parse`] returns the answer typed: a choice with a probability
 //!   for every option, a score with its legend, or the reply's own value.
@@ -83,6 +89,7 @@ pub use crate::{
 		Answer::{Answer, Answered, Usage},
 		Budget::Budget,
 		Corpus::Corpus,
+		CorpusError::CorpusError,
 		Decider::{Create, Decider, Options},
 		Error::{Code, Error},
 		Lane::{Lane, Selection},

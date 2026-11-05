@@ -6,7 +6,7 @@
 //!   one reply body out, bounded by the caller's [`AgenticRuntime::Call`]. The
 //!   credentials, the transport, the status codes and the retry policy are an
 //!   adapter's business; a fixture that answers from a captured body is an
-//!   adapter too, which is why the suite needs no socket.
+//!   adapter too (`Test/Fake.rs`), which is why the suite needs no socket.
 //! - [`Decide`] is what the crate provides: select a lane, ask about it, report
 //!   the meter.
 //!
