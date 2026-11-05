@@ -61,10 +61,15 @@
 //! is why [`Struct::Lane::Selection`] carries both halves: a request composed
 //! from a lane and the wrong template would be a shape with nothing in it.
 //!
-//! The predicates are Rust values ([`Struct::When::When`]) rather than an
-//! expression language in the corpus, because the honest predicate often needs
-//! what the corpus cannot see: "not moving for three ticks" is a counter the
-//! caller keeps, and a JSON comparison can only say "not moving now".
+//! Two predicate vocabularies, and the difference is where the knowledge lives.
+//! A lane's `select` ([`Struct::Predicate::Predicate`]) is corpus data - a closed
+//! set of comparisons over the observation's own field names - so adding a lane,
+//! or moving one up the order, is an edit to a JSON file and never a rebuild of
+//! this crate. A caller's rules ([`Struct::When::When`]) are Rust values, and
+//! exist for the honest condition a corpus cannot see: "not moving for three
+//! ticks" is a counter the caller keeps, and a JSON comparison can only say "not
+//! moving now". [`Fn::Select::Select`] takes the caller's list when it names
+//! anything at all, and the corpus's own conditions when it is empty.
 //!
 //! # No network in the crate
 //!
