@@ -174,7 +174,11 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			// runs before the question when it can and after the answer when
 			// it cannot: a call that cannot file its note must not type into
 			// somebody's tab first.
-			if Shape == Shape::Note
+			//
+			// `both` carries a note, so it inherits the requirement: a call
+			// that would print a note it could not file is refused before it
+			// types, exactly as `note` is.
+			if Shape.CarriesNote()
 				&& Given.Thread.as_deref().is_none_or(|Thread| Thread.trim().is_empty())
 				&& Bind.is_none()
 				&& crate::Fn::Note::ThreadOf(&Url).is_none()
@@ -213,26 +217,21 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			if Shape == Shape::Note {
 				return crate::Fn::Note::Note(&Answer, Given);
 			}
-			Ok(serde_json::to_string_pretty(&json!({
-				// The page's own URL, not the one this call was given: with a
-				// bind they are different, and the one that answered is the
-				// one a caller recording provenance needs.
-				"url": Answer.Url,
-				"format": Reading,
-				"text": Answer.Text,
-				"model": Answer.Model,
-				"mode": Answer.Mode,
-				"trace": Answer.Trace.iter().map(|Step| json!({
-					"depth": Step.Depth,
-					"label": Step.Label,
-					"detail": Step.Detail,
-				})).collect::<Vec<_>>(),
-				"sources": Answer.Sources.iter().map(|Source| json!({
-					"url": Source.Url,
-					"label": Source.Label,
-				})).collect::<Vec<_>>(),
-			}))
-			.unwrap_or_else(|_| "{}".to_string()))
+			// The pair shape prints two renderings and the document built from
+			// the second, and it adds them to the same JSON rather than
+			// printing twice: one call, one document, and every fact in it
+			// came from the one read the driver took. Nothing is written -
+			// stdout is the sink, and a caller that wants two files splits
+			// them.
+			let mut Out = Envelope(&Answer, Reading);
+			if Shape == Shape::Both {
+				let Note = crate::Fn::Note::Note(&Answer, Given)?;
+				if let Some(Object) = Out.as_object_mut() {
+					Object.insert("markdown".to_string(), json!(Answer.Markdown));
+					Object.insert("note".to_string(), json!(Note));
+				}
+			}
+			Ok(serde_json::to_string_pretty(&Out).unwrap_or_else(|_| "{}".to_string()))
 		},
 		Verb::Design { Url, Selectors, Timeout } => {
 			let Verifier = Design(Browser(Headless()), Url.clone());
@@ -261,6 +260,35 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 /// was compiled and a claim that was read.
 fn Row(Name:&str, Kind:&str, Port:&str, State:&str, Origin:&str) -> String {
 	format!("{Name:<32} {Kind:<12} {Port:<24} {State:<16} {Origin}")
+}
+
+/// The JSON a `text` or a `markdown` call prints, and the base of the one a
+/// `both` call prints.
+///
+/// One builder rather than two literals, because the two documents differ by
+/// the keys a pair read adds and by nothing else: a second literal would let a
+/// fact be added to one shape and forgotten in the other, and the two would
+/// then describe different calls.
+fn Envelope(Answer:&AgenticChatDriver::Answer, Reading:&str) -> serde_json::Value {
+	json!({
+		// The page's own URL, not the one this call was given: with a bind
+		// they are different, and the one that answered is the one a caller
+		// recording provenance needs.
+		"url": Answer.Url,
+		"format": Reading,
+		"text": Answer.Text,
+		"model": Answer.Model,
+		"mode": Answer.Mode,
+		"trace": Answer.Trace.iter().map(|Step| json!({
+			"depth": Step.Depth,
+			"label": Step.Label,
+			"detail": Step.Detail,
+		})).collect::<Vec<_>>(),
+		"sources": Answer.Sources.iter().map(|Source| json!({
+			"url": Source.Url,
+			"label": Source.Label,
+		})).collect::<Vec<_>>(),
+	})
 }
 
 /// One call's budget, on the wall clock.

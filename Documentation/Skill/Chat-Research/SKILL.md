@@ -28,21 +28,27 @@ Target/debug/agentic chat \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
   [--bind <target-id>] \
   [--selectors <file.json>] \
-  [--format markdown|text] \
+  [--format text|markdown|note] \
+  [--thread <id>] [--title <text>] [--project <name>] \
+  [--account <label>] [--captured <stamp>] \
   --question '<text>' \
   --timeout 300000
 ```
 
-The result is `{"url", "format", "text", "model", "mode", "trace", "sources"}`. `--bind` drives the
-tab a person is already looking at; without it the call opens a page of its own. Use a bind for
-research that belongs in an existing thread, and a new page for a probe you intend to throw away.
+The result is `{"url", "format", "text", "model", "mode", "trace", "sources"}`, where `url` is the
+page's own and not the one the call was given - with a bind the two differ. `--format note` is the
+exception: it prints the note itself on stdout, so a redirect gets a file rather than a JSON string
+holding a document. `--bind` drives the tab a person is already looking at; without it the call
+opens a page of its own. Use a bind for research that belongs in an existing thread, and a new page
+for a probe you intend to throw away.
 
 ---
 
 ## Two readings of the same answer
 
-`--format` decides what `text` is, and it is the only thing it decides: the same element, the same
-scroll, the same busy control, the same turn correlation.
+`--format` decides how the answer is read, and - for `note` alone - what is printed. `text` and
+`markdown` are one JSON read two ways: the same element, the same scroll, the same busy control, the
+same turn correlation.
 
 - **`text`** is `innerText`, trimmed. It is the default because every recorded baseline was read
   with it.
@@ -59,6 +65,56 @@ whose rows do not share a tab count cannot be recovered from it at all.
 The completion rule is unaffected, because it compares text to text and never length to length: a
 Markdown capture is longer, settles on the same third agreement, and its turn marks are computed
 from the same reading the answer came from.
+
+### One read, two renderings
+
+Two calls are two page reads, and the second read can see a page that has changed under it: a token
+still arriving, a source chip that appeared, an answer collapsed behind a control. The two
+renderings then describe different moments, and nothing in either of them says which one is older.
+
+`--format both` takes them from one evaluate. The expression returns `text` and `markdown` of the
+same element in the same synchronous call, so the pair describes one moment by construction rather
+than by agreement between two. The text half is the reading the completion rule runs on, and the
+turn marks are computed from it, so a `both` call settles on exactly the reads a `text` call takes:
+the second rendering costs no page read. `--observe` shows that directly - the same reads, the same
+character counts, for two outputs.
+
+The JSON carries both renderings and, beside them, the note built from the Markdown half. Nothing is
+written: stdout is the sink, and a caller that wants files redirects or splits the document itself.
+
+---
+
+## The note shape
+
+`--format note` prints the research note instead of the JSON: YAML frontmatter, a table of the same
+facts under the labels a person reads, then `## Transcript`. It is the only shape whose output a
+reader opens rather than a program parses.
+
+The reading is a consequence of the shape and not a second choice. A note reads Markdown whatever
+the selector file says, because a note built from `innerText` carries a formula as one glyph per
+line - the same answer, unreadable. So `markdown` stays the reading and `note` is the output: one
+flag asks for both, and the pair that produces glyphs cannot be asked for.
+
+`--format both` prints the same note inside its JSON, beside the two renderings it was built from,
+so one call gives a program the glyph reading and a reader the TeX document. It is the same note:
+the renderer takes the richest rendering the answer carries, and the pair read is the one call where
+that is the Markdown half.
+
+Five facts arrive as flags, because no answer's text can produce them:
+
+- `--thread` - absent, it is the identifier in the page's own URL (`…/search/<id>`, query string
+  ignored). A URL that names none is refused before anything is typed, rather than filed under a
+  guess.
+- `--title` - absent, the note is titled by its thread.
+- `--project` - absent, the note states an empty project rather than naming one.
+- `--captured` - absent, the moment the answer settled is used, in local time, because a note is
+  filed by the day the person captured it.
+- `--account` - not a fact the note records: it is the label the page shows for the signed-in
+  person, used to recognise that line of furniture and then dropped. A note that recorded who was
+  signed in is a note that cannot be published.
+
+The trace count, the source count and the transcript come from the page and the answer. Nothing is
+inferred from a filename, a directory or a previous note.
 
 ---
 
@@ -108,6 +164,12 @@ the question is the only reading that survives unmounting and reordering.
 A page that is **already** producing when the call begins is refused rather than typed into: the
 question would land in a turn that is still being written, and the answer read back would belong to
 neither.
+
+**An identical re-ask never settles, and that is the membership rule working.** A question asked
+again in the same thread is answered with the same words, so the new turn's identifier is already in
+the set read before the send, `fresh` stays false, and the call waits out its deadline as
+`not-ready` with `the last read was nothing`. Rephrase the question, or ask it in a thread that does
+not hold that answer. Reading one answer twice means reading the page twice, not asking twice.
 
 The honest limit: `busy` false is not proof of success. A cancelled or failed turn also stops
 generating. The driver's own turn identity and deadline are what distinguish those, and a caller
@@ -211,3 +273,10 @@ and what makes it compete with everything already there for the answer budget.
 | A settled answer equals the page's               | with the default `--format text`, compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                                                   |
 | A Markdown capture keeps the answer's structure  | `--format markdown` on a page holding a table, a fence, a formula and a nested list returns a pipe table with one line per row, a fence carrying the code's language, and `$…$` equal to the formula's annotation |
 | A citation is not a link                         | a numeric citation anchor inside the answer comes back as the number the page showed, not as `[1](https://…)`                                                                                                     |
+| The note is a file a reader opens                | `agentic chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                 |
+| The note carries TeX where text carries glyphs   | on one settled answer, `--format note` transcribes `$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$` while the same element's `innerText` is one glyph per line                                                          |
+| A note with no thread is refused, not filed      | `--format note --url https://example.test/` exits non-zero naming `--thread`, and no question is typed                                                                                                            |
+| One read yields both renderings                  | `--format both` returns `text` and `markdown` from one call, and `--observe` prints the same reads - the same count and the same character counts - as `--format text` on the same page                           |
+| The two renderings agree on the answer           | the returned `text` and the note's transcript state the same prose word for word, and the one difference is the formula: glyphs in `text`, its TeX in `markdown`                                                  |
+| An identical re-ask never settles                | ask the same question twice in one thread: the second call exits `not-ready` with `the last read was nothing`                                                                                                     |
+| A shared tab survives losing its session         | a tab the browser extension also holds can fail an evaluation as `navigation-failed` with `Session with given id not found`; the same call run again succeeds                                                     |

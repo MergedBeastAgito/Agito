@@ -89,11 +89,14 @@ pub enum Verb {
 		Selectors:Option<String>,
 		/// How the answer is printed. `text` and `markdown` are the JSON the
 		/// driver returns, with the answer read as rendered text or as the
-		/// page's own Markdown. `note` prints the research note instead -
-		/// frontmatter, a table of the same facts, then the transcript - and
-		/// reads the page as Markdown, because a note built from rendered text
-		/// carries a formula as one glyph per line. Absent, the selector file
-		/// decides, and its default is `text`.
+		/// page's own Markdown. `both` is the same JSON carrying both
+		/// renderings - taken from one read of the page, so the two cannot
+		/// describe different moments - and the note built from the Markdown
+		/// beside them. `note` prints the research note alone - frontmatter, a
+		/// table of the same facts, then the transcript - and reads the page as
+		/// Markdown, because a note built from rendered text carries a formula
+		/// as one glyph per line. Absent, the selector file decides, and its
+		/// default is `text`.
 		#[arg(long)]
 		Format:Option<String>,
 		/// The thread a note is filed under. Absent, it is read from the

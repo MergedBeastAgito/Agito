@@ -59,7 +59,15 @@ const FollowUp:&str = "ask a follow-up";
 /// and a note that recorded them would make two notes of one answer differ.
 pub fn Build(Answer:Answer, Meta:Meta) -> Note {
 	let Labels = LabelsOf(&Meta);
-	let Transcript = Strip(&Answer.Text, &Labels);
+	// The transcript is the richest rendering the answer carries. A note built
+	// from rendered text carries a formula as one glyph per line and a table as
+	// a run of tabs; a call that read both renderings carries the page's own
+	// Markdown beside the text, and that is the one a reader can follow. A call
+	// that read one rendering carries that one in `Text`, so this picks
+	// between two statements of the same answer rather than falling back to a
+	// second reading of the page.
+	let Rendering = if Answer.Markdown.is_empty() { &Answer.Text } else { &Answer.Markdown };
+	let Transcript = Strip(Rendering, &Labels);
 	Note {
 		Title:Title(&Meta),
 		Thread:Meta.Thread,

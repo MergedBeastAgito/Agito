@@ -100,6 +100,17 @@ pub struct Answer {
 	pub Url:String,
 	/// The answer's text, read once the page stopped changing it.
 	pub Text:String,
+	/// The same answer read the other way, from the same snapshot.
+	///
+	/// Empty when the call read one rendering, which is most calls: a
+	/// rendering that was never asked for is not a rendering that came back
+	/// empty, and the one an answer does carry is in [`Answer::Text`].
+	///
+	/// A driver fills this from the read that produced `Text` and from no
+	/// other, because a second pass over the page is a second moment: the pair
+	/// would then be a claim about two snapshots, and the page never said the
+	/// answer stood still between them.
+	pub Markdown:String,
 	/// The work the answer reports having done, in the order it did it.
 	pub Trace:Vec<Step>,
 	/// The sources the answer cites.

@@ -33,6 +33,9 @@ fn Answer() -> Answer {
 	Answer {
 		Url:"https://www.example.com/search/1f0c3d9a-6b1e-4a52-9d3e-2f7a1c8b4e60".to_string(),
 		Text:Capture.to_string(),
+		// One rendering, as a `text` or a `markdown` call produces: the note
+		// is built from the rendering the answer carries, whichever it is.
+		Markdown:String::new(),
 		Trace:(0..3)
 			.map(|Depth| Step { Depth, Label:format!("Step {Depth}"), Detail:"1s".to_string() })
 			.collect(),
@@ -72,6 +75,40 @@ fn Rows(Rendered:&str) -> Vec<&str> {
 #[test]
 fn the_capture_renders_byte_for_byte_to_the_note_that_was_checked_in() {
 	assert_eq!(Render(&Build(Answer(), Meta())), Expected);
+}
+
+/// A note built from an answer that carries both renderings takes the Markdown.
+///
+/// This is the one decision a note makes about its own material: the same
+/// answer read as rendered text carries a formula as glyphs and a table as a
+/// run of tabs, and the page's own Markdown carries neither. Both renderings
+/// arrive from one read - that is what the pair mode is for - so the note can
+/// take the richer one without a second pass over the page, and a note built
+/// from the text alone still renders, which is what every note before the pair
+/// mode did.
+#[test]
+fn a_note_built_from_a_pair_read_takes_the_markdown_rendering() {
+	let mut Answer = Answer();
+	Answer.Text = "Energy and mass are the same fact, written E = m c 2 twice over.".to_string();
+	Answer.Markdown = "Energy and mass are the same fact, written $E = mc^2$ twice over.".to_string();
+	let Note = Build(Answer.clone(), Meta());
+	assert!(
+		Note.Transcript.contains("$E = mc^2$"),
+		"the note took the glyphs rather than the TeX: {:?}",
+		Note.Transcript
+	);
+	assert!(!Note.Transcript.contains("m c 2"), "the rendered text reached the note");
+	assert_eq!(Note.Characters, Note.Transcript.chars().count());
+
+	// The same answer with one rendering, as every call before the pair mode
+	// produced, still becomes a note - from the rendering it carries.
+	Answer.Markdown.clear();
+	let Single = Build(Answer, Meta());
+	assert!(
+		Single.Transcript.contains("E = m c 2"),
+		"a single-rendering answer stopped rendering: {:?}",
+		Single.Transcript
+	);
 }
 
 /// The page is gone, and a sentence that merely says `Computer` is not.

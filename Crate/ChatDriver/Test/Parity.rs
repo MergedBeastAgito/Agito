@@ -96,6 +96,13 @@ impl Kind {
 }
 
 /// The expression's identity, decided by the driver's own functions.
+///
+/// Every reading of the thread is one kind, because the fake answers the port's
+/// shape and not the page's: which of the three expressions a call built is a
+/// fact about how the answer is read, and the fake's answer carries both
+/// renderings when the call asked for both. `Format::All` is walked rather than
+/// the formats being listed, so a fourth reading cannot be added to the driver
+/// and silently look unknown here.
 fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
 	if Expression == Expressions::ReadMode(Selectors) {
 		Kind::Mode
@@ -107,8 +114,9 @@ fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
 		Kind::Composer
 	} else if Expression == Expressions::PressSubmit(Selectors, Question) {
 		Kind::Submit
-	} else if Expression == Expressions::ReadAnswers(Selectors, Format::Text)
-		|| Expression == Expressions::ReadAnswers(Selectors, Format::Markdown)
+	} else if Format::All()
+		.into_iter()
+		.any(|Format| Expression == Expressions::ReadAnswers(Selectors, Format))
 	{
 		Kind::Answers
 	} else if Expression == Expressions::ReadCollapse(Selectors) {

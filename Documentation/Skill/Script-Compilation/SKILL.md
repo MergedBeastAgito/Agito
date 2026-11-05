@@ -26,8 +26,15 @@ is never re-emitted.
 ## The shape
 
 - **One file per expression.** `Crate/ChatDriver/Source/Script/Expressions/ReadAnswers.ts` and the
-  nine beside it; `Crate/Workflow/Source/Script/Measure.ts`. The path under `Source/Script/` is the
+  ten beside it; `Crate/Workflow/Source/Script/Measure.ts`. The path under `Source/Script/` is the
   path the macro takes, minus the extension: `script!("Expressions/ReadAnswers")`.
+- **A second file only when the first is pinned.** `Expressions/ReadBoth.ts` reads the thread with
+  the same code as `ReadAnswers.ts` and returns the page's Markdown beside the text, because
+  `Crate/ChatDriver/Test/Fixture/Expression.json` holds the bytes of the two single-format
+  expressions and an expression that gained a field would not be the expression a page already
+  received. The two files are held together by a test that compares them from the first line of the
+  thread read to the object each one returns: a change to one that is not a change to the other
+  fails there rather than in production.
 - **One rule, included twice.** `Crate/ChatDriver/build.rs` and `Crate/Workflow/build.rs` are each
   three lines around `include!("../../Build/Script.rs")`, and each calls
   `CompileScripts("Source/Script", "Script")`. The rule for what a script may contain lives in

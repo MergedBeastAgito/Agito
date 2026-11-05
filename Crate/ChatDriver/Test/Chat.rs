@@ -539,14 +539,160 @@ fn the_two_formats_are_different_expressions_and_only_markdown_carries_the_seria
 	let Selectors = DefaultSelectors();
 	let Text = ReadAnswers(&Selectors, Format::Text);
 	let Markdown = ReadAnswers(&Selectors, Format::Markdown);
+	let Both = ReadAnswers(&Selectors, Format::Both);
 	assert_ne!(Text, Markdown);
 	assert!(!Text.contains("Serialise"), "the text reading carries no serializer");
 	assert!(Markdown.contains("const Serialise = (Root)"), "the markdown reading carries it");
 	assert!(Markdown.contains("annotation[encoding=\"application/x-tex\"]"));
-	// Both read the same thread, so a change of format is not a change of what
-	// is captured.
-	for Expression in [&Text, &Markdown] {
+	// The pair reading carries the serializer *and* reads the text: it is the
+	// one expression that needs both halves of what the other two do.
+	assert!(Both.contains("const Serialise = (Root)"), "the pair reading serialises");
+	assert!(
+		Both.contains("const Seen = (Answer) => (Answer.innerText || \"\").trim();"),
+		"the pair reading takes its text from innerText, the reading the completion rule runs on"
+	);
+	assert!(Both.contains("text: Seen(Last), markdown: Serialise(Last),"));
+	// All three read the same thread, so a change of format is not a change of
+	// what is captured.
+	for Expression in [&Text, &Markdown, &Both] {
 		assert!(Expression.contains("document.querySelectorAll"));
 		assert!(!Expression.contains("{{"), "no placeholder survives the fill");
 	}
+}
+
+/// The pair reading, against a scripted thread whose every read carries both
+/// renderings.
+///
+/// The claim is the card's: two outputs, one read stream. The same script is
+/// driven twice - once reading the text, once reading both - and the reads and
+/// the expressions asked for are compared. A pair that cost one extra read
+/// would be two snapshots wearing one answer's clothes.
+#[test]
+fn the_pair_reading_costs_no_read_the_text_reading_did_not_take() {
+	use AgenticChatDriver::Selectors;
+	// One answer as the page renders it and as the page serialises it: the
+	// formula is glyphs in the first and TeX in the second, and the prose
+	// between them is the same sentence.
+	let Rendered = "Energy and mass are the same fact, written E = m c 2 twice over.";
+	let Serialised = "Energy and mass are the same fact, written $E = mc^2$ twice over.";
+	let Thread = |Text:&str, Markdown:&str| {
+		Answers::Fixed(vec![
+			json!({ "count": 0, "text": "", "marks": [] }),
+			json!({ "count": 1, "text": Text, "markdown": Markdown, "marks": [] }),
+		])
+	};
+	let Pace = TestPace::New();
+
+	let mut TextScript = Script::New("why", "sol", Rendered);
+	TextScript.Thread = Thread(Rendered, Serialised);
+	let TextPage = FakePage::New(TextScript);
+	let TextDriver = Built(&TextPage, &Pace);
+	let Single = Ask(&TextDriver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+
+	let mut PairScript = Script::New("why", "sol", Rendered);
+	PairScript.Thread = Thread(Rendered, Serialised);
+	let PairPage = FakePage::New(PairScript);
+	let PairDriver = BuiltWith(Selectors { Format:Format::Both, ..DefaultSelectors() }, &PairPage, &Pace);
+	let Pair = Ask(&PairDriver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+
+	// Two renderings of one answer, and they are the two readings of it.
+	assert_eq!(Pair.Text, Rendered);
+	assert_eq!(Pair.Markdown, Serialised);
+	assert_ne!(Pair.Text, Pair.Markdown, "the two readings are not the same string");
+	// One rendering, when the call asked for one.
+	assert_eq!(Single.Text, Rendered);
+	assert_eq!(Single.Markdown, "", "a text read carries no second rendering");
+	// The pair cost no read the single reading did not take, and asked the page
+	// for nothing extra: one read stream, two outputs.
+	assert_eq!(
+		PairPage.Reads.load(Ordering::SeqCst),
+		TextPage.Reads.load(Ordering::SeqCst),
+		"the pair reading read the page a different number of times"
+	);
+	assert_eq!(PairPage.Asked(), TextPage.Asked(), "the two calls spoke different protocols");
+}
+
+/// The two renderings are one read's, not two reads that happened to agree.
+///
+/// The fake serves a thread that changes on every read, with the read's own
+/// index in both renderings. The answer settles on the third consecutive
+/// `read 3`, and the second rendering beside it must be that read's: a driver
+/// that took it from the read before would return a pair that disagrees with
+/// itself, which is exactly what two calls do and what this mode exists to make
+/// impossible.
+#[test]
+fn the_two_renderings_of_one_answer_come_from_the_same_read() {
+	use AgenticChatDriver::Selectors;
+	let Read = |Index:usize| json!({ "count": 1, "text": format!("read {Index}"), "markdown": format!("read {Index}"), "marks": [] });
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "read 0");
+	// The correlation read sees an empty thread; the answer then grows to
+	// `read 3` and holds there long enough to settle.
+	Script.Thread = Answers::Fixed(vec![
+		json!({ "count": 0, "text": "", "marks": [] }),
+		Read(1),
+		Read(2),
+		Read(3),
+		Read(3),
+		Read(3),
+		Read(3),
+	]);
+	let Page = FakePage::New(Script);
+	let Driver = BuiltWith(Selectors { Format:Format::Both, ..DefaultSelectors() }, &Page, &Pace);
+	let Answer = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect("answered");
+	assert_eq!(Answer.Text, "read 3");
+	assert_eq!(
+		Answer.Markdown, "read 3",
+		"the second rendering is the one the settled read returned, not an earlier read's"
+	);
+}
+
+/// A pair read that was stopped before there was an answer is not a failure.
+///
+/// The observer ends the call the way a `MutationObserver` disconnects, and what
+/// comes back is the answer so far - which, on a read of an empty thread, is
+/// nothing. The second rendering is not owed yet, so its absence is not the
+/// `not-ready` a page that dropped it earns.
+#[test]
+fn a_pair_read_stopped_before_the_answer_arrived_returns_nothing_rather_than_failing() {
+	use AgenticChatDriver::Selectors;
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	// Two empty reads: the correlation read and the one the observer stops on.
+	Script.Thread = Answers::Fixed(vec![
+		json!({ "count": 0, "text": "", "marks": [] }),
+		json!({ "count": 0, "text": "", "marks": [] }),
+		json!({ "count": 1, "text": "answer", "markdown": "answer", "marks": [] }),
+	]);
+	let Page = FakePage::New(Script);
+	let Driver = BuiltWith(Selectors { Format:Format::Both, ..DefaultSelectors() }, &Page, &Pace);
+	let Answer = Watch(&Driver, &Pace, Asked("why", "sol"), Span(2_000), &mut |_| Control::Stop)
+		.expect("stopping is not failing");
+	assert_eq!(Answer.Text, "");
+	assert_eq!(Answer.Markdown, "");
+}
+
+/// A pair read the page answered with one rendering is refused.
+///
+/// An empty second rendering would be reported as an answer that serialised to
+/// nothing, which is a claim about the answer rather than about the page that
+/// never made one.
+#[test]
+fn refuses_a_pair_read_that_came_back_with_one_rendering() {
+	use AgenticChatDriver::Selectors;
+	let Pace = TestPace::New();
+	let mut Script = Script::New("why", "sol", "answer");
+	Script.Thread = Answers::Fixed(vec![
+		json!({ "count": 0, "text": "", "marks": [] }),
+		json!({ "count": 1, "text": "answer", "marks": [] }),
+	]);
+	let Page = FakePage::New(Script);
+	let Driver = BuiltWith(Selectors { Format:Format::Both, ..DefaultSelectors() }, &Page, &Pace);
+	let Error = Ask(&Driver, &Pace, Asked("why", "sol"), Span(2_000)).expect_err("refused");
+	assert_eq!(Error.Code(), Code::NotReady);
+	assert!(
+		Error.Detail().contains("no markdown"),
+		"the detail says what was missing: {}",
+		Error.Detail()
+	);
 }

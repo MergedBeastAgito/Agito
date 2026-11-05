@@ -15,6 +15,12 @@ their `cargo add` resolved to on the same day.
 - **One file per expression**, `Source/Script/Expressions/ReadAnswers.ts` and so on, and one for the
   workflow's `Source/Script/Measure.ts`. The path under `Source/Script/` is the path the macro
   takes: `script!("Expressions/ReadAnswers")`.
+- **A second file only when the first is pinned.** `Expressions/ReadBoth.ts` carries the same thread
+  read as `Expressions/ReadAnswers.ts` and adds the page's Markdown to what it returns, because
+  `Crate/ChatDriver/Test/Fixture/Expression.json` holds the bytes of the two single-format
+  expressions: an expression that gained a field would not be the expression a page already
+  received. The duplication is held together by a test that compares the two from the first line of
+  the thread read to the object each one returns.
 - **A `build.rs` per owning crate**, three lines around `Build/Script.rs`, which is the one
   statement of what a script may contain and how it becomes bytes. `ChatDriver` and `Workflow` both
   include it, so the rule cannot drift between them.

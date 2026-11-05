@@ -116,6 +116,22 @@ pub fn PressSubmit(Selectors:&Selectors, Expected:&str) -> String {
 /// the closure that turns an element into text changes, which is why the
 /// observation stream and the completion rule cannot tell the two apart - they
 /// compare text to text, not text to a format.
+///
+/// [`Format::Both`] is the exception that proves the rule: it changes neither
+/// the closure nor the thread read, only the object the expression returns. The
+/// text half stays `innerText`, so the completion rule and the turn marks are
+/// the ones a `Text` call produces, and the page's Markdown is added beside it
+/// from the same `Last` element. One evaluate, one snapshot, two renderings -
+/// which is the only way the pair can be trusted to describe the same answer,
+/// because two evaluates are two moments.
+///
+/// It is built from a second script file, `Source/Script/Expressions/ReadBoth.ts`,
+/// and not from a third parameter of `ReadAnswers.ts`:
+/// `Test/Fixture/Expression.json` pins the JavaScript the two single-format
+/// expressions send, byte for byte, and an expression that gained a field would
+/// not be the expression a page already received. The two files carry one rule,
+/// and the test `the_pair_reading_reads_the_thread_exactly_as_the_text_reading_does`
+/// is what holds them together.
 pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 	// An empty `done` is not a pattern that matches nothing: it is the caller
 	// saying the product has no terminal marker, which turns the check off
@@ -125,30 +141,44 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 	} else {
 		format!("new RegExp({})", Escape(&Selectors.Done))
 	};
-	// The serializer is spliced in only when it is asked for: it is thirteen
-	// kilobytes the page would parse on every read of the thread, and the
-	// recorded baselines were read without it.
-	let Serialise = match Format {
-		Format::Text => "",
-		Format::Markdown => SerialiseScript,
-	};
-	// What one answer reads as. The same closure produces the newest answer's
-	// text and every answer's mark, so the driver's own mark and the page's
-	// cannot be computed from two different readings of the same turn.
-	let Seen = match Format {
-		Format::Text => "(Answer) => (Answer.innerText || \"\").trim()",
-		Format::Markdown => "(Answer) => Serialise(Answer)",
-	};
-	script!(
-		"Expressions/ReadAnswers";
-		Serialise = Serialise,
-		Scroll = &Selectors.Scroll,
-		Answer = &Selectors.Answer,
-		Busy = &Selectors.Busy,
-		Pattern = Pattern,
-		Turn = &Selectors.Turn,
-		Seen = Seen,
-	)
+	match Format {
+		Format::Both => {
+			script!(
+				"Expressions/ReadBoth";
+				Serialise = SerialiseScript,
+				Scroll = &Selectors.Scroll,
+				Answer = &Selectors.Answer,
+				Busy = &Selectors.Busy,
+				Pattern = Pattern,
+				Turn = &Selectors.Turn,
+			)
+		},
+		Format::Text | Format::Markdown => {
+			// The serializer is spliced in only when it is asked for: it is
+			// thirteen kilobytes the page would parse on every read of the
+			// thread, and the recorded baselines were read without it.
+			let Serialise = if Format == Format::Text { "" } else { SerialiseScript };
+			// What one answer reads as. The same closure produces the newest
+			// answer's text and every answer's mark, so the driver's own mark
+			// and the page's cannot be computed from two different readings of
+			// the same turn.
+			let Seen = if Format == Format::Text {
+				"(Answer) => (Answer.innerText || \"\").trim()"
+			} else {
+				"(Answer) => Serialise(Answer)"
+			};
+			script!(
+				"Expressions/ReadAnswers";
+				Serialise = Serialise,
+				Scroll = &Selectors.Scroll,
+				Answer = &Selectors.Answer,
+				Busy = &Selectors.Busy,
+				Pattern = Pattern,
+				Turn = &Selectors.Turn,
+				Seen = Seen,
+			)
+		},
+	}
 }
 
 /// The label of the control that collapses the newest answer, or `null`.
@@ -194,13 +224,14 @@ mod Tests {
 	/// matters: `Unfilled` answering `None` for every expression proves nothing
 	/// unless it answers `Some` for a string that still carries a marker, and
 	/// the raw script is that string.
-	const Raw:[(&str, &str); 10] = [
+	const Raw:[(&str, &str); 11] = [
 		("ReadMode", script!("Expressions/ReadMode")),
 		("PressMode", script!("Expressions/PressMode")),
 		("ReadModel", script!("Expressions/ReadModel")),
 		("TypeQuestion", script!("Expressions/TypeQuestion")),
 		("PressSubmit", script!("Expressions/PressSubmit")),
 		("ReadAnswers", script!("Expressions/ReadAnswers")),
+		("ReadBoth", script!("Expressions/ReadBoth")),
 		("ReadCollapse", script!("Expressions/ReadCollapse")),
 		("ReadTrace", script!("Expressions/ReadTrace")),
 		("ReadSources", script!("Expressions/ReadSources")),
@@ -224,6 +255,7 @@ mod Tests {
 			("PressSubmit", PressSubmit(&Selectors, Question)),
 			("ReadAnswers/text", ReadAnswers(&Selectors, Format::Text)),
 			("ReadAnswers/markdown", ReadAnswers(&Selectors, Format::Markdown)),
+			("ReadAnswers/both", ReadAnswers(&Selectors, Format::Both)),
 			("ReadCollapse", ReadCollapse(&Selectors)),
 			("ReadTrace", ReadTrace(&Selectors)),
 			("ReadSources", ReadSources(&Selectors)),
@@ -269,6 +301,14 @@ mod Tests {
 	/// This is the assertion that rules out a formatter: a compiler that
 	/// re-indented, re-quoted, appended a semicolon or dropped a comment would
 	/// pass a behavioural test and fail here.
+	///
+	/// A *new* expression is the one thing that is added to the fixture rather
+	/// than held to it, because there is no before for it to match: the entry
+	/// records the bytes it was introduced with, and from then on it is held
+	/// like every other. `ReadAnswers/both` is such an entry, and what makes
+	/// it safe to add is that the two readings it sits beside are unchanged
+	/// byte for byte - a both-read that altered what a text read or a markdown
+	/// read receives fails on their entries, not on its own.
 	#[test]
 	fn every_compiled_expression_is_byte_for_byte_the_one_the_page_received() {
 		const Fixture:&str = include_str!("../../Test/Fixture/Expression.json");
@@ -284,5 +324,49 @@ mod Tests {
 			let Want = Before.get(Name).unwrap_or_else(|| panic!("{Name} is not in the fixture"));
 			assert_eq!(&Text, Want, "{Name} is not the expression the page used to receive");
 		}
+	}
+
+	/// The pair reading and the text reading read the thread with one rule.
+	///
+	/// `ReadBoth.ts` is a second file because the fixture pins
+	/// `ReadAnswers.ts` byte for byte, so the two files are one rule stated
+	/// twice. What must not happen is them drifting: a scroll, a busy control,
+	/// a mark or an early return that differed between a call that reads the
+	/// text and a call that reads both would make the completion rule mean two
+	/// things, and the difference would be invisible - both calls would still
+	/// settle, just on different evidence.
+	///
+	/// So everything from the first line of the thread read to the object each
+	/// expression returns is compared, and the only difference allowed is the
+	/// object. The comparison starts at the thread read rather than at the top
+	/// because the pair expression carries the serializer above it, which the
+	/// text expression does not.
+	#[test]
+	fn the_pair_reading_reads_the_thread_exactly_as_the_text_reading_does() {
+		let Selectors = DefaultSelectors();
+		let Text = ReadAnswers(&Selectors, Format::Text);
+		let Both = ReadAnswers(&Selectors, Format::Both);
+		let Body = |Expression:&str| {
+			let Start = Expression
+				.find("	// A virtualised thread")
+				.unwrap_or_else(|| panic!("the thread read is not in the expression"));
+			let Return = Expression
+				.rfind("	return {")
+				.unwrap_or_else(|| panic!("the object the expression returns is not in it"));
+			assert!(Start < Return, "the thread read comes before the object it fills");
+			Expression[Start..Return].to_string()
+		};
+		assert_eq!(Body(&Both), Body(&Text), "the two files read the thread differently");
+		// What the difference is allowed to be, and nothing else: one object
+		// carries the second rendering and the other does not.
+		assert!(
+			Both.contains("return { count: Answers.length, text: Seen(Last), markdown: Serialise(Last),"),
+			"the pair reading returns the second rendering beside the text"
+		);
+		assert!(
+			Text.contains("return { count: Answers.length, text: Seen(Last), marks:"),
+			"the text reading returns the text and no second rendering"
+		);
+		assert!(!Text.contains("markdown:"), "the text reading carries no second rendering");
 	}
 }

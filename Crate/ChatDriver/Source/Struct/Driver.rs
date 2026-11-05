@@ -27,6 +27,19 @@
 //! the driver does not invent a fifth; the cause rides along in `detail`
 //! instead.
 //!
+//! # One read, two renderings
+//!
+//! A call that asks for [`Format::Both`] is the same call with a wider read:
+//! the expression returns the rendered text and the page's own Markdown from
+//! the same element in the same evaluate, so the answer carries two renderings
+//! of one snapshot rather than two renderings of two. None of the four rules
+//! changes - the completion rule runs on the text half, which is the half it
+//! always ran on, and the marks are computed from that half too, so a `Both`
+//! call settles and correlates exactly as a `Text` call does.
+//!
+//! The pair is not written down anywhere. The driver hands it back and the
+//! caller decides: a redirect, a file it owns, a sink of its own.
+//!
 //! Nothing here opens a browser, knows a transport, or reads an environment
 //! variable: the page is the composition root's to supply, and the fake in
 //! `Test/` is the proof that the rules hold without one.
@@ -53,6 +66,7 @@ use crate::{
 	},
 	Struct::{
 		Error::Error,
+		Format::Format,
 		Port::{Answer, Chat, Control, Observation, Page, Question, Target},
 		Selectors::{DefaultSelectors, Selectors},
 		Settlement::Settlement,
@@ -332,8 +346,14 @@ impl Driver {
 		}
 
 		// Completion is stable text: unchanged for three consecutive reads.
+		//
+		// The loop carries a pair out of itself: the text it settled on, and
+		// the second rendering the same read returned. They leave together
+		// because they arrived together - reading the page again after it had
+		// settled, to fetch the other rendering, would be reading a second
+		// moment and calling it the same answer.
 		let mut Progress = Settlement::Empty;
-		let Text = loop {
+		let (Text, Second) = loop {
 			// The deadline is checked here, not only inside the read, so a page
 			// that keeps writing is reported as an answer that
 			// never settled rather than as one slow read.
@@ -369,14 +389,37 @@ impl Driver {
 			if let Some(Sink) = Sink.as_deref_mut() {
 				let Seen = Observation { Count:Read.Count, Text:Read.Text.clone(), Busy:Read.Busy, Fresh, Settled };
 				if Sink(&Seen) == Control::Stop {
-					break Read.Text;
+					break (Read.Text, Read.Markdown);
 				}
 			}
 			if Settled {
-				break Progress.Text().unwrap_or_default().to_string();
+				// `Progress` holds the text this read confirmed, which is this
+				// read's own text: the second rendering beside it is from the
+				// same evaluate.
+				break (Progress.Text().unwrap_or_default().to_string(), Read.Markdown);
 			}
 			let Wait = self.Options.Poll.min(Call.Remaining(self.Pace.as_ref()));
 			self.Pace.Sleep(Wait).await;
+		};
+
+		// A call that asked for both renderings has not got them if the page
+		// answered only one. Reporting an empty second rendering would be a
+		// claim that the answer serialised to nothing, which is a different
+		// claim from a page that never made one.
+		let Markdown = match (Selectors.Format, Second) {
+			(Format::Both, Some(Markdown)) => Markdown,
+			// An answer that is not there has no second rendering to miss: a
+			// caller that stopped the observation before the page produced one
+			// gets the empty answer every format returns, not an error about a
+			// rendering that was never owed.
+			(Format::Both, None) if Text.is_empty() => String::new(),
+			(Format::Both, None) => {
+				return Err(Error::NotReady(
+					"the page did not answer the second rendering",
+					"the read asked for both and the expression returned no markdown",
+				));
+			},
+			(..) => String::new(),
 		};
 
 		// A collapsed answer is not the whole answer.
@@ -414,7 +457,15 @@ impl Driver {
 			if Read.is_empty() { Question.Model.trim().to_string() } else { Read }
 		};
 
-		Ok(Answer { Url:Target.Url.clone(), Text, Trace, Sources, Model, Mode:"search".to_string() })
+		Ok(Answer {
+			Url:Target.Url.clone(),
+			Text,
+			Markdown,
+			Trace,
+			Sources,
+			Model,
+			Mode:"search".to_string(),
+		})
 	}
 
 	/// The whole call, with the release guaranteed on every path.

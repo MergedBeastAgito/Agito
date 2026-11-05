@@ -25,6 +25,13 @@ pub struct Answers {
 	pub Count:f64,
 	/// The last answer's text, trimmed; empty when there is none.
 	pub Text:String,
+	/// The last answer's second rendering, when the read asked for both.
+	///
+	/// `None` and not an empty string: a read that asked for one rendering
+	/// has no second one, and folding "not asked for" into "came back empty"
+	/// would let a page that dropped the field look like an answer that
+	/// serialised to nothing.
+	pub Markdown:Option<String>,
 	/// Whether the page says it is still producing the answer.
 	///
 	/// This is the page's own statement, not an inference from its text: a
@@ -94,6 +101,7 @@ pub fn AsAnswers(Value:&Value) -> Option<Answers> {
 	Some(Answers {
 		Count,
 		Text:TextOf(Object.get("text")),
+		Markdown:Object.get("markdown").and_then(Value::as_str).map(|Text| Text.to_string()),
 		Busy:Object.get("busy").and_then(Value::as_bool).unwrap_or(false),
 		Marks:Object
 			.get("marks")

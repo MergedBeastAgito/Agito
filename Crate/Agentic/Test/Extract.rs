@@ -15,13 +15,20 @@
 //! `Crate/ChatDriver/Test/Fixture/Answer.html` - the same file a person can
 //! open to see what was read.
 //!
+//! It also proves the pair reading, which is the one claim a fake cannot make:
+//! one evaluate returns the rendered text and the page's Markdown from the same
+//! subtree, the two halves are byte for byte what the two single-format
+//! expressions produce, and they describe the same answer - the formula is
+//! glyphs in one and TeX in the other, and the prose around it matches word for
+//! word.
+//!
 //! The browser is named by `AGENTIC_BROWSER`, because this workspace does not
 //! assume which one a machine has installed. When the variable is absent the
 //! well-known Brave paths are tried, and a machine with neither is a failure
 //! that says so rather than a test that quietly passes.
 //!
-//! Both readings come from one browser and one page, and there is one test
-//! rather than two: a second launch of the same browser while the first is
+//! Every reading comes from one browser and one page, and there is one test
+//! rather than three: a second launch of the same browser while the first is
 //! still running exits before it is ready, and a suite that only passes with
 //! `--test-threads=1` is a suite that fails on the machine of whoever runs it
 //! next.
@@ -61,8 +68,24 @@ fn Fixture() -> String {
 	format!("file://{}", Path.to_string_lossy())
 }
 
-/// The answer's text in each format, read from one page in one browser.
-fn Captured() -> (String, String) {
+/// The answer as each reading of it returned it.
+///
+/// The pair reading is evaluated once and returns both halves, so what the test
+/// compares is one snapshot's two renderings against the two readings that used
+/// to cost a snapshot each.
+struct Readings {
+	/// The rendered text, from the text reading.
+	Text:String,
+	/// The page's Markdown, from the markdown reading.
+	Markdown:String,
+	/// The rendered text the pair reading returned.
+	PairText:String,
+	/// The page's Markdown the pair reading returned.
+	PairMarkdown:String,
+}
+
+/// The fixture's answer in all three readings, from one page in one browser.
+fn Captured() -> Readings {
 	let Runtime = tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
 		.build()
@@ -81,30 +104,37 @@ fn Captured() -> (String, String) {
 			.await
 			.expect("the fixture opens");
 		let mut Seen = Vec::new();
-		for Format in [Format::Markdown, Format::Text] {
+		for Format in [Format::Markdown, Format::Text, Format::Both] {
 			let Value = Browse
 				.Evaluate(&Target, &Read(Format), Budget(30))
 				.await
 				.expect("the expression runs");
-			Seen.push(
-				Value
-					.get("text")
-					.and_then(serde_json::Value::as_str)
-					.unwrap_or_default()
-					.to_string(),
-			);
+			Seen.push(Value);
 		}
 		Browse.Dispose(Target).await;
+		let Field = |Value:&serde_json::Value, Key:&str| {
+			Value
+				.get(Key)
+				.and_then(serde_json::Value::as_str)
+				.unwrap_or_default()
+				.to_string()
+		};
+		let Pair = Seen.pop().unwrap_or_default();
 		let Text = Seen.pop().unwrap_or_default();
 		let Markdown = Seen.pop().unwrap_or_default();
-		(Markdown, Text)
+		Readings {
+			Text:Field(&Text, "text"),
+			Markdown:Field(&Markdown, "text"),
+			PairText:Field(&Pair, "text"),
+			PairMarkdown:Field(&Pair, "markdown"),
+		}
 	})
 }
 
 #[test]
 #[ignore = "needs a browser: cargo test -p agentic --test Extract -- --ignored"]
 fn the_fixture_page_round_trips_as_markdown_and_the_text_reading_does_not() {
-	let (Markdown, Text) = Captured();
+	let Readings { Text, Markdown, PairText, PairMarkdown } = Captured();
 
 	// A table: its head, a separator, and one line per row.
 	let Rows:Vec<&str> = Markdown.lines().filter(|Line| Line.starts_with("| ")).collect();
@@ -170,4 +200,53 @@ fn the_fixture_page_round_trips_as_markdown_and_the_text_reading_does_not() {
 		Text.chars().count()
 	);
 	assert_ne!(Markdown.chars().count(), Text.chars().count());
+
+	// The pair reading, from one evaluate of the page: both halves came out of
+	// the single `Value` `Captured` took, which is the whole point of the mode.
+	// They are the two readings the calls above took, byte for byte - so one
+	// read is enough to produce both, and the two calls were never needed.
+	assert_eq!(PairText, Text, "the pair's text is not the text reading");
+	assert_eq!(PairMarkdown, Markdown, "the pair's Markdown is not the Markdown reading");
+
+	// The formula: glyphs in one half, TeX in the other. `innerText` keeps the
+	// KaTeX glyph run - one positioned glyph per line - and the serializer
+	// keeps the annotation, so the pair is the two statements the fixture was
+	// built to distinguish.
+	assert!(!PairText.contains("$E = mc^2$"), "the text half kept the TeX:\n{PairText}");
+	assert!(!PairText.contains("mc^2"), "the text half kept the TeX:\n{PairText}");
+	assert!(
+		PairMarkdown.contains("$E = mc^2$"),
+		"the Markdown half lost the TeX:\n{PairMarkdown}"
+	);
+	assert!(
+		!PairMarkdown.contains("𝐸"),
+		"the Markdown half kept the glyphs:\n{PairMarkdown}"
+	);
+
+	// The prose around it is the same sentence, word for word. Each rendering
+	// is taken from its own first word to its own last, whitespace is folded
+	// because a glyph run is one word per line in `innerText`, and the formula
+	// is replaced by one placeholder on each side. What is left has to be
+	// identical, or the two halves are not the same answer.
+	let Sentence = |Rendering:&str| {
+		let Start = Rendering
+			.find("Energy and mass")
+			.unwrap_or_else(|| panic!("the sentence is not in the rendering:\n{Rendering}"));
+		let Rest = &Rendering[Start..];
+		let End = Rest
+			.find("worth reading.")
+			.unwrap_or_else(|| panic!("the sentence does not end:\n{Rendering}"))
+			+ "worth reading.".len();
+		Rest[..End].split_whitespace().collect::<Vec<_>>().join(" ")
+	};
+	let Prose = |Rendering:&str, Formula:&str| {
+		let Sentence = Sentence(Rendering);
+		assert!(Sentence.contains(Formula), "{Formula:?} is not in {Sentence:?}");
+		Sentence.replace(Formula, "«formula»")
+	};
+	assert_eq!(
+		Prose(&PairText, "𝐸 = 𝑚 𝑐 2 E=mc2"),
+		Prose(&PairMarkdown, "$E = mc^2$"),
+		"the two renderings of one answer disagree about the prose"
+	);
 }

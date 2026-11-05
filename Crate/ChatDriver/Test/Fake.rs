@@ -107,9 +107,11 @@ pub enum Kind {
 
 /// The expression's identity, decided by the driver's own functions.
 ///
-/// A read of the thread has two expressions - one per format - and both are a
+/// A read of the thread has one expression per format and all of them are a
 /// read of the thread: the fake answers the same value either way, because the
-/// shape it answers is the port's, not the page's.
+/// shape it answers is the port's, not the page's. `Format::All` is walked
+/// rather than the formats being listed, so a fourth reading cannot be added to
+/// the driver and silently look unknown here.
 pub fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
 	if Expression == Expressions::ReadMode(Selectors) {
 		Kind::Mode
@@ -121,8 +123,9 @@ pub fn KindOf(Selectors:&Selectors, Question:&str, Expression:&str) -> Kind {
 		Kind::Composer
 	} else if Expression == Expressions::PressSubmit(Selectors, Question) {
 		Kind::Submit
-	} else if Expression == Expressions::ReadAnswers(Selectors, Format::Text)
-		|| Expression == Expressions::ReadAnswers(Selectors, Format::Markdown)
+	} else if Format::All()
+		.into_iter()
+		.any(|Format| Expression == Expressions::ReadAnswers(Selectors, Format))
 	{
 		Kind::Answers
 	} else if Expression == Expressions::ReadCollapse(Selectors) {

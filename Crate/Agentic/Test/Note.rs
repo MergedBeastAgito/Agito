@@ -69,6 +69,9 @@ fn Answer() -> Answer {
 			.collect(),
 		Model:"example-model".to_string(),
 		Mode:"search".to_string(),
+		// One rendering: this answer is what a `markdown` call returns, and a
+		// note is built from the rendering an answer carries.
+		Markdown:String::new(),
 	}
 }
 
@@ -257,21 +260,32 @@ fn now_is_a_stamp_the_note_can_be_filed_by() {
 	}
 }
 
-/// The shapes are the three the flag takes, and only the note changes the
-/// reading.
+/// The shapes are the four the flag takes, and only the pair and the note
+/// change the reading.
 #[test]
-fn the_shapes_are_text_markdown_and_note_and_note_reads_markdown() {
-	assert_eq!(Shape::All().map(Shape::Name), ["text", "markdown", "note"]);
+fn the_shapes_are_text_markdown_both_and_note_and_the_documents_read_markdown() {
+	assert_eq!(Shape::All().map(Shape::Name), ["text", "markdown", "both", "note"]);
 	assert_eq!(Shape::From("note"), Some(Shape::Note));
 	assert_eq!(Shape::From(" Note "), Some(Shape::Note));
+	assert_eq!(Shape::From("both"), Some(Shape::Both));
 	assert_eq!(Shape::From("notebook"), None);
 	// A reading format is a shape too, which is what a selector file states.
 	assert_eq!(Shape::Of(AgenticChatDriver::Format::Markdown), Shape::Markdown);
 	assert_eq!(Shape::Of(AgenticChatDriver::Format::Text), Shape::Text);
+	assert_eq!(Shape::Of(AgenticChatDriver::Format::Both), Shape::Both);
 	// `note` is a document built from Markdown, and Markdown is unchanged.
 	assert_eq!(Shape::Note.Reading(), AgenticChatDriver::Format::Markdown);
 	assert_eq!(Shape::Markdown.Reading(), AgenticChatDriver::Format::Markdown);
 	assert_eq!(Shape::Text.Reading(), AgenticChatDriver::Format::Text);
+	// `both` is the one shape whose reading is neither of the two: it is the
+	// pair, taken from one snapshot.
+	assert_eq!(Shape::Both.Reading(), AgenticChatDriver::Format::Both);
+	// The two shapes that print a note are the two that need a thread to file
+	// it under.
+	assert!(Shape::Note.CarriesNote());
+	assert!(Shape::Both.CarriesNote());
+	assert!(!Shape::Text.CarriesNote());
+	assert!(!Shape::Markdown.CarriesNote());
 }
 
 /// The command line offers the shape and every fact a note needs.
