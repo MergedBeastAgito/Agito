@@ -55,17 +55,21 @@ use serde_json::Value;
 use crate::Struct::Error::Error;
 
 /// One corpus's observation, as it was written.
+///
+/// Every field states its own key rather than relying on a container
+/// `rename_all`: the serde build this workspace resolves does not apply one to
+/// struct fields, and an observation that read nothing would describe a corpus
+/// with no fields at all.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub struct Observation {
 	/// The version the observation file declares.
-	#[serde(default, skip_serializing_if = "Zero")]
+	#[serde(rename = "version", default, skip_serializing_if = "Zero")]
 	pub Version:u64,
 	/// Every field the ingestion can hand over, by the name the corpus uses.
 	#[serde(rename = "state", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Fields:BTreeMap<String, ObservationField>,
 	/// The derived values the observation names, as the prose that defines them.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	#[serde(rename = "derived", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Derived:BTreeMap<String, Value>,
 	/// The file's own comment, when it wrote one.
 	#[serde(rename = "$comment", default, skip_serializing_if = "Option::is_none")]
@@ -86,25 +90,30 @@ pub struct ObservationField {
 	#[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
 	pub Kind:Option<String>,
 	/// Where the value comes from: the ingestion's own word.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "source", default, skip_serializing_if = "Option::is_none")]
 	pub Source:Option<String>,
 	/// The ingestion's own address for it, as a string it understands.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "address", default, skip_serializing_if = "Option::is_none")]
 	pub Address:Option<String>,
 	/// The unit the value is in.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "unit", default, skip_serializing_if = "Option::is_none")]
 	pub Unit:Option<String>,
 	/// The range the value stays within, when the corpus states one.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	///
+	/// Read as numbers, so a bound written `0` and one written `0.0` are the same
+	/// bound and a round trip writes the decimal form. A range is a numeric fact
+	/// - the ingestion clamps against it - and keeping the file's spelling of an
+	/// integer would be a second, textual fact about the same number.
+	#[serde(rename = "range", default, skip_serializing_if = "Option::is_none")]
 	pub Range:Option<Vec<f64>>,
 	/// For an array, what its items are.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "items", default, skip_serializing_if = "Option::is_none")]
 	pub Items:Option<String>,
 	/// For an array, how many items it holds.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "length", default, skip_serializing_if = "Option::is_none")]
 	pub Length:Option<u64>,
 	/// What the field means, in the author's words.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "note", default, skip_serializing_if = "Option::is_none")]
 	pub Note:Option<String>,
 	/// Every key this crate has not been taught.
 	#[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]

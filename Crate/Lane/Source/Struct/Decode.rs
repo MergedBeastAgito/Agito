@@ -10,25 +10,31 @@
 //!
 //! # Four kinds of wrong, and they are not the same wrong
 //!
-//! - [`DecodeError::Malformed`] - the bytes are not JSON, or not UTF-8. Nothing
+//! - `DecodeError::Malformed` - the bytes are not JSON, or not UTF-8. Nothing
 //!   can be salvaged, so the detail carries the body's opening and the parser's
 //!   own sentence.
-//! - [`DecodeError::Refused`] - the endpoint answered and the answer is
+//! - `DecodeError::Refused` - the endpoint answered and the answer is
 //!   `success: false`. The body is well formed; the *call* failed. The two are
 //!   separated because their remedies are: one is a bug in this crate's reading
 //!   or the endpoint's contract, the other is a credential or a quota.
-//! - [`DecodeError::Missing`] / [`DecodeError::Shape`] - a field the answer
+//! - `DecodeError::Missing` / `DecodeError::Shape` - a field the answer
 //!   cannot do without is absent, or is present as the wrong type. The field is
 //!   named in both, because "missing" without a name is the opaque string this
 //!   type exists to replace.
-//! - [`DecodeError::UnknownChoice`] / [`DecodeError::ProbabilityShape`] /
-//!   [`DecodeError::BudgetShape`] - the answer's *content* is wrong: a chosen
+//! - `DecodeError::UnknownChoice` / `DecodeError::ProbabilityShape` /
+//!   `DecodeError::BudgetShape` - the answer's *content* is wrong: a chosen
 //!   option outside its own distribution, a share that is not a share, a spend
 //!   that is not two counts.
 //!
-//! [`DecodeError::Empty`] is the fifth and smallest: the reply is well formed,
+//! `DecodeError::Empty` is the fifth and smallest: the reply is well formed,
 //! carries `answers`, and answers nothing - which is a reply no caller can act
 //! on and a different fact from a missing field.
+//!
+//! The variants are named in code rather than linked because each one has a
+//! constructor of the same name, and rustdoc cannot tell a link to the variant
+//! from a link to the function. The constructors exist so a call site reads
+//! `DecodeError::Missing("result.answers", …)` instead of repeating two field
+//! names; the variants are what a caller matches on.
 //!
 //! # Why no variant carries an `f64` or a `Value`
 //!
@@ -117,10 +123,10 @@ impl DecodeError {
 			DecodeError::Missing { Field, .. } => format!("the reply carries no `{Field}`"),
 			DecodeError::Empty { .. } => "the reply answered no question".to_string(),
 			DecodeError::Shape { Field, .. } => format!("`{Field}` is not the shape an answer needs"),
-			DecodeError::UnknownChoice { Question, Choice:Some(Choice), .. } => {
+			DecodeError::UnknownChoice { Question, Choice: Some(Choice), .. } => {
 				format!("question `{Question}` chose `{Choice}`, which the reply did not carry")
 			},
-			DecodeError::UnknownChoice { Question, Choice:None, .. } => {
+			DecodeError::UnknownChoice { Question, Choice: None, .. } => {
 				format!("question `{Question}` named no chosen option")
 			},
 			DecodeError::ProbabilityShape { Question, .. } => {
@@ -132,7 +138,7 @@ impl DecodeError {
 
 	/// What was observed, which may be empty.
 	///
-	/// Built rather than stored for [`DecodeError::UnknownChoice`], because the
+	/// Built rather than stored for `DecodeError::UnknownChoice`, because the
 	/// options a reply carried are only worth spelling out when someone asks:
 	/// a `Vec` kept solely for a log line would be a `Vec` cloned on every
 	/// refusal.
@@ -144,9 +150,11 @@ impl DecodeError {
 			| DecodeError::ProbabilityShape { Detail, .. }
 			| DecodeError::BudgetShape { Detail } => Detail.clone(),
 			DecodeError::Missing { Detail, .. } | DecodeError::Shape { Detail, .. } => Detail.clone(),
-			DecodeError::UnknownChoice { Options, .. } => match Options.len() {
-				0 => "the reply carried no options at all".to_string(),
-				_ => format!("the options were {}", Options.join(", ")),
+			DecodeError::UnknownChoice { Options, .. } => {
+				match Options.len() {
+					0 => "the reply carried no options at all".to_string(),
+					_ => format!("the options were {}", Options.join(", ")),
+				}
 			},
 		}
 	}

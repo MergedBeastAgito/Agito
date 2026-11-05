@@ -28,8 +28,23 @@
 //!   payload - `messages`, `temperature` - is not a shape this crate can write
 //!   or read;
 //! - [`Fn::Ask::Ask`] posts it through a [`Struct::Port::Poster`] and
-//!   [`Fn::Parse::Parse`] returns the answer typed: a choice with a probability
-//!   for every option, a score with its legend, or the reply's own value.
+//!   [`Fn::Decode::Decode`] returns the answer typed: a choice with a
+//!   probability for every option, a score with its legend, or the reply's own
+//!   value - plus what the reply spent and, when the caller declared a ceiling,
+//!   what is left of it ([`Struct::Answer::Usage`]). [`Fn::Parse::Parse`] is the
+//!   same reading reported as the port's own code, with the decoder's reason
+//!   kept inside it.
+//!
+//! # A refusal names the field it was about
+//!
+//! `module.json` declares seven codes, and every unreadable reply is one of them
+//! (`unparseable`). That is what a caller routing on an error needs and less
+//! than a person holding a broken body does, so [`Fn::Decode`] keeps a finer
+//! vocabulary - a missing field, a share outside `0..=1`, a choice naming an
+//! option the reply did not carry - and the port's error carries it whole rather
+//! than flattening it into the sentence. Nothing here panics on response data: a
+//! body this crate cannot read is a `Result`, and the reason is a value a test
+//! can compare.
 //!
 //! # Two levels of selection, because a lane is a request *shape*
 //!
@@ -80,6 +95,7 @@ pub use crate::{
 	Fn::{
 		Ask::Ask,
 		Compose::Compose,
+		Decode::{Decode, DecodeBytes, DecodeWithin},
 		Load::{Load, Read},
 		Model::{Bare, Models, Price, Route},
 		Parse::Parse,
@@ -93,6 +109,7 @@ pub use crate::{
 		Corpus::Corpus,
 		CorpusError::CorpusError,
 		Decider::{Create, Decider, Options},
+		Decode::DecodeError,
 		Error::{Code, Error},
 		Lane::{Lane, Selection},
 		Observation::{Observation, ObservationField},

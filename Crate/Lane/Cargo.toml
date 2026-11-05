@@ -53,6 +53,10 @@ path = "Test/Request.rs"
 name = "Schema"
 path = "Test/Schema.rs"
 
+[[test]]
+name = "Probe"
+path = "Test/Probe.rs"
+
 # The loader alone: the layout on disk, the discovery of lane files, and the
 # refusal that names the path or the id it was about. Separate from `Lane.rs`
 # because these cases need corpora that are deliberately broken, and a file
@@ -69,3 +73,19 @@ path = "Test/Load.rs"
 [[test]]
 name = "Corpus"
 path = "Test/Corpus.rs"
+
+# The decoder alone: one body per way a reply can be wrong, and no corpus and no
+# poster in sight. Separate from `Lane.rs` because a decoder that needed either
+# would be testing something other than the reading - and because every case
+# here is a body a transport actually hands back, not a reply this crate built.
+[[test]]
+name = "Decode"
+path = "Test/Decode.rs"
+
+# The shipped reply as data: the document under `Test/Fixture/Clef/`, the poster
+# that answers from it, and the three things that document promises - a chosen
+# option, a share for every option that sums to one, and a budget. No corpus and
+# no socket: what it holds is the stand-in other runs are wired with.
+[[test]]
+name = "ClefFixture"
+path = "Test/ClefFixture.rs"

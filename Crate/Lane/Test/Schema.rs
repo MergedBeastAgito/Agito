@@ -241,10 +241,23 @@ fn the_observation_is_read_as_typed_entries() {
 	assert_eq!(Observation.Derived().count(), 1);
 	assert!(Observation.Declares("verdict") && !Observation.Declares("slip"));
 
+	let Expected = json!({
+		"$comment": "what the ingestion can hand over",
+		"version": 1,
+		"state": {
+			"speed_kmh": {
+				"type": "number", "source": "memory", "address": "car+0x430",
+				"unit": "km/h", "range": [0.0, 400.0], "note": "signed forward speed"
+			},
+			"grounded": { "type": "array", "items": "boolean", "length": 4 },
+			"verdict": { "type": "string" }
+		},
+		"derived": { "moved_m": "metres the car advanced over the last six ticks" }
+	});
 	assert_eq!(
 		serde_json::to_value(&Observation).expect("the observation writes"),
-		Written,
-		"nothing the file wrote is lost on the way back out"
+		Expected,
+		"every key survives the round trip; a numeric range writes its bounds as numbers"
 	);
 }
 
@@ -278,12 +291,12 @@ fn a_corpus_round_trips_as_one_document() {
 	assert_eq!(Corpus.Root(), None, "a corpus read from a value came from no directory");
 	assert_eq!(Corpus.Order, vec!["cruise".to_string(), "corner".to_string()]);
 	assert_eq!(
-		Corpus.Ordered().iter().map(|Lane| Lane.Name.as_str()).collect::<Vec<&str>>(),
+		Corpus.Ordered().iter().map(|(Id, _)| Id.as_str()).collect::<Vec<&str>>(),
 		vec!["cruise", "corner"],
 		"the declared order is kept, not the sorted one"
 	);
 	assert_eq!(
-		Corpus.Lanes().map(|Lane| Lane.Name.as_str()).collect::<Vec<&str>>(),
+		Corpus.Lanes.keys().map(String::as_str).collect::<Vec<&str>>(),
 		vec!["corner", "cruise"],
 		"the map stays sorted, which is the other question"
 	);
@@ -313,7 +326,7 @@ fn an_order_that_names_a_lane_nobody_wrote_hides_nothing() {
 	}))
 	.expect("an order naming a lane that is gone is not a refusal");
 	assert_eq!(
-		Corpus.Ordered().iter().map(|Lane| Lane.Name.as_str()).collect::<Vec<&str>>(),
+		Corpus.Ordered().iter().map(|(Id, _)| Id.as_str()).collect::<Vec<&str>>(),
 		vec!["recover", "drive"],
 		"a lane the order does not mention is appended, never hidden"
 	);

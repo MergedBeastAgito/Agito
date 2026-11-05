@@ -52,11 +52,16 @@ use crate::Struct::{Predicate::Predicate, Template::Template};
 /// `model`, `cadence` and `why` are carried for the corpus author's sake. Every
 /// key may be absent and the lane still loads: a lane with no `fields` asks about
 /// instructions alone, and a lane with no `select` is a catch-all.
+///
+/// Every field states its own key rather than relying on a container
+/// `rename_all`: the serde build this workspace resolves does not apply one to
+/// struct fields, and a corpus whose keys silently did not match would be a
+/// corpus that loaded empty. An explicit key is also the thing a reader can
+/// check against the JSON above without knowing serde's rules.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub struct Lane {
 	/// The lane's name, which is its key in the corpus.
-	#[serde(default, skip_serializing_if = "String::is_empty")]
+	#[serde(rename = "name", default, skip_serializing_if = "String::is_empty")]
 	pub Name:String,
 	/// The model this lane asks, as the corpus named it.
 	///
@@ -66,13 +71,13 @@ pub struct Lane {
 	/// the caller's default stands in - [`crate::Struct::Decider::Create`] stamps
 	/// it onto every unnamed lane, and [`crate::Fn::Model::Bare`] answers the
 	/// crate's own fallback for a lane composed without either.
-	#[serde(default, skip_serializing_if = "String::is_empty")]
+	#[serde(rename = "model", default, skip_serializing_if = "String::is_empty")]
 	pub Model:String,
 	/// The fields it sends, in the order it names them.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(rename = "fields", default, skip_serializing_if = "Vec::is_empty")]
 	pub Fields:Vec<String>,
 	/// The templates it serves, in preference order.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(rename = "templates", default, skip_serializing_if = "Vec::is_empty")]
 	pub Templates:Vec<String>,
 	/// The condition that selects it, as the corpus states it.
 	///
@@ -80,13 +85,13 @@ pub struct Lane {
 	/// whenever no more specific lane does, and two of them make a corpus that
 	/// cannot say which one wins - which [`crate::Fn::SelectLane::SelectLane`]
 	/// reports rather than resolving.
-	#[serde(default)]
+	#[serde(rename = "select", default)]
 	pub Select:Predicate,
 	/// How often it is worth sending, as the corpus says it.
-	#[serde(default, skip_serializing_if = "String::is_empty")]
+	#[serde(rename = "cadence", default, skip_serializing_if = "String::is_empty")]
 	pub Cadence:String,
 	/// Why it exists, as the corpus says it.
-	#[serde(default, skip_serializing_if = "String::is_empty")]
+	#[serde(rename = "why", default, skip_serializing_if = "String::is_empty")]
 	pub Why:String,
 }
 
@@ -98,8 +103,10 @@ pub struct Lane {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
 	/// The lane the state selected.
+	#[serde(rename = "lane")]
 	pub Lane:Lane,
 	/// The template the state selected inside that lane.
+	#[serde(rename = "template")]
 	pub Template:Template,
 }
 

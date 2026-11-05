@@ -6,7 +6,7 @@
 //! decoder are deliberate:
 //!
 //! - **A failed call is not an answer with empty questions.** `success: false`
-//!   is [`DecodeError::Refused`], and the endpoint's own message goes into the
+//!   is `DecodeError::Refused`, and the endpoint's own message goes into the
 //!   detail, because the commonest failure (an expired credential) arrives as a
 //!   200-shaped body with `success: false` in it and reads as "the model said
 //!   nothing".
@@ -15,7 +15,7 @@
 //!   across five options. Re-normalising the winner would erase that, and the
 //!   chosen option is checked against its own distribution rather than trusted:
 //!   a `choice` naming an option the reply did not carry is
-//!   [`DecodeError::UnknownChoice`], not a choice with a probability of zero.
+//!   `DecodeError::UnknownChoice`, not a choice with a probability of zero.
 //! - **A question type this crate does not interpret is carried, not dropped.**
 //!   The endpoint may understand it; this crate simply cannot turn it into a
 //!   probability, and pretending otherwise would be a typed answer that is not
@@ -68,7 +68,7 @@ pub fn DecodeWithin(Body:&str, Ceiling:u64) -> Result<Answer, DecodeError> { Rea
 
 /// Read one reply from the bytes a transport handed back.
 ///
-/// Bytes that are not UTF-8 are [`DecodeError::Malformed`] rather than a lossy
+/// Bytes that are not UTF-8 are `DecodeError::Malformed` rather than a lossy
 /// string: a body decoded with replacement characters is a body whose
 /// probabilities may have been mangled, and an answer built from it would be
 /// wrong in a way nothing downstream could see.
@@ -95,12 +95,15 @@ fn Read(Body:&str, Ceiling:Option<u64>) -> Result<Answer, DecodeError> {
 		.filter(|Result| !Result.is_null())
 		.ok_or_else(|| DecodeError::Missing("result", format!("the reply carries no result · {}", Clip(Body))))?;
 	let Result = Object(Result, "result")?;
-	let Answers = Result
-		.get("answers")
-		.ok_or_else(|| DecodeError::Missing("result.answers", format!("the result carries no answers · {}", Clip(Body))))?;
+	let Answers = Result.get("answers").ok_or_else(|| {
+		DecodeError::Missing("result.answers", format!("the result carries no answers · {}", Clip(Body)))
+	})?;
 	let Answers = Object(Answers, "result.answers")?;
 	if Answers.is_empty() {
-		return Err(DecodeError::Empty(format!("`result.answers` is an empty object · {}", Clip(Body))));
+		return Err(DecodeError::Empty(format!(
+			"`result.answers` is an empty object · {}",
+			Clip(Body)
+		)));
 	}
 
 	let mut Questions:BTreeMap<String, Answered> = BTreeMap::new();
@@ -126,9 +129,9 @@ fn Read(Body:&str, Ceiling:Option<u64>) -> Result<Answer, DecodeError> {
 /// alone, because the distribution is what makes it a choice: an answer with a
 /// `choice` word and no probabilities is a word this crate cannot threshold.
 fn OneAnswer(Name:&str, One:&Value) -> Result<Answered, DecodeError> {
-	let One = One.as_object().ok_or_else(|| {
-		DecodeError::Shape(Name.to_string(), format!("the answer is {}, not an object", Kind(One)))
-	})?;
+	let One = One
+		.as_object()
+		.ok_or_else(|| DecodeError::Shape(Name.to_string(), format!("the answer is {}, not an object", Kind(One))))?;
 	let Declared = One.get("type").and_then(Value::as_str).unwrap_or_default();
 
 	if Declared == "choice" || One.contains_key("choice") || One.contains_key("probabilities") {
@@ -138,10 +141,7 @@ fn OneAnswer(Name:&str, One:&Value) -> Result<Answered, DecodeError> {
 		let Score = One.get("score").and_then(Value::as_f64).ok_or_else(|| {
 			DecodeError::Shape(
 				format!("{Name}.score"),
-				format!(
-					"the score is {}, not a number",
-					One.get("score").map(Kind).unwrap_or("absent")
-				),
+				format!("the score is {}, not a number", One.get("score").map(Kind).unwrap_or("absent")),
 			)
 		})?;
 		return Ok(Answered::Score { Score, Legend:Legend(One.get("legend")) });
@@ -154,7 +154,8 @@ fn Choice(Name:&str, One:&Map<String, Value>) -> Result<Answered, DecodeError> {
 	let Shares = One.get("probabilities").ok_or_else(|| {
 		DecodeError::Missing(
 			format!("{Name}.probabilities"),
-			"a choice without its distribution cannot be told apart from a name this crate should not trust".to_string(),
+			"a choice without its distribution cannot be told apart from a name this crate should not trust"
+				.to_string(),
 		)
 	})?;
 	let Shares = Shares.as_object().ok_or_else(|| {
@@ -227,7 +228,7 @@ fn Spend(Value:Option<&Value>, Ceiling:Option<u64>) -> Result<Usage, DecodeError
 	})?;
 	let Input = Count(Reported, "input_tokens")?;
 	let Output = match Reported.get("output_tokens") {
-		Some(Value) => Count(Reported, "output_tokens")?,
+		Some(_) => Count(Reported, "output_tokens")?,
 		None => 0,
 	};
 	Ok(Usage::Of(Input, Output, Ceiling))
@@ -236,11 +237,14 @@ fn Spend(Value:Option<&Value>, Ceiling:Option<u64>) -> Result<Usage, DecodeError
 /// One unsigned count inside `usage`.
 fn Count(Usage:&Map<String, Value>, Field:&str) -> Result<u64, DecodeError> {
 	let Value = Usage.get(Field).ok_or_else(|| {
-		DecodeError::Missing(format!("result.usage.{Field}"), "the reply reported a spend without this count".to_string())
+		DecodeError::Missing(
+			format!("result.usage.{Field}"),
+			"the reply reported a spend without this count".to_string(),
+		)
 	})?;
-	Value.as_u64().ok_or_else(|| {
-		DecodeError::BudgetShape(format!("`{Field}` is {}, not an unsigned token count", Kind(Value)))
-	})
+	Value
+		.as_u64()
+		.ok_or_else(|| DecodeError::BudgetShape(format!("`{Field}` is {}, not an unsigned token count", Kind(Value))))
 }
 
 /// A score's legend, which the endpoint may write as an array of words or as an
@@ -293,9 +297,9 @@ fn Kind(Value:&Value) -> &'static str {
 
 /// One value that has to be an object, or the field that was not.
 fn Object<'a>(Value:&'a Value, Field:&str) -> Result<&'a Map<String, Value>, DecodeError> {
-	Value.as_object().ok_or_else(|| {
-		DecodeError::Shape(Field.to_string(), format!("expected a JSON object, found {}", Kind(Value)))
-	})
+	Value
+		.as_object()
+		.ok_or_else(|| DecodeError::Shape(Field.to_string(), format!("expected a JSON object, found {}", Kind(Value))))
 }
 
 /// A body, shortened to something a log can hold.

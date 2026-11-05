@@ -36,15 +36,14 @@ use crate::Struct::Question::Question;
 /// template whose only description is its question text is one nobody can tell
 /// apart from its neighbour.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub struct Template {
 	/// The template's name, which is its key in the corpus.
-	#[serde(default, skip_serializing_if = "String::is_empty")]
+	#[serde(rename = "name", default, skip_serializing_if = "String::is_empty")]
 	pub Name:String,
 	/// When it applies, as the corpus states it.
-	#[serde(default, skip_serializing_if = "String::is_empty")]
+	#[serde(rename = "when", default, skip_serializing_if = "String::is_empty")]
 	pub When:String,
 	/// The questions, by name. A request carries them in this order.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	#[serde(rename = "questions", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Questions:BTreeMap<String, Question>,
 }

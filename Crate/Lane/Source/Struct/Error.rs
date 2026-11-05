@@ -13,6 +13,12 @@
 //! it disagrees with itself. Likewise `post-failed` covers every way the poster
 //! can refuse, because a credential, a socket and a status code are the
 //! adapter's vocabulary, not this capability's.
+//!
+//! `unparseable` is the one code whose detail is not the end of the story: the
+//! decoder in [`crate::Fn::Decode`] knows exactly which field was wrong, and
+//! that reason rides inside the variant's `cause` rather than being flattened
+//! into the sentence. A caller that only routes on a code ignores it; a caller
+//! reading a broken reply does not have to guess.
 
 use std::fmt;
 

@@ -25,6 +25,13 @@
 //! that meant the shipped document and was handed the scripted body fails on the
 //! choice and the shares, instead of agreeing by accident.
 //!
+//! # Where the instrument's own claims live
+//!
+//! Not here. `Test/ClefFixture.rs` includes this module and asserts what the
+//! shipped document says and what the poster answers, in a binary of its own -
+//! so a document that stopped parsing fails a suite named after it, rather than
+//! surfacing as a confusing assertion in whichever test needed a reply first.
+//!
 //! # It ignores the call's deadline, on purpose
 //!
 //! A real poster owns the in-flight bound. A fake that enforced it as well
@@ -307,82 +314,5 @@ impl Poster for FixturePoster {
 	fn Post<'a>(&'a self, Request:&'a Request, _Call:Call) -> FutureBox<'a, Result<String, Failure>> {
 		self.Asked.lock().unwrap().push(Request.clone());
 		Box::pin(future::ready(Ok(self.Fixture.Body())))
-	}
-}
-
-/// The instrument's own claims, beside the instrument.
-///
-/// They run in whichever test binary includes this module, which is what keeps
-/// the fixture from breaking silently: the reply is data, and a document that
-/// stopped parsing would otherwise be found by the first test that happened to
-/// need it, in a failure naming the answer rather than the file.
-#[cfg(test)]
-mod Smoke {
-	use std::{sync::Arc, time::Duration};
-
-	use AgenticLane::{Ask, Parse, Request, State};
-	use AgenticRuntime::{BlockOn, Call, Never, Wall};
-
-	use super::{Fixture, FixturePoster};
-
-	/// One call's bound, on the wall clock.
-	fn Budget() -> Call { Call::Within(Duration::from_secs(1), &Wall, Arc::new(Never)) }
-
-	/// A request that asks nothing, for a poster that answers whatever it is
-	/// handed: what is under test here is the stand-in, not a composition.
-	fn Asked() -> Request {
-		Request { Model:"clef-flash".to_string(), State:State::New(), Questions:Default::default() }
-	}
-
-	#[test]
-	fn the_shipped_fixture_parses_with_a_whole_distribution_and_a_budget() {
-		let Fixture = Fixture::Shipped();
-		assert!(Fixture.Budget() >= 1, "a canned run worth no request is not a fixture");
-
-		let Shares = Fixture.Probabilities("course");
-		assert_eq!(Shares.len(), 2, "every option the reply named is carried: {Shares:?}");
-		let Sum:f64 = Shares.values().sum();
-		assert!((Sum - 1.0).abs() < 1e-6, "the shares sum to one, saw {Sum}");
-
-		let Chosen = Fixture.Choice("course").expect("the canned reply chose an option");
-		assert!(
-			Shares.contains_key(Chosen),
-			"`{Chosen}` is one of the options it was chosen from"
-		);
-
-		// The same three facts, read through the parser the run itself uses: a
-		// body this crate cannot read is a fixture for nothing.
-		let Answer = Parse(&Fixture.Body()).expect("the canned body is a reply");
-		assert_eq!(Answer.Choice("course"), Some((Chosen, Shares[Chosen])));
-		assert!(Answer.Usage.Input > 0, "the reply reports what it spent");
-	}
-
-	#[test]
-	fn the_fixture_poster_answers_from_the_file_and_records_what_it_was_asked() {
-		let Fixture = Fixture::Shipped();
-		let Poster = FixturePoster::Shipped();
-		let Request = Asked();
-
-		let Answer = BlockOn(Ask(&Request, &*Poster, Budget())).expect("the fixture answers with no socket");
-		assert_eq!(Answer.Choice("course").map(|(Chosen, _)| Chosen), Fixture.Choice("course"));
-
-		let Posted = Poster.Only();
-		assert_eq!(Posted, Request, "the request it answered is the request it recorded");
-		assert_eq!(Posted.Body()["model"], "clef-flash");
-		assert_eq!(Posted.Path(), "/ai/run/@cf/cloudflare/clef-flash");
-		assert_eq!(Poster.Budget(), Fixture.Budget());
-	}
-
-	#[test]
-	#[should_panic(expected = "probabilities sum to")]
-	fn a_fixture_whose_distribution_does_not_sum_to_one_is_refused() {
-		Fixture::Read(
-			r#"{
-				"budget": 1,
-				"response": { "success": true, "result": { "answers": {
-					"course": { "type": "choice", "choice": "closer", "probabilities": { "closer": 0.6, "farther": 0.2 } }
-				} } }
-			}"#,
-		);
 	}
 }

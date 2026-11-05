@@ -33,7 +33,8 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 
 use std::{
-	env, fs,
+	env,
+	fs,
 	path::{Path, PathBuf},
 	process,
 	sync::atomic::{AtomicU64, Ordering},
@@ -58,7 +59,10 @@ impl Scratch {
 	fn New() -> Self {
 		static Next:AtomicU64 = AtomicU64::new(0);
 		let Count = Next.fetch_add(1, Ordering::Relaxed);
-		let Nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|Span| Span.subsec_nanos()).unwrap_or_default();
+		let Nanos = SystemTime::now()
+			.duration_since(UNIX_EPOCH)
+			.map(|Span| Span.subsec_nanos())
+			.unwrap_or_default();
 		let Path = env::temp_dir().join(format!("agentic-lane-{}-{Count}-{Nanos}", process::id()));
 		// A leftover from a run that was killed: the guard never got to delete
 		// it, and reading a stale file would be a test that passes for the
@@ -371,7 +375,11 @@ fn a_five_lane_corpus_loads_off_a_directory_with_its_questions_typed() {
 		"five lanes, sorted by name"
 	);
 	assert_eq!(Corpus.Templates().count(), 6, "six templates");
-	assert_eq!(Corpus.Root().map(PathBuf::as_path), Some(Directory.Root()), "the corpus remembers where it came from");
+	assert_eq!(
+		Corpus.Root().map(PathBuf::as_path),
+		Some(Directory.Root()),
+		"the corpus remembers where it came from"
+	);
 
 	// The two halves of the observation, and the union a lane is checked
 	// against: a reading and a derived sentence are both sendable.
@@ -406,12 +414,21 @@ fn a_five_lane_corpus_loads_off_a_directory_with_its_questions_typed() {
 	// The templates are typed values, not carried text: a choice has its
 	// options, a score has its scale, and both are what a request is built from.
 	let Cruise = Corpus.Template("freeroam.cruise").expect("the cruise template is declared");
-	assert!(Cruise.When.starts_with("free roam"), "the corpus's own sentence is kept: {}", Cruise.When);
+	assert!(
+		Cruise.When.starts_with("free roam"),
+		"the corpus's own sentence is kept: {}",
+		Cruise.When
+	);
 	assert_eq!(Cruise.Questions.len(), 2);
-	let Question::Choice { Instructions, Criteria } = Cruise.Questions.get("action").expect("the cruise template asks for an action") else {
+	let Question::Choice { Instructions, Criteria } =
+		Cruise.Questions.get("action").expect("the cruise template asks for an action")
+	else {
 		panic!("a choice question is a choice");
 	};
-	assert!(Instructions.contains("target pace"), "the instructions travel verbatim: {Instructions}");
+	assert!(
+		Instructions.contains("target pace"),
+		"the instructions travel verbatim: {Instructions}"
+	);
 	assert_eq!(
 		Criteria.keys().cloned().collect::<Vec<String>>(),
 		vec!["brake".to_string(), "hold".to_string(), "throttle".to_string()],
@@ -420,14 +437,26 @@ fn a_five_lane_corpus_loads_off_a_directory_with_its_questions_typed() {
 	let Question::Score { Criteria, .. } = Cruise.Questions.get("confidence").expect("and for a confidence") else {
 		panic!("a score question is a score");
 	};
-	assert_eq!(Criteria, &vec!["guessing".to_string(), "unsure".to_string(), "fairly sure".to_string(), "certain".to_string()]);
+	assert_eq!(
+		Criteria,
+		&vec![
+			"guessing".to_string(),
+			"unsure".to_string(),
+			"fairly sure".to_string(),
+			"certain".to_string()
+		]
+	);
 	assert_eq!(Cruise.Questions["confidence"].Type(), "score");
 
 	// Every lane names only templates the corpus carries: that is the check the
 	// loader exists for, so a loaded corpus is a corpus that passed it.
 	for Lane in Corpus.Lanes() {
 		for Served in &Lane.Templates {
-			assert!(Corpus.Template(Served).is_some(), "lane {} serves {Served}, which exists", Lane.Name);
+			assert!(
+				Corpus.Template(Served).is_some(),
+				"lane {} serves {Served}, which exists",
+				Lane.Name
+			);
 		}
 	}
 }
@@ -445,7 +474,11 @@ fn a_missing_observation_file_is_refused_by_its_path() {
 	assert_eq!(path, &Expected, "the refusal names the file that is absent");
 	assert_eq!(Why.Path(), Some(Expected.as_path()), "and answers it as the path it is about");
 	assert!(Why.Unreadable(), "a missing file is a corpus that could not be read at all");
-	assert!(Why.Message().contains("Observation.json"), "the sentence names it: {}", Why.Message());
+	assert!(
+		Why.Message().contains("Observation.json"),
+		"the sentence names it: {}",
+		Why.Message()
+	);
 	assert!(
 		Why.Message().contains(&Expected.display().to_string()),
 		"the whole path is in the sentence: {}",
@@ -544,10 +577,16 @@ fn each_context_selects_the_one_lane_whose_condition_holds() {
 	assert_eq!(Race.Name, "race", "racetype says a race is running");
 
 	let Recover = SelectLane(&Corpus, &Stuck()).expect("a stuck context belongs to a lane");
-	assert_eq!(Recover.Name, "recover", "the verdict is a derived field, and a lane may select on one");
+	assert_eq!(
+		Recover.Name, "recover",
+		"the verdict is a derived field, and a lane may select on one"
+	);
 
 	let Context = SelectLane(&Corpus, &Uncued()).expect("an uncued context belongs to a lane");
-	assert_eq!(Context.Name, "context", "no route cue on screen is a negation over an absent field");
+	assert_eq!(
+		Context.Name, "context",
+		"no route cue on screen is a negation over an absent field"
+	);
 
 	// Selection is a function of the corpus and the context alone: no clock, no
 	// file system, no global, so the same context replays to the same lane.
@@ -562,7 +601,11 @@ fn each_context_selects_the_one_lane_whose_condition_holds() {
 fn a_context_no_lane_holds_is_refused_rather_than_defaulted() {
 	// The catch-all removed: a corpus whose lanes all state a condition, and one
 	// context that satisfies none of them.
-	let Directory = Written(&Lanes(json!({ "op": "gt", "field": "speed_kmh", "than": 300 }), Corner(), Race()));
+	let Directory = Written(&Lanes(
+		json!({ "op": "gt", "field": "speed_kmh", "than": 300 }),
+		Corner(),
+		Race(),
+	));
 	let Corpus = Load(Directory.Root()).expect("a corpus with no catch-all still loads");
 
 	let Why = SelectLane(&Corpus, &Driving()).expect_err("no lane's condition holds");

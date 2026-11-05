@@ -9,8 +9,8 @@
 //! is wrong with the body in hand.
 //!
 //! This module is the single place the two are joined. [`Parse`] reads through
-//! the decoder and keeps the decoder's own error inside
-//! [`Error::Unparseable`]'s `cause`, so a caller that routes on the code loses
+//! the decoder and keeps the decoder's own error inside `Error::Unparseable`'s
+//! `cause`, so a caller that routes on the code loses
 //! nothing it can still inspect: `error.cause()` narrows on the exact variant
 //! without the message being parsed back out of a string.
 //!

@@ -54,30 +54,34 @@ use serde_json::Value;
 use crate::Struct::{Lane::Lane, Observation::Observation, Template::Template};
 
 /// One corpus, as it was read.
+///
+/// Every field states its own key rather than relying on a container
+/// `rename_all`: the serde build this workspace resolves does not apply one to
+/// struct fields, so a corpus document would have loaded empty rather than
+/// wrong. An explicit key is the thing a reader checks against the shape above.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub struct Corpus {
 	/// The directory it was read out of, or `None` when it came from strings.
 	#[serde(skip)]
 	pub Root:Option<PathBuf>,
 	/// The version the question file declares.
-	#[serde(default, skip_serializing_if = "Zero")]
+	#[serde(rename = "version", default, skip_serializing_if = "Zero")]
 	pub Version:u64,
 	/// Every field a caller may send, by the name the corpus uses, with the
 	/// observation's own descriptor.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	#[serde(rename = "fields", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Fields:BTreeMap<String, Value>,
 	/// The derived conditions the observation states, as prose.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	#[serde(rename = "derived", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Derived:BTreeMap<String, Value>,
 	/// The lanes, by name.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	#[serde(rename = "lanes", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Lanes:BTreeMap<String, Lane>,
 	/// The templates, by name.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	#[serde(rename = "templates", default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub Templates:BTreeMap<String, Template>,
 	/// The lane ids in the order the corpus declared them.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(rename = "order", default, skip_serializing_if = "Vec::is_empty")]
 	pub Order:Vec<String>,
 }
 
@@ -117,18 +121,21 @@ impl Corpus {
 	/// priority: [`Corpus::Ordered`] is the order the corpus declared.
 	pub fn Lanes(&self) -> impl Iterator<Item = &Lane> { self.Lanes.values() }
 
-	/// The lanes in the order the corpus declared them.
+	/// The lanes in the order the corpus declared them, each with the id the
+	/// corpus keys it by.
 	///
-	/// A lane the order list does not mention is appended rather than hidden: an
-	/// order that went stale when someone added a lane must not make the new
-	/// lane invisible to a caller that prints its policy.
-	pub fn Ordered(&self) -> Vec<&Lane> {
-		let Named:Vec<&Lane> = self.Order.iter().filter_map(|Name| self.Lanes.get(Name)).collect();
-		let Rest:Vec<&Lane> = self
+	/// The id travels beside the lane because the map key is the corpus's own
+	/// name for it, and [`Lane::Name`] is only that name once a loader has
+	/// stamped it - a corpus read straight through serde has not been. A lane the
+	/// order list does not mention is appended rather than hidden: an order that
+	/// went stale when someone added a lane must not make the new lane invisible
+	/// to a caller that prints its policy.
+	pub fn Ordered(&self) -> Vec<(&String, &Lane)> {
+		let Named:Vec<(&String, &Lane)> = self.Order.iter().filter_map(|Name| Some((Name, self.Lanes.get(Name)?))).collect();
+		let Rest:Vec<(&String, &Lane)> = self
 			.Lanes
 			.iter()
 			.filter(|(Name, _)| !self.Order.iter().any(|Listed| Listed == *Name))
-			.map(|(_, Lane)| Lane)
 			.collect();
 		Named.into_iter().chain(Rest).collect()
 	}
