@@ -6,8 +6,8 @@
 //!
 //! # Why a second test binary
 //!
-//! `Test/Lane.rs` exercises the round trip - select, compose, post, parse, meter
-//! - and this file exercises the one step before any of that: reading the
+//! `Test/Lane.rs` exercises the round trip (select, compose, post, parse,
+//! meter) and this file exercises the one step before any of that: reading the
 //! directory. They are separate binaries because the loader needs corpora that
 //! are deliberately broken, and a suite that has to hold both a working round
 //! trip and nine refusals in one file is a file nobody can read.

@@ -27,14 +27,29 @@
 //! no question reads. The wider form exists so neither has to be chosen by
 //! accident.
 //!
+//! # Which model, when the corpus names none
+//!
+//! The model is the lane's rather than an argument, because a lane is a price
+//! as well as a shape and an entry point that took a model would let a caller
+//! overrule the corpus on the way past it. A lane that names none asks the
+//! crate's default - [`crate::Fn::Model::Bare`] of an empty name - which is the
+//! same silence [`Compose`] resolves. A caller that wants a *different* default
+//! stamps the corpus first: [`crate::Struct::Decider::Create`] is the
+//! constructor that does exactly that, and
+//! [`crate::Struct::Decider::Decider::Corpus`] hands back the stamped corpus
+//! this function takes.
+//!
 //! # One error, three origins
 //!
-//! A selection that names no lane, or names two, lowers to [`Error::NoMatch`] /
-//! [`Error::CorpusInvalid`] through [`crate::Struct::SelectError`]'s own `From`;
-//! a poster that does not answer is [`Error::PostFailed`]; a reply this crate
-//! cannot read is [`Error::Unparseable`] carrying the decoder's own reason in
-//! its `cause`, so a caller matches on [`crate::Struct::Decode::DecodeError`]
-//! instead of parsing a sentence back out of a string.
+//! A selection that names no lane, or names two, lowers to
+//! [`variant@Error::NoMatch`] / [`variant@Error::CorpusInvalid`] through
+//! [`crate::Struct::SelectError`]'s own `From`; a poster that does not answer is
+//! [`variant@Error::PostFailed`]; a reply this crate cannot read is
+//! [`variant@Error::Unparseable`] carrying the decoder's own reason in its
+//! `Cause`, so a caller matches on [`crate::Struct::Decode::DecodeError`]
+//! instead of parsing a sentence back out of a string. The order is fixed -
+//! selection, then composition, then the post, then the read - so a failure
+//! before the post leaves the poster with nothing recorded and nobody billed.
 //!
 //! # No I/O, and no clock of its own
 //!
@@ -71,7 +86,7 @@ use crate::{
 /// [`DecideOn`] for that. Selection is a function of the corpus and the state
 /// alone: no clock, no counter, no cache, so a recorded state replays to the
 /// same lane and the same request.
-pub async fn Decide<P: Poster + ?Sized>(Poster:&P, Corpus:&Corpus, State:&State, Call:Call) -> Result<Answer, Error> {
+pub async fn Decide<P:Poster + ?Sized>(Poster:&P, Corpus:&Corpus, State:&State, Call:Call) -> Result<Answer, Error> {
 	DecideOn(Poster, Corpus, &Context::from(State), State, Call).await
 }
 
@@ -87,7 +102,7 @@ pub async fn Decide<P: Poster + ?Sized>(Poster:&P, Corpus:&Corpus, State:&State,
 /// ([`Rules::default`] holds no rules), because a corpus lists its templates in
 /// preference. A caller that wants to override that per call has
 /// [`crate::Fn::Select::Select`], which takes the caller's rules.
-pub async fn DecideOn<P: Poster + ?Sized>(
+pub async fn DecideOn<P:Poster + ?Sized>(
 	Poster:&P,
 	Corpus:&Corpus,
 	Context:&Context,

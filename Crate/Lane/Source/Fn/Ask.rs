@@ -35,7 +35,7 @@ use crate::{
 /// indirection, while a caller holding `&dyn Poster` still works: a trait object
 /// implements its own trait, so `?Sized` covers both. [`crate::Struct::Decider::Decider`]
 /// is the second kind.
-pub async fn Ask<P: Poster + ?Sized>(Request:&Request, Poster:&P, Call:Call) -> Result<Answer, Error> {
+pub async fn Ask<P:Poster + ?Sized>(Request:&Request, Poster:&P, Call:Call) -> Result<Answer, Error> {
 	if Call.Cancelled() {
 		return Err(Error::PostFailed(
 			"the caller cancelled before the request was posted",

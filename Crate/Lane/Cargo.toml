@@ -86,3 +86,26 @@ path = "Test/Decode.rs"
 [[test]]
 name = "ClefFixture"
 path = "Test/ClefFixture.rs"
+
+# The whole entry point, once: a corpus on disk, a lane chosen by a condition, a
+# request composed and posted, and the typed answer that comes back - against the
+# shipped fixture poster rather than a scripted body. A target of its own because
+# it is the only one that runs every step in a single pass, and because a document
+# edited into something the pipeline cannot read should fail a suite named after
+# the round trip.
+[[test]]
+name = "EndToEnd"
+path = "Test/EndToEnd.rs"
+
+# The entry point's own signature, as a contract: one call in, and the three
+# origins of its one error type out - a selection that names no lane, a poster
+# that does not answer, and a reply the decoder refuses with its own variant
+# kept. Also the two claims a caller relies on but a happy path cannot show:
+# that a failure before the post leaves nothing recorded, and that the
+# state-selected form and the context-selected form compose the same request.
+# `Test/EndToEnd.rs` holds the same pipeline's answer and body; this holds what
+# the signature promises when it fails, which is why they are two targets.
+[[test]]
+name = "Decide"
+path = "Test/Decide.rs"
+
