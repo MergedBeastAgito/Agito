@@ -16,6 +16,8 @@
 
 use std::fmt;
 
+use crate::Struct::Decode::DecodeError;
+
 /// The codes, in the order the manifest names them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Code {

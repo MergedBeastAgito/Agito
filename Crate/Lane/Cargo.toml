@@ -60,3 +60,12 @@ path = "Test/Schema.rs"
 [[test]]
 name = "Load"
 path = "Test/Load.rs"
+
+# The loader and the selector together, against a corpus this test builds in a
+# temp directory: five lanes with mutually exclusive conditions, the typed
+# questions inside their templates, the three refusals a corpus author hits, and
+# the two ways a selection fails. Hermetic by construction - the suite never
+# reads the real corpus, and two runs cannot share a file.
+[[test]]
+name = "Corpus"
+path = "Test/Corpus.rs"

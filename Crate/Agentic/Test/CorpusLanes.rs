@@ -2,8 +2,9 @@
 //!
 //! Every other test in this workspace answers from a corpus written for the test
 //! it sits beside. This one reads the corpus a caller actually drives with - the
-//! NFSU2 example's `Templates/` directory - because a loader proved only against
-//! a fixture written next to it has proved that the two agree, and nothing more.
+//! NFSU2 example's `Templates/` files, reached through the corpus root - because
+//! a loader proved only against a fixture written next to it has proved that the
+//! two agree, and nothing more.
 //!
 //! Run it with the table visible:
 //! `cargo test -p agentic --test CorpusLanes -- --nocapture`.

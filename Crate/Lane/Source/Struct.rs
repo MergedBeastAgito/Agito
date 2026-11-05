@@ -6,6 +6,7 @@ pub mod Budget;
 pub mod Context;
 pub mod Corpus;
 pub mod CorpusError;
+pub mod Decode;
 pub mod Decider;
 pub mod Error;
 pub mod Lane;

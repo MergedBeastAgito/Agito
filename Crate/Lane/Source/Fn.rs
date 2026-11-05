@@ -2,6 +2,7 @@
 
 pub mod Ask;
 pub mod Compose;
+pub mod Decode;
 pub mod Load;
 pub mod Model;
 pub mod Parse;
