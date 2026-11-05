@@ -10,6 +10,7 @@
 		"Format:Prettier": "prettier --write .",
 		"Format:Rust": "cargo fmt --all",
 		"Format:Check": "prettier --check . && cargo fmt --all -- --check",
+		"Audit:Paths": "bash Scripts/AuditPaths.sh",
 		"Test": "cargo test --workspace"
 	},
 	"devDependencies": {

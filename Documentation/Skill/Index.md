@@ -19,6 +19,10 @@ The skills this repository ships, and the contract that keeps them loadable.
   to infer, and the scoping that makes each one correct.
 - `Bounded-Sequences/` - several operations in order: one budget per step, a stop on the first
   refusal, and verification by server-side state rather than by a click.
+- `Bounded-Calls/` - the `Call` that spans a loop: why its deadline is fixed when it is built, the
+  three signs that an expired call is the caller's arithmetic rather than a slow page, the second
+  client that proves the page innocent, and the handler task whose death leaves a connection that
+  accepts commands and never answers them.
 - `Research-Conduct/` - weighing a research answer rather than trusting it: over-supply the
   inventory, read only where the verdict lands, and open the line the answer names before acting on
   it.

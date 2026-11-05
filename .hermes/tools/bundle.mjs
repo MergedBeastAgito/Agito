@@ -19,14 +19,7 @@
  * home directory - because both the manifest and the batches are committed.
  * A machine path that survives the scrub is reported and fails the run.
  */
-import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	readdirSync,
-	statSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
@@ -101,6 +94,7 @@ const Scrub = (Text) =>
 // fixed, not a batch that must be edited.
 const Machine = new RegExp(
 	["/" + "Volumes/", "/" + "Users/[a-z]", "/" + "private/(?:tmp|var)/"].join("|"),
+	"g",
 );
 const Leaks = [];
 
@@ -172,7 +166,7 @@ const Written = Batches.map((Batch, Index) => {
 	const Body = Batch.files
 		.map((File) => {
 			const Text = Scrub(readFileSync(File.path, "utf8").replace(/\n+$/, ""));
-			for (const Hit of Text.match(Machine) ?? [])
+			for (const Hit of new Set(Text.match(Machine) ?? []))
 				Leaks.push({ batch: Name, file: File.relative, path: Hit });
 			return `--- FILE: ${File.relative} ---\n${Text}\n`;
 		})
