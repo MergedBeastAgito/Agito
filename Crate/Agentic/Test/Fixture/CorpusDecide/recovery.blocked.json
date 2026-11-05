@@ -1,0 +1,31 @@
+{
+	"budget": 1,
+	"response": {
+		"success": true,
+		"result": {
+			"model": "clef-flash",
+			"answers": {
+				"action": {
+					"type": "choice",
+					"choice": "reverse_left",
+					"probabilities": {
+						"reverse_left": 0.48,
+						"reverse_right": 0.22,
+						"throttle": 0.12,
+						"steer_left": 0.1,
+						"steer_right": 0.06,
+						"brake": 0.02
+					}
+				},
+				"confidence": {
+					"type": "score",
+					"score": 2
+				}
+			},
+			"usage": {
+				"input_tokens": 441,
+				"output_tokens": 0
+			}
+		}
+	}
+}

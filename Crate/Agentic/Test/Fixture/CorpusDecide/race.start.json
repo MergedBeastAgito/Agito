@@ -1,0 +1,29 @@
+{
+	"budget": 1,
+	"response": {
+		"success": true,
+		"result": {
+			"model": "clef-flash",
+			"answers": {
+				"action": {
+					"type": "choice",
+					"choice": "throttle",
+					"probabilities": {
+						"throttle": 0.62,
+						"steer_left": 0.14,
+						"steer_right": 0.1,
+						"brake": 0.14
+					}
+				},
+				"risk": {
+					"type": "score",
+					"score": 3
+				}
+			},
+			"usage": {
+				"input_tokens": 372,
+				"output_tokens": 0
+			}
+		}
+	}
+}

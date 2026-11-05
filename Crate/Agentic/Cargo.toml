@@ -76,3 +76,13 @@ path = "Test/Note.rs"
 [[test]]
 name = "CorpusLanes"
 path = "Test/CorpusLanes.rs"
+
+# The same corpus, decided end to end: the lane each case selects, the request
+# it composes and the typed answer a canned reply returns, one document per
+# template under `Test/Fixture/CorpusDecide/`. A target of its own because it is
+# the only one that joins the real corpus to the poster, and a corpus or a
+# fixture edited into something the pipeline cannot read should fail a suite
+# named after that join rather than an assertion inside another one.
+[[test]]
+name = "CorpusDecide"
+path = "Test/CorpusDecide.rs"
