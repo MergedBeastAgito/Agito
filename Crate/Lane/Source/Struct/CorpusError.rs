@@ -103,10 +103,10 @@ pub enum CorpusError {
 	},
 	/// A lane states a condition the corpus's vocabulary cannot express.
 	///
-	/// The condition is read by [`crate::Fn::Condition::Condition`], which owns
-	/// the operator vocabulary; this variant is the lane it was written on plus
-	/// that reader's own complaint, so a corpus author is told which lane to open
-	/// and why its condition was refused.
+	/// The condition is read by [`crate::Struct::Predicate::Predicate`]'s own
+	/// schema, which owns the operator vocabulary; this variant is the lane it
+	/// was written on plus that reader's own complaint, so a corpus author is
+	/// told which lane to open and why its condition was refused.
 	BadCondition {
 		/// The lane whose condition could not be read.
 		lane:String,

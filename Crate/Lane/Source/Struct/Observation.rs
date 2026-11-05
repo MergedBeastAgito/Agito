@@ -56,6 +56,7 @@ use crate::Struct::Error::Error;
 
 /// One corpus's observation, as it was written.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct Observation {
 	/// The version the observation file declares.
 	#[serde(default, skip_serializing_if = "Zero")]

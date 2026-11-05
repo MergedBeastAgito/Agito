@@ -117,6 +117,10 @@ pub enum Error {
 		Message:String,
 		/// What the body actually held, truncated to something loggable.
 		Detail:String,
+		/// Why the decoder refused it, when the refusal came from the decoder.
+		/// `None` for a refusal this crate states itself, so a caller can tell
+		/// "the decoder has a specific reason" from "the port has none".
+		Cause:Option<DecodeError>,
 	},
 }
 
@@ -153,7 +157,25 @@ impl Error {
 
 	/// A reply that is not an answer.
 	pub fn Unparseable(Message:impl Into<String>, Detail:impl Into<String>) -> Self {
-		Error::Unparseable { Message:Message.into(), Detail:Detail.into() }
+		Error::Unparseable { Message:Message.into(), Detail:Detail.into(), Cause:None }
+	}
+
+	/// A reply the decoder refused, with the decoder's own reason kept.
+	///
+	/// The sentence and the detail are the decoder's, so a log line reads the
+	/// same whether the failure was read through this type or through
+	/// [`crate::Struct::Decode::DecodeError`] directly - and the reason stays a
+	/// value, not a string a caller would have to parse back out.
+	pub fn Decode(Why:DecodeError) -> Self {
+		Error::Unparseable { Message:Why.Sentence(), Detail:Why.Detail(), Cause:Some(Why) }
+	}
+
+	/// The decoder's own reason, when the refusal came from the decoder.
+	pub fn Cause(&self) -> Option<&DecodeError> {
+		match self {
+			Error::Unparseable { Cause, .. } => Cause.as_ref(),
+			_ => None,
+		}
 	}
 
 	/// The code this failure carries.

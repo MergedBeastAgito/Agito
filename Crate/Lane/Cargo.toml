@@ -35,9 +35,24 @@ upper_case_acronyms = "allow"
 name = "Lane"
 path = "Test/Lane.rs"
 
+[[test]]
+name = "SelectLane"
+path = "Test/SelectLane.rs"
+
 # The body's own claims - three keys, no chat field, the lane's model - kept in a
 # target of their own so they stay runnable while the round trip's fixture and
 # poster are being worked on.
 [[test]]
 name = "Request"
 path = "Test/Request.rs"
+
+# The corpus's typed model: a lane written by hand, the condition read out of it,
+# and the context that condition is answered with. No file, no socket, no
+# selection - the shape the loader and the selector both rest on.
+[[test]]
+name = "Schema"
+path = "Test/Schema.rs"
+
+[[test]]
+name = "Probe"
+path = "Test/Probe.rs"

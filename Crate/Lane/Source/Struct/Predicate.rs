@@ -63,12 +63,10 @@
 //! other pair of values compares as JSON: a string is not a number, and `true`
 //! is not `1`.
 
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
-use crate::Struct::{Error::Error, State::State};
+use crate::Struct::Context::Context;
 
 /// One condition over a context, as the corpus writes it.
 ///
@@ -81,6 +79,7 @@ use crate::Struct::{Error::Error, State::State};
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Predicate {
 	/// Holds for every context. A lane with no alternative.
+	#[default]
 	Always,
 	/// The field equals the value.
 	Eq {
@@ -185,19 +184,19 @@ impl Predicate {
 	/// caller learns what happened from which lane matched, and a corpus whose
 	/// conditions can never hold is visible as `no-match` rather than as a
 	/// panic at the tick that mattered.
-	pub fn Matches(&self, Context:&Context) -> bool {
+	pub fn Matches(&self, Reading:&Context) -> bool {
 		match self {
 			Predicate::Always => true,
-			Predicate::Eq { Field, Value } => Context.Get(Field).is_some_and(|Held| Same(Held, Value)),
-			Predicate::Ne { Field, Value } => Context.Get(Field).is_some_and(|Held| !Same(Held, Value)),
+			Predicate::Eq { Field, Value } => Reading.Get(Field).is_some_and(|Held| Same(Held, Value)),
+			Predicate::Ne { Field, Value } => Reading.Get(Field).is_some_and(|Held| !Same(Held, Value)),
 			Predicate::In { Field, Values } => {
-				Context.Get(Field).is_some_and(|Held| Values.iter().any(|One| Same(Held, One)))
+				Reading.Get(Field).is_some_and(|Held| Values.iter().any(|One| Same(Held, One)))
 			},
-			Predicate::Gt { Field, Than } => Context.Number(Field).is_some_and(|Held| Held > *Than),
-			Predicate::Lt { Field, Than } => Context.Number(Field).is_some_and(|Held| Held < *Than),
-			Predicate::And { Of } => Of.iter().all(|Case| Case.Matches(Context)),
-			Predicate::Or { Of } => Of.iter().any(|Case| Case.Matches(Context)),
-			Predicate::Not { Of } => !Of.Matches(Context),
+			Predicate::Gt { Field, Than } => Reading.Number(Field).is_some_and(|Held| Held > *Than),
+			Predicate::Lt { Field, Than } => Reading.Number(Field).is_some_and(|Held| Held < *Than),
+			Predicate::And { Of } => Of.iter().all(|Case| Case.Matches(Reading)),
+			Predicate::Or { Of } => Of.iter().any(|Case| Case.Matches(Reading)),
+			Predicate::Not { Of } => !Of.Matches(Reading),
 		}
 	}
 
@@ -244,83 +243,6 @@ impl Predicate {
 			Predicate::Not { Of } => format!("not ({})", Of.Line()),
 		}
 	}
-}
-
-/// What a predicate reads: field path to JSON value.
-///
-/// A context is not a [`State`], although the two hold the same kind of thing.
-/// A state is what a request *sends* - it is kept flat and every field in it is
-/// a field the model will be shown. A context is what a condition *reads*, which
-/// may be larger: a counter the caller keeps, a knob the corpus never sends, a
-/// grouped reading under one key. Keeping them apart is what lets a lane select
-/// on a field it would never spend tokens on.
-///
-/// [`Context::Of`] converts a state, so an adapter that already built one does
-/// not build its context twice.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Context(BTreeMap<String, Value>);
-
-impl Context {
-	/// An empty context.
-	pub fn New() -> Self { Self(BTreeMap::new()) }
-
-	/// The context a JSON object names.
-	///
-	/// Anything that is not an object is refused: an array of readings has no
-	/// field names, and a predicate over it could not name what it read.
-	pub fn Of(Value:Value) -> Result<Self, Error> {
-		match Value {
-			Value::Object(Fields) => Ok(Self(Fields.into_iter().collect())),
-			Other => Err(Error::CorpusInvalid("the context is not a JSON object", Other.to_string())),
-		}
-	}
-
-	/// Record one field.
-	pub fn Set(&mut self, Field:&str, Value:impl Into<Value>) { self.0.insert(Field.to_string(), Value.into()); }
-
-	/// One field's value, or `None` when it is absent or null.
-	///
-	/// The exact key is tried first, so a field whose own name contains a dot is
-	/// reachable by writing that name; only when no such key exists is the name
-	/// read as a path. A path that walks into a scalar, an array or a null
-	/// answers `None` rather than failing.
-	pub fn Get(&self, Field:&str) -> Option<&Value> {
-		if let Some(Direct) = self.0.get(Field).filter(|Value| !Value.is_null()) {
-			return Some(Direct);
-		}
-		if !Field.contains('.') {
-			return None;
-		}
-		let mut Steps = Field.split('.');
-		let mut Cursor = self.0.get(Steps.next()?)?;
-		for Step in Steps {
-			Cursor = Cursor.get(Step)?;
-		}
-		(!Cursor.is_null()).then_some(Cursor)
-	}
-
-	/// One field as a number, when it is one.
-	pub fn Number(&self, Field:&str) -> Option<f64> { self.Get(Field)?.as_f64() }
-
-	/// Whether the context carries this field with a value.
-	pub fn Has(&self, Field:&str) -> bool { self.Get(Field).is_some() }
-
-	/// Every field name at the top level, sorted.
-	pub fn Fields(&self) -> impl Iterator<Item = &String> { self.0.keys() }
-
-	/// The context as a JSON object.
-	pub fn Body(&self) -> Value { Value::Object(self.0.clone().into_iter().collect::<Map<String, Value>>()) }
-
-	/// Whether anything was recorded at all.
-	pub fn IsEmpty(&self) -> bool { self.0.is_empty() }
-}
-
-impl From<State> for Context {
-	fn from(State:State) -> Self { Self(State.Body().as_object().cloned().unwrap_or_default().into_iter().collect()) }
-}
-
-impl From<&State> for Context {
-	fn from(State:&State) -> Self { Self::from(State.clone()) }
 }
 
 /// Whether two JSON values are the same reading.

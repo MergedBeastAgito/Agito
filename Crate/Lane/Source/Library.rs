@@ -84,6 +84,7 @@ pub use crate::{
 		Model::{Bare, Models, Price, Route},
 		Parse::Parse,
 		Select::{Choose, Select},
+		SelectLane::SelectLane,
 	},
 	Struct::{
 		Answer::{Answer, Answered, Usage},
@@ -100,6 +101,7 @@ pub use crate::{
 		Question::Question,
 		Request::Request,
 		Rule::{Rule, Rules},
+		SelectError::SelectError,
 		State::State,
 		Template::Template,
 		When::When,

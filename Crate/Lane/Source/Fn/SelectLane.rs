@@ -13,14 +13,14 @@
 //!
 //! ```json
 //! "lanes": {
-//! 	"ice": {
-//! 		"fields": ["speed", "surface"],
-//! 		"templates": ["surface.loss"],
-//! 		"select": { "op": "and", "of": [
-//! 			{ "op": "eq", "field": "surface", "value": "ice" },
-//! 			{ "op": "gt", "field": "speed", "than": 40 }
-//! 		] }
-//! 	}
+//!     "ice": {
+//!         "fields": ["speed", "surface"],
+//!         "templates": ["surface.loss"],
+//!         "select": { "op": "and", "of": [
+//!             { "op": "eq", "field": "surface", "value": "ice" },
+//!             { "op": "gt", "field": "speed", "than": 40 }
+//!         ] }
+//!     }
 //! }
 //! ```
 //!

@@ -268,14 +268,15 @@ fn the_corpus_on_disk_declares_exactly_the_five_lanes() {
 				Lane.Name
 			);
 		}
-		// The loader already refuses a lane sending an unobserved field; asserted
-		// here because a corpus that loads and names a field the ingestion cannot
-		// read is the failure this crate exists to catch before a request is paid
-		// for, and the real corpus is the one nobody reviews against the code.
+		// The loader already refuses a lane sending a field the observation
+		// neither reads nor derives; asserted here because the real corpus is the
+		// one nobody reviews against the code. `Observed` is the right rule rather
+		// than the `state` table alone: the honest lane sends the sentence that
+		// says what the numbers mean, and that sentence is derived, not read.
 		for Field in &Lane.Fields {
 			assert!(
 				Corpus.Observed(Field),
-				"lane {} sends {Field}, which the observation does not carry",
+				"lane {} sends {Field}, which the observation neither reads nor derives",
 				Lane.Name
 			);
 		}

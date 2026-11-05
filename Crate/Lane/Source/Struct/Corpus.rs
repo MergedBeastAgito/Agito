@@ -43,8 +43,8 @@
 //! The *derived* conditions are kept for the same reason, and they are as
 //! sendable as the read ones: `verdict` and `situation` are computed by the
 //! ingestion rather than read from it, and a lane that sends the sentence
-//! beside the numbers is the lane that works. [`Corpus::Known`] is the union,
-//! which is what a lane is checked against.
+//! beside the numbers is the lane that works. [`Corpus::Observed`] is the union
+//! of the two, which is what a lane is checked against.
 
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -94,17 +94,15 @@ impl Corpus {
 	/// One field's descriptor, when the observation declares it.
 	pub fn Field(&self, Name:&str) -> Option<&Value> { self.Fields.get(Name) }
 
-	/// Whether the observation declares this field.
-	pub fn Observed(&self, Name:&str) -> bool { self.Fields.contains_key(Name) }
-
-	/// Whether the corpus names this field at all: a reading the ingestion
-	/// takes, or a condition it derives from them.
+	/// Whether the observation names this field at all: a reading the ingestion
+	/// takes, or a condition it derives from those readings.
 	///
-	/// This is what a lane is checked against. The distinction still matters to
-	/// a caller building a state - only an observed field can arrive in one -
-	/// but a lane may send either, because the derived sentence is the part of
-	/// the state that says what the numbers mean.
-	pub fn Known(&self, Name:&str) -> bool { self.Fields.contains_key(Name) || self.Derived.contains_key(Name) }
+	/// The union rather than the readings alone, because the observation file
+	/// declares both halves and a lane may send either - the derived sentence
+	/// (`verdict`, `situation`) is the part of a state that says what the
+	/// numbers mean, and a lane that sends it is the lane that works. The
+	/// readings on their own are [`Corpus::Fields`] and [`Corpus::Field`].
+	pub fn Observed(&self, Name:&str) -> bool { self.Fields.contains_key(Name) || self.Derived.contains_key(Name) }
 
 	/// The derived conditions the observation states.
 	pub fn Derived(&self) -> impl Iterator<Item = (&String, &Value)> { self.Derived.iter() }

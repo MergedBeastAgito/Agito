@@ -44,12 +44,14 @@
 //!
 //! # What a lane carries
 //!
-//! A lane names the fields it sends, the templates it serves, and - when the
-//! corpus declares one - the condition that selects it. The condition is read
-//! here and interpreted by [`crate::Fn::Condition::Condition`], so a lane is
-//! resolved at load time in every part that can be: an unknown template id, an
-//! unreadable condition and a field the observation does not name are all
-//! refusals now, rather than a request composed from half a lane later.
+//! A lane names the fields it sends, the templates it serves, the model it asks,
+//! and - when the corpus declares one - the condition that selects it. The
+//! condition is deserialised here (in `ReadSelect`) into
+//! [`crate::Struct::Predicate::Predicate`], and every field it names is checked
+//! against the corpus, so a lane is resolved at load time in every part that can
+//! be: an unknown template id, an unreadable condition and a field the
+//! observation does not name are all refusals now, rather than a request
+//! composed from half a lane later.
 //!
 //! A lane may send a *derived* field as well as a read one, and it must be
 //! allowed to: the honest lane sends the sentence that says what the numbers
@@ -135,7 +137,12 @@ pub fn Load(Root:&Path) -> Result<Corpus, CorpusError> {
 		}
 	}
 
-	Assemble(Observation, Questions, Lanes)
+	let mut Corpus = Assemble(Observation, Questions, Lanes)?;
+	// The root travels with the corpus rather than being remembered by the
+	// caller: a report that says "the corpus" is a report nobody can act on, and
+	// the only code that knows where the bytes came from is this one.
+	Corpus.Root = Some(Root.to_path_buf());
+	Ok(Corpus)
 }
 
 /// The directories a corpus's lane files may sit in, root first.
@@ -205,6 +212,9 @@ fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corp
 
 	let mut Lanes = BTreeMap::new();
 	let mut Origin:BTreeMap<String, PathBuf> = BTreeMap::new();
+	// A map sorts for determinism; a corpus may also state a priority by the
+	// order it wrote its lanes in, and only a list can remember that.
+	let mut Order:Vec<String> = Vec::new();
 	for (Source, Body) in Sources {
 		let Declared = Object(Body.get("lanes"), Source, "the lane table")?;
 		for (Name, One) in Declared {
@@ -216,6 +226,7 @@ fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corp
 				});
 			}
 			Origin.insert(Name.clone(), Source.clone());
+			Order.push(Name.clone());
 			Lanes.insert(Name.clone(), ReadLane(Name, One, Source, &Fields, &Derived, &Templates)?);
 		}
 	}
@@ -224,11 +235,13 @@ fn Assemble(Observation:Named, Questions:Named, Extra:Vec<Named>) -> Result<Corp
 	}
 
 	Ok(Corpus {
+		Root:None,
 		Version:Asked.get("version").and_then(Value::as_u64).unwrap_or(0),
 		Fields,
 		Derived,
 		Lanes,
 		Templates,
+		Order,
 	})
 }
 
@@ -305,6 +318,9 @@ fn ReadLane(
 		Some(Declared) => ReadSelect(Name, Declared, Source, Fields, Derived)?,
 		None => Predicate::Always,
 	};
+	// A lane that states no condition is a catch-all rather than a refusal: the
+	// corpus says nothing about when it applies, and `always` is the statement
+	// that says exactly that.
 	Ok(Lane {
 		Name:Name.to_string(),
 		// Kept as the corpus spelled it (empty when it named none): normalising
@@ -337,10 +353,10 @@ fn ReadSelect(
 	Derived:&BTreeMap<String, Value>,
 ) -> Result<Predicate, CorpusError> {
 	let Condition:Predicate = serde_json::from_value(Declared.clone()).map_err(|Why| {
-		CorpusError::UnexpectedShape {
-			path:Source.to_path_buf(),
-			what:format!("lane {Lane}'s select"),
-			found:Why.to_string(),
+		CorpusError::BadCondition {
+			lane:Lane.to_string(),
+			message:"the condition is not one this crate reads".to_string(),
+			detail:format!("{}: {Why}", Source.display()),
 		}
 	})?;
 	for Field in Condition.Fields() {
