@@ -6,7 +6,7 @@
 //! implement that a composition root can hold without naming the crate that
 //! implements it. That is [`Struct::Port::Adapter`]. Until this crate existed a
 //! third-party driver could only copy `agentic-browser-cdp`'s plumbing and be
-//! consumed by path, which is what the NFSU driver did.
+//! consumed by path, which is what the NFSU2 driver did.
 //!
 //! # Why a trait and not a registry
 //!

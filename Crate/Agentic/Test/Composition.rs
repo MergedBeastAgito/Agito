@@ -283,7 +283,7 @@ fn an_unknown_verb_is_a_parse_error_and_not_a_run() {
 // ---------------------------------------------------------------------------
 // Third-party modules: the `adapter` kind and the roots it is found through.
 //
-// The fixture is the shape the NFSU driver's `ADAPTER.md` describes - a name, a
+// The fixture is the shape the NFSU2 driver's `ADAPTER.md` describes - a name, a
 // port, a required port, an artefact - because that file is the specification
 // this half of the workspace was written against. Nothing here starts a browser
 // or a driver: a third-party module is read, not run.

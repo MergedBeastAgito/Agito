@@ -15,7 +15,7 @@ use crate::Struct::Error::Error;
 ///
 /// # Why every method takes `&self`
 ///
-/// Object safety. A trait method without a receiver - the shape the NFSU
+/// Object safety. A trait method without a receiver - the shape the NFSU2
 /// driver's `ADAPTER.md` first proposed for [`Adapter::Port`] - cannot be called
 /// on `dyn Adapter`, so the trait could not be held as `Arc<dyn Adapter>` at
 /// all, and a consumer would be back to naming the concrete crate. Every method

@@ -8,7 +8,7 @@
 //! for rather than how a particular adapter works.
 //!
 //! What it does not test is a real adapter: a consumer of the facade cannot see
-//! one, and a test that reached for the NFSU driver would be naming a second
+//! one, and a test that reached for the NFSU2 driver would be naming a second
 //! crate - which is the dependency this fixture exists to prove unnecessary.
 
 #![allow(non_snake_case, non_upper_case_globals)]
