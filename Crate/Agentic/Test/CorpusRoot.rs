@@ -1,11 +1,11 @@
-//! Where the real corpus is, and the policy that selects its five lanes.
+//! Where the real corpus is, and the states that select its five lanes.
 //!
 //! Two targets read the same corpus: `Test/CorpusLanes.rs` asserts what it
 //! declares and which lane each representative state selects, and
 //! `Test/CorpusDecide.rs` runs those selections through the entry point against
 //! a canned reply. Both need the same three things - the discovery rule, the
-//! five expected lanes, and the ordered policy - and a second copy of any of
-//! them would be a second answer to "which corpus, and which lane wins".
+//! five expected lanes, and the representative states - and a second copy of any
+//! of them would be a second answer to "which corpus, and which lane wins".
 //!
 //! The module holds no test of its own. Its claims are made by the targets that
 //! include it, each in its own binary, so a corpus that moved would fail a suite
@@ -45,7 +45,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use AgenticLane::{Corpus, Load, Rule, Rules, When};
+use AgenticLane::{Corpus, Load};
 use serde_json::Value;
 
 /// The variable that points these tests at a corpus directory.
@@ -113,32 +113,13 @@ pub fn Read(Dir:&Path) -> Corpus {
 	Load(Dir).unwrap_or_else(|Why| panic!("{} does not load: {Why} ({})", Dir.display(), Why.Detail()))
 }
 
-/// The selection policy, in the order a state is tested against it.
-///
-/// The corpus states each template's `when` as a sentence and carries no
-/// predicate: `Crate/Lane` makes the condition a value the caller supplies,
-/// because the honest one often reads a counter the corpus cannot see -
-/// `blocked_ticks` is exactly that, and the observation lists it under
-/// `derived`. So this list is the policy, ordered the way the corpus's own
-/// cadences read: a race outranks everything, a car that cannot make progress
-/// outranks a corner, and the ordinary tick is last.
-pub fn Policy() -> Rules {
-	Rules::New(vec![
-		Rule::New("race", When::Any(vec![When::Equal("racetype", 1), When::Equal("racetype", 7)])),
-		Rule::New(
-			"recover",
-			When::Any(vec![
-				When::Equal("verdict", "blocked"),
-				When::Equal("verdict", "stalled"),
-				When::Above("blocked_ticks", 2.0),
-			]),
-		),
-		Rule::New("corner", When::Above("yaw_rate", 0.35)),
-		Rule::New("context", When::Present("traffic")),
-		Rule::New("drive", When::Present("route_cue_x")),
-	])
-	.Falling("drive")
-}
+// No selection policy lives here. The corpus states each lane's `select`, so both
+// targets pass `Rules::default()` and the conditions in `Questions.json` are what
+// select. A rule list beside them would be a second answer to "which lane wins",
+// and the first time the two disagreed the test would be pinning the copy rather
+// than the corpus. The one thing the corpus cannot state - which of a lane's
+// templates to ask - is a caller rule, and these states carry a cue so the
+// lane's first template is the ordinary answer.
 
 /// One representative state, and the lane and template it must select.
 pub struct Case {
