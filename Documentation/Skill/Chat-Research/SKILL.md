@@ -28,7 +28,7 @@ Target/debug/agentic chat \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
   [--bind <target-id>] \
   [--selectors <file.json>] \
-  [--format text|markdown|note] \
+  [--format text|markdown|both|note] \
   [--thread <id>] [--title <text>] [--project <name>] \
   [--account <label>] [--captured <stamp>] \
   --question '<text>' \
@@ -48,7 +48,8 @@ for a probe you intend to throw away.
 
 `--format` decides how the answer is read, and - for `note` alone - what is printed. `text` and
 `markdown` are one JSON read two ways: the same element, the same scroll, the same busy control, the
-same turn correlation.
+same turn correlation. `both` is those two from one read, and `note` is a document built from the
+Markdown one.
 
 - **`text`** is `innerText`, trimmed. It is the default because every recorded baseline was read
   with it.

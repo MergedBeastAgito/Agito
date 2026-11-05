@@ -105,6 +105,12 @@ declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
 - **A declaration with no type is refused**, because it is neither data nor code.
 - **A marker with no declaration, a declaration with no marker, and a declaration written twice are
   each a build error** naming the position.
+- **A marker is an identifier, so it can only sit where an identifier is valid.** It cannot be
+  spliced into a property key position - `{ text: Seen(Last), __PARAM_X__ marks: ... }` is a parse
+  error before any substitution runs, and a fragment that would be valid after substitution is not
+  the file the compiler sees. A value position, an argument, or a whole expression is where a marker
+  belongs; a field that has to be _added_ to an object the script already returns is a second file,
+  not a parameter.
 - **Substitution is one pass, left to right.** A value is written into the output and never scanned
   again, so a question whose text contains `__PARAM_Seen__` cannot have another parameter's code
   spliced into the middle of its string.
