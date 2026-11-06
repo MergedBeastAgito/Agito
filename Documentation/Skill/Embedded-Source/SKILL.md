@@ -16,10 +16,8 @@ Rust that carries another language's source as a string - a TypeScript expressio
 CSS rule, a SQL statement, a shell command - compiles while the embedded source does not, so the
 compiler cannot tell you the string is wrong. The failure arrives at the far end and arrives
 silently: an escape level too deep, a brace the format macro ate, a stale path baked into the
-binary. Every rule below is about keeping the embedded source somewhere a reader, a linter and a
-compiler can all see it.
-
----
+binary. Every rule below keeps the embedded source somewhere a reader, a linter and a compiler can
+see it.
 
 ## Source lives in a file, never in a `format!` string
 
@@ -37,16 +35,14 @@ the rule for what a script may contain cannot drift between the two. The macro e
 `macro_rules!` expands where the macro is called - plus a check of the call site against the
 script's own declarations.
 
-`Documentation/Script.md` records why the compilation is erasure rather than a transpiler, with the
-measurements; `Script-Compilation/` is the skill for the compiler itself. This skill is the editing
-discipline around it, and the general rule for the cases where a file is not the answer.
+`Documentation/Script.md` records why the compilation is erasure rather than a transpiler;
+`Script-Compilation/` is the skill for the compiler itself, and this one is the editing discipline
+around it and the rule for the cases where a file is not the answer.
 
 **Extracting a string to a file is a move, not a rewrite.** The emitted bytes must not change,
 because those bytes are what a page already receives and what every recorded observation was taken
 against. The probe is structural: a file with no type syntax compiles to itself, so if a script with
 no `declare` lines comes out different from its source, something is re-printing the file.
-
----
 
 ## A parameter is a declared identifier, and its type is its kind
 
@@ -61,8 +57,8 @@ declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
 - **`string` is data.** The value becomes an escaped JavaScript string literal, so a selector
   holding a quote, a backslash or a newline cannot end the string it sits in.
 - **Any other declared type is code.** A function, a `RegExp`, an array literal - spliced as it
-  stands. Do not infer the kind from the value: the declaration is the only statement of it.
-- **A declaration with no type is refused**, because it is neither data nor code.
+  stands. Do not infer the kind from the value: the declaration is the only statement of it. A
+  declaration with no type is refused, because it is neither.
 - **A marker without a declaration, a declaration with no marker, and a declaration written twice
   are each a build error** naming the file and the position. So is a marker that never terminates.
 - **A marker is an identifier, so it can only sit where an identifier is valid.** It cannot be
@@ -70,9 +66,9 @@ declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
   already returns is a second file, not a parameter.
 - **Substitution is one pass, left to right.** A value is written into the output and never scanned
   again, so a question whose text contains `__PARAM_Seen__` cannot have another parameter's code
-  spliced into the middle of its string.
-- **An unfilled marker stays in the artefact.** A page receiving one throws
-  `ReferenceError: __PARAM_Scroll__ is not defined` rather than quietly matching nothing.
+  spliced into the middle of its string. An unfilled marker stays in the artefact, and a page
+  receiving one throws `ReferenceError: __PARAM_Scroll__ is not defined` rather than quietly
+  matching nothing.
 
 A call site cannot forget a parameter: `script!` compares its arguments against the script's
 declarations in a `const` context, so a missing argument, an extra one or the same one twice is a
@@ -80,8 +76,6 @@ declarations in a `const` context, so a missing argument, an extra one or the sa
 `error[E0080]: evaluation panicked: script parameters: a declared parameter is missing` - rather
 than a `ReferenceError` in a page. The comparison counts as well as names, or a repeated name would
 pass.
-
----
 
 ## When the source has to stay inline
 
@@ -112,8 +106,6 @@ In this tree `RunTime::Escape` is held to `serde_json` byte for byte over every 
 and every non-ASCII character, with one deliberate exception: `U+2028` and `U+2029` stay raw, as
 JSON leaves them and as a JavaScript literal has accepted them since ES2019.
 
----
-
 ## Verify the bytes you wrote, not the source you re-read
 
 An edit tool that round-trips escaping can land a different number of backslashes than you wrote,
@@ -140,8 +132,6 @@ is a bug that compiles in some positions and produces invalid source in others.
 - **When the tool cannot tell two lines apart**, do not force it: write the replacement with a real
   script that asserts one occurrence and re-checks the bytes afterwards.
 
----
-
 ## The macro's path is a string, so a rename is invisible
 
 `script!("Expression/ReadAnswers")` and `Source/Script/Expression/` are joined only inside
@@ -157,8 +147,6 @@ error, compare it with `ls Source/Script`, fix **every** call site (a partial re
 when the last one matches), and fix the path examples in the doc comments in the same pass, because
 that is where the next copy comes from.
 
----
-
 ## A formatter must not own the script sources
 
 Once the compiled artefact is pinned to what a page receives, the script sources are pinned inputs:
@@ -169,10 +157,8 @@ formatter per file type, and Rust is rustfmt's (`*.rs`), TOML is nobody's.
 If a formatter has already rewritten a script, restore it by content rather than by
 `git checkout --`: read `git show HEAD:<path>` and write each file back through a script that lists
 its targets, supports a dry run, and ends by asserting `git status --short -- <paths>` is empty. Do
-not re-record the expectation to match the formatted file - that turns the assertion into the
+not re-record the expectation to match the formatted file: that turns the assertion into the
 formatter compared with itself.
-
----
 
 ## A return value is not the effect
 
@@ -182,21 +168,15 @@ framework - can report a successful insert while its model still holds the previ
 can report success while a control stayed disabled. The lie lands at the far end, and the next
 action operates on the stale value.
 
-So the host verifies by reading the state back through the same channel that will use it, and
-refuses when it disagrees:
-
-- after an insert, read the field and compare it with what was meant to be written; a mismatch is a
-  failure with its own code, not a retry and not a warning;
-- before an irreversible action, assert the precondition on the same read that triggers it, so the
-  check and the act see one instant;
-- replace an existing value through the embedded language's own edit path - select, delete, insert -
-  rather than writing over its storage, because a write bypasses the model that decides what to
-  submit.
+So the host reads the state back through the same channel that will use it, and refuses when it
+disagrees: after an insert, compare the field with what was meant to be written and treat a mismatch
+as a failure with its own code; before an irreversible action, assert the precondition on the same
+read that triggers it; replace an existing value through the embedded language's own edit path -
+select, delete, insert - rather than writing over its storage, because a write bypasses the model
+that decides what to submit.
 
 An expression that returns whether it _found_ its target is a diagnostic; one that returns whether
 it _changed_ anything is the one worth trusting.
-
----
 
 ## A value computed on both sides must agree on its units
 
@@ -211,15 +191,11 @@ Count code points on both sides (`[...Text].length`) or compare a value only one
 Slicing has the same defect: `slice(0, 48)` counts code units while `chars().take(48)` counts scalar
 values.
 
----
-
 ## Reference
 
 `Reference/Index.md` - the file list for this skill.
 
 `Documentation/Script.md` - the compiler comparison with its measurements.
-
----
 
 ## Claims and how to test them
 

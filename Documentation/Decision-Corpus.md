@@ -1,14 +1,15 @@
 # A decision corpus for Agito
 
-**Status:** no record, no `Documentation/Decision/` directory and no board exists. What follows
-states what the corpus is: five records, the fields each carries, and the gate that holds them.
+**Status:** no record, no `Documentation/Decision/` directory, no board. What follows states what
+the corpus is: five records, the fields each carries, and the gate that holds them.
 
 ---
 
 ## 1. Five records
 
-Five records, and no sixth until a failure owes one. The price is one test, five records of roughly
-forty lines, and one standing obligation: `status` must stay true, which no gate fully checks.
+Five records, and no sixth until a failure owes one. The price is one test, no new dependency, five
+records of roughly forty lines, and one standing obligation: `status` must stay true, which no gate
+fully checks.
 
 The need: `Documentation/Review.md` found this tree to be "a second architecture that agrees with
 the first only in vocabulary" - the CLI reaches browser operations without the lease engine,
@@ -18,9 +19,9 @@ to disagree with it. A record with `owner`, `applies_to` and `status: proposed` 
 tree, that the design was described and not built.
 
 Five, not TimeLine's 76: that corpus is a publication surface, read by people outside the
-repository. This one is read by whoever changes the tree. The size that follows is _one record per
-decision a crate can be wrong about_, and five is what the review's three findings plus two blocking
-questions actually owe:
+repository. This one is read by whoever changes the tree. The size rule is _one record per decision
+a crate can be wrong about_, and five is what the review's three findings plus two blocking
+questions owe:
 
 - **The fence an effect carries** - lease and generation identifiers travel with the effect and are
   checked where the write lands, not by the wrapper that admitted it (`Review.md`).
@@ -115,8 +116,8 @@ nor adapted.
 
 ## 5. The gate
 
-A `Corpus` test target under `cargo test --workspace`. The tree has no test target, so the checks
-below are a specification rather than something a command runs.
+The gate is a `Corpus` test target under `cargo test --workspace`. The tree has no test target, so
+the checks below are a specification rather than something a command runs.
 
 The discipline is the one `README.md` states: "a gate that lives in the toolchain being deleted is a
 gate that leaves with it". So the corpus gate is no Node, no Python, no new toolchain - one command

@@ -62,8 +62,9 @@ empty or half-written log reports green. Count in the loop (`checks=$((checks+1)
 mismatch as a failure of the harness. Make the loop stub-switchable (`STUB=1` in place of the real
 command) so this logic is provable in a second without running the checks it guards.
 
-**Never redirect a grep into the file it is reading.** `grep -E '…' "$LOG" | tee -a "$LOG"` truncates
-its own input mid-scan and appends the partial result, so the summary is whatever survived.
+**Never redirect a grep into the file it is reading.** `grep -E '…' "$LOG" | tee -a "$LOG"`
+truncates its own input mid-scan and appends the partial result, so the summary is whatever
+survived.
 
 **Never let two runs share one log.** A second concurrent run interleaves its exit lines into the
 first's file, so "8 checks" becomes 16 and no line is attributable to a run. Lock the log

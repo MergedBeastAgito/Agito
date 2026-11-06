@@ -28,6 +28,7 @@ task, not after it fails.**
 | Author or render a diagram                               | `Documentation/Skill/Diagrams/SKILL.md`              |
 | Write, move or check a skill in this corpus              | `Documentation/Skill/Skill-Authoring/SKILL.md`       |
 | What this workspace is, and the gates it runs            | `Documentation/Skill/Workspace/SKILL.md`             |
+| Record a change, or write down a design decision         | `Documentation/Skill/Contribution-Workflow/SKILL.md` |
 | Grade this driver against a harness                      | `Documentation/Skill/Bench-Harness/SKILL.md`         |
 
 Each directory carries a `Reference/Index.md` when it has archived files; a skill's body holds the

@@ -1,6 +1,6 @@
 ---
 name: cargo-probe
-description: Use when cargo, TOML or regex behaviour must be known, not guessed. Probe in a scratch crate.
+description: Use when cargo, TOML or regex behaviour must be known. Probe, do not guess.
 version: 1.0.0
 license: MIT
 platforms: [macos, linux]
@@ -56,21 +56,21 @@ manifest. Verified: without the table the error above, with it the probe runs.
 3. **Pin the dependency to the version the tree resolves**, read from `Cargo.lock`, not from memory
    and not from the latest on crates.io:
 
-   ```sh
-   grep -A1 '^name = "regex"' Cargo.lock
-   ```
+    ```sh
+    grep -A1 '^name = "regex"' Cargo.lock
+    ```
 
-   A probe on a different minor version tests a different library.
+    A probe on a different minor version tests a different library.
 
-   ```toml
-   [package]
-   name = "regex-check"
-   version = "0.1.0"
-   edition = "2024"
+    ```toml
+    [package]
+    name = "regex-check"
+    version = "0.1.0"
+    edition = "2024"
 
-   [dependencies]
-   regex = "1"
-   ```
+    [dependencies]
+    regex = "1"
+    ```
 
 4. **Embed the exact input, byte for byte.** Never normalise: keep the em dash (U+2014), the UTF-8
    BOM, the non-breaking space, the trailing whitespace. Normalising "repairs" the very input the
@@ -98,6 +98,9 @@ manifest. Verified: without the table the error above, with it the probe runs.
   the same binary: the comparison between them is what identifies the cause.
 - **Cargo needs the network only for the first fetch.** Reruns are offline, so a probe is cheap to
   keep for the length of a session and cheap to throw away.
+- **A remembered behaviour is a claim about a version.** A crate that rejected a leading UTF-8 BOM
+  on one release accepted it on the next; the marker says what this tree resolves, and the memory
+  says what some earlier one did.
 - **A probe that needs the tree's own types is a different exercise.** If the question is about this
   workspace's code rather than a dependency's, the answer belongs in `Verification-Harness/`, run
   against the built binary - not in a scratch crate that re-implements the type.
@@ -112,12 +115,12 @@ manifest. Verified: without the table the error above, with it the probe runs.
 
 ## Claims and how to test them
 
-| Claim                                        | Test                                                                                     |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| A probe outside the tree builds and runs     | `cargo run -q` in `<path>/Probe` prints its markers with no edit to the workspace         |
-| A probe inside the tree is not a member      | `cargo run -q` under `Crate/` fails with "believes it's in a workspace when it's not"     |
-| An empty `[workspace]` table isolates it      | the same probe with `[workspace]` appended runs, and `cargo build --workspace` is unchanged |
-| The pinned version is the tree's             | the version in the probe's manifest equals the one `grep -A1 '^name = "<crate>"' Cargo.lock` prints |
-| The edition matches the tree                 | the probe's manifest says `edition = "2024"`, as `[workspace.package]` does               |
-| A marker means the case ran                  | break the input deliberately; the control prints `PARSE_ERR` instead of the success marker |
-| The answer came from the library, not the probe | the probe contains no logic the library does not have - read `main.rs` before quoting it |
+| Claim                                           | Test                                                                                                |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| A probe outside the tree builds and runs        | `cargo run -q` in `<path>/Probe` prints its markers with no edit to the workspace                   |
+| A probe inside the tree is not a member         | `cargo run -q` under `Crate/` fails with "believes it's in a workspace when it's not"               |
+| An empty `[workspace]` table isolates it        | the same probe with `[workspace]` appended runs, and `cargo build --workspace` is unchanged         |
+| The pinned version is the tree's                | the version in the probe's manifest equals the one `grep -A1 '^name = "<crate>"' Cargo.lock` prints |
+| The edition matches the tree                    | the probe's manifest says `edition = "2024"`, as `[workspace.package]` does                         |
+| A marker means the case ran                     | break the input deliberately; the control prints `PARSE_ERR` instead of the success marker          |
+| The answer came from the library, not the probe | the probe contains no logic the library does not have - read `main.rs` before quoting it            |

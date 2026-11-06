@@ -1,9 +1,9 @@
 # The recorder: verifying a tool whose product is a command
 
-A tool that writes to a network API, a repository or a database has no local product to inspect. What
-it produced is the set of commands it issued, and the cheapest way to assert on that is to replace
-the runner with a recorder: a function that appends the `argv` it was handed and returns the fixture
-that command would have printed.
+A tool that writes to a network API, a repository or a database has no local product to inspect.
+What it produced is the set of commands it issued, and the cheapest way to assert on that is to
+replace the runner with a recorder: a function that appends the `argv` it was handed and returns the
+fixture that command would have printed.
 
 ```python
 Issued = []
@@ -25,8 +25,8 @@ no cleanup, and a refusal provable as directly as a write.
 
 ## The four rules
 
-**Assert the writes you expect and the writes you do not.** "A dropped item is closed and its body is
-not edited" is two assertions, and only a recorder can make the second one. A harness that checks
+**Assert the writes you expect and the writes you do not.** "A dropped item is closed and its body
+is not edited" is two assertions, and only a recorder can make the second one. A harness that checks
 only the first passes over a tool that closes every item it touches.
 
 **Drive the entry point twice.** The first pass must issue the writes the fixture needs; the second,

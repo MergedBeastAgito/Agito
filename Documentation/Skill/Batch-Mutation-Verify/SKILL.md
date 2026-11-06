@@ -7,7 +7,7 @@ platforms: [macos, linux]
 metadata:
     hermes:
         tags: [cdp, rust, batch, mutation, audit, verification]
-        related_skills: [bounded-sequences, paginated-scrape, browser-eval]
+        related_skills: [ui-step-sequence, bounded-sequences, paginated-scrape]
 ---
 
 # Batch Mutation Verify
@@ -28,8 +28,9 @@ one bounded call per step, per row, each with its own `--timeout`.
    an interrupted run continues where it stopped instead of repeating its first rows.
 2. Match a rendered row to its target **by stable ID only**, never by display name. A name is a
    label the page may repeat, truncate or localise; the ID is the join key.
-3. For each matched row, run the step sequence - one `Call` per step, stop on the first refusal
-   (`bounded-sequences`). A step returning `null` or `false` is a refusal, not a no-op.
+3. For each matched row, run the step sequence (`UI-Step-Sequence/`) - one `Call` per step, stop on
+   the first refusal (`Bounded-Sequences/`). A step returning `null` or `false` is a refusal, not a
+   no-op.
 4. Verify the mutation, then log it. A row whose effect is unproven is a failure, not a success
    awaiting confirmation.
 5. Append one JSON line per action to a separate audit log. Never mutate without a matching line.
@@ -58,7 +59,7 @@ did not happen, whatever the DOM says.
 
 When the log's removed-count disagrees with the live scalar, the **scalar wins**:
 
-1. Re-scrape the live list (`paginated-scrape`) into the same shape as the target set.
+1. Re-scrape the live list (`Paginated-Scrape/`) into the same shape as the target set.
 2. `remaining = source ∩ live`; `false_positive = logged - live`.
 3. Flip the false-positive log entries to `removed:false`, then resume.
 

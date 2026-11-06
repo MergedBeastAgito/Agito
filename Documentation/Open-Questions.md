@@ -329,7 +329,8 @@ either.
 connection idle past the documented interval and see whether it is closed under a warmed lease.
 
 **Blocks:** `agito-browser-cdp`'s lease model, whose whole premise is that a warm session is still
-usable (`Documentation/Rust.md` §Still open 1).
+usable. `Documentation/Design.md` §The manifest gives the reason: `HoldTransport` is a liveness
+probe because an open socket can be dead.
 
 ---
 

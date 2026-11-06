@@ -5,9 +5,8 @@ beliefs and trace. It lives here rather than in the consuming repository because
 SpacetimeDB to be true, and a module that imported the server SDK to hold it could not be tested
 without a published database.
 
-What the catalog is, which invariant each rule enforces, and what TimeLine takes to adopt it in one
-step. The statement of the model is `Crate/Spacetime/Catalog/`; this document is the prose that says
-what the crate states.
+This document says what the catalog is, which invariant each rule enforces, and what TimeLine takes
+to adopt it in one step. The statement of the model is `Crate/Spacetime/Catalog/`.
 
 ## What this crate is
 
@@ -118,8 +117,8 @@ never deleted, so the fence survives and the next claim advances past it.
 A refusal is ambiguous only when the record's identity matched the current epoch - generation, lease
 generation, fence and holder. A superseded fence is refused without an ambiguity, because the row no
 longer describes that epoch and the claim that superseded it is the accounting point for the effects
-it had in flight. The holder is the transport's sender rather than an argument, so a caller that
-reproduces every number in the row is still not the holder.
+it had in flight. The holder is `ctx.sender` rather than an argument, so a caller that reproduces
+every number in the row is still not the holder.
 
 ## Adopting it in TimeLine, in one step
 
