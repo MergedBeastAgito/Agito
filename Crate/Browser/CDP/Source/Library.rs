@@ -36,7 +36,7 @@ pub use crate::{
 		Chrome::{Chrome, ChromeOptions},
 		Error::{Code, Error},
 		Pace::Tokio,
-		Port::{Browse, OpenOptions, Ownership, Target},
+		Port::{Browse, Input, Modifiers, OpenOptions, Ownership, Press, Target},
 		Session::{Create, Options, Report, Session},
 		Transport::{Launcher, PageWant, Transport},
 	},

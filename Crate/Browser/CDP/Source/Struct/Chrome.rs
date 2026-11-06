@@ -26,7 +26,14 @@ use std::{
 };
 
 use ::RunTime::{Call, FutureBox};
-use chromiumoxide::{Browser, BrowserConfig, Handler, Page};
+use chromiumoxide::{
+	Browser, BrowserConfig, Handler, Page,
+	cdp::browser_protocol::input::{
+		DispatchKeyEventParams,
+		DispatchKeyEventType,
+		InsertTextParams,
+	},
+};
 use futures_util::StreamExt;
 use serde_json::Value;
 use tokio::task::JoinHandle;
@@ -35,9 +42,27 @@ use crate::{
 	Fn::Classify::{Classify, Fatal},
 	Struct::{
 		Error::Error,
+		Port::Input,
 		Transport::{Launcher, PageWant, Transport},
 	},
 };
+
+/// The keys this substrate can encode: the protocol's name, the physical
+/// `code`, and the virtual key code.
+///
+/// Three, because three is what the capability presses: select-all's letter,
+/// the delete that follows it, and the return that sends. A table rather than a
+/// per-call argument, because a caller that had to supply `KeyA` and `65` would
+/// be encoding a protocol it does not own. A name outside this table is refused
+/// by name at [`Transport::Input`], never ignored.
+fn KeyTable(Name:&str) -> Option<(&'static str, &'static str, i64)> {
+	Some(match Name {
+		"a" => ("a", "KeyA", 65),
+		"Backspace" => ("Backspace", "Backspace", 8),
+		"Enter" => ("Enter", "Enter", 13),
+		_ => return None,
+	})
+}
 
 /// How to start or reach a browser.
 #[derive(Clone, Debug, Default)]
@@ -249,6 +274,61 @@ impl Transport for ChromeTransport {
 		Box::pin(async move {
 			match self.Page.evaluate(Expression).await {
 				Ok(Result) => Ok(Result.value().cloned().unwrap_or(Value::Null)),
+				Err(Why) => {
+					if Fatal(&Why) {
+						self.Closed.store(true, Ordering::SeqCst);
+					}
+					Err(Classify(&Why))
+				},
+			}
+		})
+	}
+
+	fn Input<'a>(&'a self, Input:&'a Input, _Call:Call) -> FutureBox<'a, Result<(), Error>> {
+		Box::pin(async move {
+			let Sent = match Input {
+				Input::Type(Text) => self.Page.execute(InsertTextParams::new(Text.clone())).await.map(|_| ()),
+				Input::Press(Chord) => {
+					let Some(Definition) = KeyTable(Chord.Key.as_str()) else {
+						// A key this substrate cannot encode is refused by
+						// name: a press that silently did nothing would read,
+						// downstream, as a composer that will not empty.
+						return Err(Error::Navigation(
+							"the input domain does not know this key",
+							format!("nothing in the key table names {:?}", Chord.Key),
+						));
+					};
+					let (Name, Code, KeyCode) = Definition;
+					let Mutated = DispatchKeyEventParams::builder()
+						.r#type(DispatchKeyEventType::RawKeyDown)
+						.modifiers(Chord.Modifiers.Bit())
+						.key(Name)
+						.code(Code)
+						.windows_virtual_key_code(KeyCode)
+						.native_virtual_key_code(KeyCode)
+						.build();
+					let Ok(Down) = Mutated else {
+						return Err(Error::Navigation("the key event could not be built", format!("{Input:?}")));
+					};
+					let Up = DispatchKeyEventParams::builder()
+						.r#type(DispatchKeyEventType::KeyUp)
+						.modifiers(Chord.Modifiers.Bit())
+						.key(Name)
+						.code(Code)
+						.windows_virtual_key_code(KeyCode)
+						.native_virtual_key_code(KeyCode)
+						.build();
+					let Ok(Up) = Up else {
+						return Err(Error::Navigation("the key event could not be built", format!("{Input:?}")));
+					};
+					match self.Page.execute(Down).await {
+						Ok(_) => self.Page.execute(Up).await.map(|_| ()),
+						Err(Why) => Err(Why),
+					}
+				},
+			};
+			match Sent {
+				Ok(()) => Ok(()),
 				Err(Why) => {
 					if Fatal(&Why) {
 						self.Closed.store(true, Ordering::SeqCst);

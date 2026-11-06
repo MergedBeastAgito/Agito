@@ -26,7 +26,7 @@ use crate::{
 	Fn::Classify::ClassifyPage,
 	Struct::{
 		Error::Error,
-		Port::{Browse, OpenOptions, Ownership, Target},
+		Port::{Browse, Input, OpenOptions, Ownership, Target},
 		Transport::{Launcher, Transport},
 	},
 };
@@ -109,6 +109,25 @@ impl Session {
 					Why.Name(),
 				))
 			},
+		}
+	}
+
+	/// One input, in whatever budget is left, classified like an evaluate.
+	///
+	/// The classification is the same because the failure modes are: a closed
+	/// transport is a dead socket, a live one that refuses is a page that could
+	/// not be used, and silence is the deadline. What differs is only which
+	/// command was sent.
+	async fn Deliver(&self, Transport:&Arc<dyn Transport>, Input:&Input, Call:&Call) -> Result<(), Error> {
+		let Work = Transport.Input(Input, Call.clone());
+		match Bound(Work, Call, self.Pace.as_ref()).await {
+			Ok(Ok(())) => Ok(()),
+			Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
+			Err(Expired::Timeout) => Err(Error::Timeout("input exceeded its deadline", "the page never answered")),
+			Err(Expired::Cancelled) => Err(Error::Timeout(
+				"input was cancelled by the caller",
+				"the signal fired while the page was being typed into",
+			)),
 		}
 	}
 }
@@ -207,6 +226,31 @@ impl Browse for Session {
 					))
 				},
 			}
+		})
+	}
+
+	/// The same target lookup and the same refusal as an evaluate: a session
+	/// that holds no transport for the target cannot type into it, and a
+	/// closed transport is dead rather than slow.
+	fn Input<'a>(&'a self, Target:&'a Target, Input:&'a Input, Call:Call) -> FutureBox<'a, Result<(), Error>> {
+		Box::pin(async move {
+			let Transport = Self::Lock(&self.Held).get(&Target.Ws).cloned();
+			let Some(Transport) = Transport else {
+				return Err(Error::Unavailable(
+					"this session holds no transport for the target",
+					format!("{} was never opened here, or it was already disposed", Target.Ws),
+				));
+			};
+			if Transport.Closed() {
+				return Err(Error::Unavailable(
+					"the transport is closed",
+					format!("{} is no longer connected", Target.Ws),
+				));
+			}
+			if Call.Cancelled() {
+				return Err(Error::Timeout("input was cancelled before it started", "the signal was already fired"));
+			}
+			self.Deliver(&Transport, Input, &Call).await
 		})
 	}
 

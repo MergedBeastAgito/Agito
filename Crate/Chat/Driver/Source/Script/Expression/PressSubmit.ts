@@ -1,19 +1,17 @@
 declare const __PARAM_Composer__: string;
-declare const __PARAM_Expected__: string;
 declare const __PARAM_Submit__: string;
 
 (() => {
+	// No comparison here. The composer is read back by the driver, which has
+	// both readings - the editor's model and the DOM - and one place to compare
+	// them; a second comparison in this expression would be a second rule, and
+	// the two would disagree the first time one of them was changed.
+	//
+	// A disabled control is not clicked: the click would land on nothing, the
+	// page would look sent, and the caller would wait out its whole deadline
+	// for an answer nobody asked for.
 	const Composer = document.querySelector(__PARAM_Composer__);
-	// Whitespace is removed rather than collapsed, because an editor may not
-	// keep a paragraph break at all: the text is inserted, the blocks render
-	// without a separator, and `innerText` reads "them.The" where the caller
-	// wrote "them. The". Collapsing to one space calls that a mismatch and
-	// refuses to send a prompt that is exactly the one that was typed, which
-	// is a false refusal about the editor's rendering rather than the text.
-	const Strip = (Text) => (Text || "").replace(/\s+/g, "");
-	const Wanted = Strip(__PARAM_Expected__);
-	const Held = Composer === null ? null : Strip(Composer.innerText || Composer.value || "");
-	if (Held !== null && Held !== Wanted) return "mismatch";
+	if (Composer === null) return "missing";
 	const Submit = document.querySelector(__PARAM_Submit__);
 	if (Submit === null) return "missing";
 	if (Submit.disabled === true) return "disabled";

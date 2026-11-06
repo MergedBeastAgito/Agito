@@ -152,6 +152,166 @@ impl Failure {
 	pub fn Of(Message:impl Into<String>) -> Self { Self { Message:Message.into(), Detail:String::new() } }
 }
 
+/// Which modifiers are held while a key is pressed.
+///
+/// This crate's own copy, for the same reason [`Target`] and [`Failure`] are:
+/// a capability declares the vocabulary it needs, and the composition root
+/// translates it to whatever its substrate speaks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Modifiers {
+	/// Alt, or Option.
+	pub Alt:bool,
+	/// Control.
+	pub Control:bool,
+	/// Command on macOS, the Windows key elsewhere.
+	pub Meta:bool,
+	/// Shift.
+	pub Shift:bool,
+}
+
+impl Modifiers {
+	/// The chord that selects everything: Command on macOS, Control elsewhere.
+	///
+	/// The platform is the page's own statement, read from `navigator`, rather
+	/// than this process's: a driver attached to somebody else's browser is
+	/// typing into the machine that browser runs on.
+	pub const fn SelectAll(Mac:bool) -> Self {
+		Self { Alt:false, Control:!Mac, Meta:Mac, Shift:false }
+	}
+}
+
+/// One key press.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Press {
+	/// The key, as the substrate names it: `a`, `Backspace`, `Enter`.
+	pub Key:String,
+	/// The modifiers held while it is pressed.
+	pub Modifiers:Modifiers,
+}
+
+impl Press {
+	/// A press of `Key` with `Modifiers` held.
+	pub fn New(Key:impl Into<String>, Modifiers:Modifiers) -> Self { Self { Key:Key.into(), Modifiers } }
+}
+
+/// One thing the page's input domain can do to whatever has focus.
+///
+/// The half of the protocol an expression cannot reach. A composer that keeps
+/// its own document model accepts a written `innerText`, answers an editing
+/// command and keeps the text it already had; what it cannot ignore is input
+/// the browser produced.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Input {
+	/// Press one key, with modifiers held.
+	Press(Press),
+	/// Insert text at the caret, the way a paste or an IME commit does.
+	Type(String),
+}
+
+/// What a composer holds, read from the editor rather than from its rendering.
+///
+/// Two readings and not one, because they are two different claims. `DOM` is
+/// what the page shows; `Model` is what the editor says it holds, when the
+/// editor can be asked. An editor mid-reconciliation answers with a model that
+/// does not match its DOM, and a driver that typed into it would append to a
+/// draft it never read.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Composer {
+	/// The editor's kind: `textarea`, `input` or `editable`.
+	pub Kind:String,
+	/// What the editor's own document model holds, when it can be read.
+	///
+	/// `None` is "this editor cannot be asked", which is a different fact from
+	/// an editor that says it is empty.
+	pub Model:Option<String>,
+	/// What the DOM holds, as the page renders it.
+	pub DOM:String,
+	/// The handle the model was read through: `prosemirror`, `lexical`,
+	/// `quill`, `plain`, or empty when no model could be read.
+	pub Source:String,
+}
+
+impl Composer {
+	/// The text this composer holds: the model when there is one, the DOM
+	/// otherwise.
+	pub fn Text(&self) -> &str { self.Model.as_deref().unwrap_or(self.DOM.as_str()) }
+
+	/// Whether the model and the DOM disagree about the text, ignoring
+	/// whitespace.
+	///
+	/// Whitespace is ignored because an editor is allowed to lose it: a
+	/// paragraph break is a node in the model and a rendered block in the DOM,
+	/// and the two need not read the same. What they may not disagree about is
+	/// a character that was typed.
+	pub fn Diverged(&self) -> bool {
+		match &self.Model {
+			None => false,
+			Some(Model) => Strip(Model) != Strip(&self.DOM),
+		}
+	}
+
+	/// Whether the composer holds nothing but whitespace.
+	pub fn Empty(&self) -> bool { self.Text().trim().is_empty() }
+}
+
+/// Everything but whitespace, which is the part of a text an editor may not
+/// lose.
+pub fn Strip(Text:&str) -> String { Text.chars().filter(|Character| !Character.is_whitespace()).collect() }
+
+/// One control in the composer row that opens something.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Candidate {
+	/// Where it sat in document order among the row's popup controls.
+	pub Index:usize,
+	/// The label the page gives it.
+	pub Label:String,
+	/// The text it renders.
+	pub Text:String,
+	/// The value of its `aria-haspopup`.
+	pub Popup:String,
+	/// Why it was or was not taken as the model: `model`, `count`,
+	/// `names-a-control` or `empty`.
+	pub Reason:String,
+}
+
+/// What the composer row holds, and which control was read as the model.
+///
+/// Every candidate is kept, not just the chosen one: the day a build moves the
+/// model control, the run that stops identifying it already carries the list
+/// that says what the row looks like now.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Inspection {
+	/// Every popup control in the composer row, in document order.
+	pub Candidates:Vec<Candidate>,
+	/// Which candidate was taken as the model, by index.
+	pub Chosen:Option<usize>,
+	/// The model's own name, when one control was identified as naming it.
+	pub Model:Option<String>,
+	/// What the composer holds.
+	pub Composer:Composer,
+}
+
+impl Inspection {
+	/// The model as a report states it: the identified name, or `unknown`.
+	pub fn Named(&self) -> &str { self.Model.as_deref().unwrap_or("unknown") }
+}
+
+/// What clearing a composer did.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Cleared {
+	/// What the composer held before it was cleared.
+	pub Before:String,
+	/// What it holds afterwards.
+	pub After:String,
+	/// The presses that were sent, in order.
+	pub Pressed:Vec<String>,
+}
+
+impl Cleared {
+	/// Whether the composer ended up holding nothing.
+	pub fn Empty(&self) -> bool { self.After.trim().is_empty() }
+}
+
 /// The browser as this capability needs it: one page, asked one expression at a
 /// time.
 ///
@@ -161,6 +321,12 @@ impl Failure {
 ///   and the expression is a complete JavaScript expression whose value is
 ///   JSON-serialisable. `document` is the only host object it may touch, so a
 ///   page that is a tab and a page that is a fixture answer the same driver.
+/// - `Input` delivers a key press or an inserted string to whatever the page
+///   has focused. It is a different operation from `Evaluate` because an
+///   editor that keeps its own document model answers one and obeys the other:
+///   the first is a DOM write and the second is input. A page that cannot
+///   deliver input fails here rather than accepting the call and doing
+///   nothing.
 /// - the [`Call`] is honoured: a page that never answers is failed, not
 ///   awaited. The driver checks the same deadline on its side, so an
 ///   implementation that ignores it cannot quietly turn a bounded call into an
@@ -178,6 +344,8 @@ pub trait Page: Send + Sync {
 		Expression:&'a str,
 		Call:Call,
 	) -> FutureBox<'a, Result<Value, Failure>>;
+	/// Put one thing into the page's input domain, at whatever has focus.
+	fn Input<'a>(&'a self, Target:&'a Target, Input:&'a Input, Call:Call) -> FutureBox<'a, Result<(), Failure>>;
 	/// Release everything the page holds. Never fails.
 	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()>;
 }
@@ -204,6 +372,26 @@ pub trait Chat: Send + Sync {
 		Call:Call,
 		Sink:&'a mut (dyn FnMut(&Observation) -> Control + Send),
 	) -> FutureBox<'a, Result<Answer, crate::Struct::Error::Error>>;
+	/// Empty the addressed composer, and say what it held.
+	///
+	/// The recovery a caller needs when a previous call left a draft behind:
+	/// without it the only way out of a composer holding the wrong text is to
+	/// leave this tool and drive the browser by hand. It is the same path
+	/// `Ask` takes before it types, exposed because a caller that hit a wedged
+	/// editor is exactly the caller that has no answer to read.
+	///
+	/// The clear is real input - a select-all chord and a delete, delivered by
+	/// the browser - and it is verified by reading the editor back, never by
+	/// trusting that the press did something. A composer that still holds text
+	/// afterwards is `not-ready`, not a success.
+	fn Clear<'a>(&'a self, Call:Call) -> FutureBox<'a, Result<Cleared, crate::Struct::Error::Error>>;
+	/// What the driver can see about the composer without typing into it.
+	///
+	/// Every popup control in the composer row and which one was taken as the
+	/// model, plus what the editor holds. It exists so a build that moves the
+	/// model control is diagnosable from one run instead of from a
+	/// `wrong-model` that names a draft count.
+	fn Inspect<'a>(&'a self, Call:Call) -> FutureBox<'a, Result<Inspection, crate::Struct::Error::Error>>;
 }
 
 /// One look at the thread, as the driver saw it.

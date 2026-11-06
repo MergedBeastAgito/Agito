@@ -59,18 +59,44 @@ pub fn ReadMode(Selectors:&Selectors) -> String { script!("Expression/ReadMode";
 /// and decides - so this returns whether anything was there to press.
 pub fn PressMode(Selectors:&Selectors) -> String { script!("Expression/PressMode"; Mode = &Selectors.Mode) }
 
-/// The model label the composer will send to, as the page shows it.
+/// The model control the composer will send to, as the page shows it.
+///
+/// An inventory, not a label: a build can render several popup controls in the
+/// composer row - the reference product's first one is a drafts control whose
+/// label is a count - and a selector that matches the row's first popup then
+/// reads "1 draft" as the model. So every match is returned with what it says
+/// and why it was or was not taken, and the driver decides which one names the
+/// model. The expression itself never guesses.
 pub fn ReadModel(Selectors:&Selectors) -> String { script!("Expression/ReadModel"; Model = &Selectors.Model) }
+
+/// Which chord this page's platform selects everything with.
+pub fn ReadPlatform() -> String { script!("Expression/ReadPlatform") }
+
+/// What the composer holds, as the editor says it holds it.
+///
+/// Two readings in one expression: the editor's own document model when it can
+/// be asked for it, and the DOM it renders. They are taken together because a
+/// second read is a second moment, and the whole point of the pair is to say
+/// whether the editor and its rendering agree *now*.
+///
+/// `null` when the selector matches nothing, which is a different fact from a
+/// composer that is empty.
+pub fn ReadComposer(Selectors:&Selectors) -> String { script!("Expression/ReadComposer"; Composer = &Selectors.Composer) }
 
 /// Put the question in the composer.
 ///
 /// A `textarea` or an `input` takes it through the property's own setter, so a
 /// framework that tracks the value sees the change; anything else is treated as
-/// a contenteditable and takes a real edit - a selection plus `insertText` -
+/// a contenteditable and takes a real edit - a caret plus `insertText` -
 /// because an editor that keeps its own document model ignores a written
 /// `innerText` and leaves its send control disabled. Both paths dispatch
 /// `input`, because a composer that never saw one keeps that control disabled
 /// and the question would sit there looking sent.
+///
+/// It does not clear, and it does not read back. Clearing is the input domain's
+/// job - an editor answers `execCommand("delete")` with `true` and keeps its
+/// content - and the read-back is the driver's, because that is where both
+/// readings of the composer are in hand.
 pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 	script!("Expression/TypeQuestion"; Composer = &Selectors.Composer, Text = Text)
 }
@@ -80,21 +106,15 @@ pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 ///
 /// A disabled control is not clicked: the click would land on nothing, the page
 /// would look sent, and the caller would wait out its whole deadline for an
-/// answer that was never asked for.
+/// answer that was never asked for. A composer that is not there is `missing`
+/// for the same reason.
 ///
-/// The composer is read back first, because an editor can keep its own model
-/// while the DOM shows something else - an insert that reported success over a
-/// draft still holding the previous question. Sending that is worse than
-/// sending nothing: the answer would be to a question nobody asked, and nothing
-/// in the result would say so. So a composer that does not hold the question is
-/// `mismatch`, and no click happens.
-pub fn PressSubmit(Selectors:&Selectors, Expected:&str) -> String {
-	script!(
-		"Expression/PressSubmit";
-		Composer = &Selectors.Composer,
-		Expected = Expected,
-		Submit = &Selectors.Submit,
-	)
+/// It does not compare the composer with the question. The driver read the
+/// composer back before this ran, with both readings of it, and a comparison
+/// here would be a second rule for the same question - one of the two would be
+/// changed first and the two would then disagree.
+pub fn PressSubmit(Selectors:&Selectors) -> String {
+	script!("Expression/PressSubmit"; Composer = &Selectors.Composer, Submit = &Selectors.Submit)
 }
 
 /// How many answers the thread holds, the text of the newest one, and whether

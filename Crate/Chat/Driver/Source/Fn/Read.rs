@@ -10,7 +10,7 @@
 
 use serde_json::Value;
 
-use crate::Struct::Port::{Source, Step};
+use crate::Struct::Port::{Candidate, Composer, Inspection, Source, Step, Strip};
 
 /// One read of the thread.
 ///
@@ -148,4 +148,137 @@ pub fn AsSources(Value:&Value) -> Option<Vec<Source>> {
 			})
 			.collect(),
 	)
+}
+
+/// What the composer holds, or `None` when the page answered something else.
+///
+/// `null` is `None`: the selector matched nothing, which is not a composer that
+/// holds nothing. The difference is the whole of the first precondition, so the
+/// two are never folded together.
+pub fn AsComposer(Value:&Value) -> Option<Composer> {
+	let Object = Value.as_object()?;
+	Some(Composer {
+		Kind:TextOf(Object.get("kind")),
+		// A model the page reports as `null` is an editor that cannot be
+		// asked, not an editor that holds nothing: the empty case is the
+		// empty string.
+		Model:Object.get("model").and_then(Value::as_str).map(|Text| Text.to_string()),
+		DOM:TextOf(Object.get("dom")),
+		Source:TextOf(Object.get("source")),
+	})
+}
+
+/// The composer row's popup controls and the model among them, or `None` when
+/// the page answered something else.
+pub fn AsInspection(Value:&Value) -> Option<Inspection> {
+	let Object = Value.as_object()?;
+	let Candidates = Object
+		.get("candidates")
+		.and_then(Value::as_array)
+		.map(|Entries| {
+			Entries
+				.iter()
+				.enumerate()
+				.map(|(Index, Entry)| {
+					let One = Entry.as_object();
+					Candidate {
+						Index:One
+							.and_then(|One| One.get("index"))
+							.and_then(Value::as_f64)
+							.map(|At| At as usize)
+							.unwrap_or(Index),
+						Label:TextOf(One.and_then(|One| One.get("label"))),
+						Text:TextOf(One.and_then(|One| One.get("text"))),
+						Popup:TextOf(One.and_then(|One| One.get("popup"))),
+						Reason:TextOf(One.and_then(|One| One.get("reason"))),
+					}
+				})
+				.collect::<Vec<Candidate>>()
+		})
+		.unwrap_or_default();
+	Some(Inspection {
+		Chosen:Object.get("chosen").and_then(Value::as_f64).map(|At| At as usize),
+		Model:Object.get("model").and_then(Value::as_str).map(|Text| Text.to_string()),
+		Candidates,
+		Composer:Composer::default(),
+	})
+}
+
+/// Whether the page said its platform selects everything with Command.
+pub fn AsMac(Value:&Value) -> bool { Value.get("mac").and_then(Value::as_bool).unwrap_or(false) }
+
+/// What the composer holds against what was typed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Comparison {
+	/// Whether the composer holds what was typed.
+	pub Matched:bool,
+	/// The held text's length in characters.
+	pub Held:usize,
+	/// The typed text's length in characters.
+	pub Want:usize,
+	/// The first offset at which the two differ once whitespace is removed.
+	pub Offset:usize,
+	/// What the composer holds from that offset.
+	pub HeldAt:String,
+	/// What was typed from that offset.
+	pub WantAt:String,
+}
+
+impl Comparison {
+	/// The sentence a failure states: the two lengths and where they part.
+	pub fn Detail(&self) -> String {
+		format!(
+			"held {} characters, wanted {}; first difference at {}: {:?} against {:?}",
+			self.Held, self.Want, self.Offset, self.HeldAt, self.WantAt
+		)
+	}
+}
+
+/// Compare what the composer holds with what was typed.
+///
+/// # The rule, and why it is two rules
+///
+/// Whitespace is removed from both sides before they are compared, because an
+/// editor is allowed to lose it. A paragraph break is a node in the editor's
+/// document and a rendered block in the DOM, and the reference product's editor
+/// renders one with no separator at all: the text reads `them.The` where the
+/// caller wrote `them. The`. Collapsing runs to a single space - the rule this
+/// replaced - calls that a mismatch and refuses a question that was typed
+/// exactly as written.
+///
+/// A comparison that ignores whitespace entirely is too permissive on its own,
+/// so it is paired with a length range:
+///
+/// - **the floor** is the typed text's length with whitespace removed. Every
+///   character the caller typed has to be there, so a prefix or a truncated
+///   insert falls below it and is refused;
+/// - **the ceiling** is the typed length plus that floor, which is what an
+///   editor holds when it keeps every break as two characters. A composer that
+///   still holds the previous draft *and* this question is above it, and is
+///   refused.
+///
+/// What this deliberately accepts: an editor that drops every paragraph break
+/// while keeping every character. That is below the typed length and above the
+/// floor, and it is not distinguishable from the same editor's own rendering -
+/// measured on the reference product, the editor's model reports the same
+/// separator-free text its DOM does. Refusing it would refuse every
+/// multi-paragraph question, which is the defect this replaced.
+pub fn Compare(Held:&str, Expected:&str) -> Comparison {
+	let Wanted = Strip(Expected);
+	let Actual = Strip(Held);
+	let Floor = Wanted.chars().count();
+	let Ceiling = Expected.chars().count() + Floor;
+	let Held = Held.chars().count();
+	let Want = Expected.chars().count();
+	let Matched = Actual == Wanted && Held >= Floor && Held <= Ceiling;
+	let Limit = Actual.chars().count().min(Wanted.chars().count());
+	let Offset = Actual.chars().zip(Wanted.chars()).take_while(|(Left, Right)| Left == Right).count().min(Limit);
+	Comparison {
+		Matched,
+		Held,
+		Want,
+		Offset,
+		HeldAt:Actual.chars().skip(Offset).take(24).collect(),
+		WantAt:Wanted.chars().skip(Offset).take(24).collect(),
+	}
 }

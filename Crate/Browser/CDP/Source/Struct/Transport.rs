@@ -20,7 +20,10 @@ use std::sync::Arc;
 use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
-use crate::Struct::Error::Error;
+use crate::Struct::{
+	Error::Error,
+	Port::Input,
+};
 
 /// One live page connection.
 pub trait Transport: Send + Sync {
@@ -33,6 +36,13 @@ pub trait Transport: Send + Sync {
 	fn Closed(&self) -> bool;
 	/// Ask the page one expression and return what it produced.
 	fn Evaluate<'a>(&'a self, Expression:&'a str, Call:Call) -> FutureBox<'a, Result<Value, Error>>;
+	/// Put one thing into the page's input domain.
+	///
+	/// The transport is where the protocol's input commands live, so this is
+	/// the only place a key event or an inserted string can be produced. A
+	/// substrate that cannot deliver input says so by failing here rather than
+	/// by accepting the call and doing nothing.
+	fn Input<'a>(&'a self, Input:&'a Input, Call:Call) -> FutureBox<'a, Result<(), Error>>;
 	/// Close the page this session launched.
 	fn Close(&self) -> FutureBox<'_, ()>;
 	/// Let go of a page somebody else owns, without closing it.
