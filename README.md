@@ -1,3 +1,5 @@
+![Merged Beast Agito](https://raw.githubusercontent.com/MergedBeastAgito/.github/refs/heads/main/Sukuna_summons_Merged_Beast_Agito.webp)
+
 # Agito
 
 Capabilities, adapters and the runtime that leases them. A local agent and swarm: it gathers links,
