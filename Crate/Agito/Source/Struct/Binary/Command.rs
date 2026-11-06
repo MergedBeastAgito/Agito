@@ -79,11 +79,36 @@ pub enum Verb {
 		#[arg(long = "url")]
 		URL:String,
 		/// The model the answer must come from, as the page labels it.
+		///
+		/// Absent, no model is demanded and the page's own label is reported.
+		/// A build whose model control cannot be identified reports `unknown`
+		/// and proceeds; a label that *is* identified and differs from this one
+		/// is still refused.
 		#[arg(long)]
-		Model:String,
+		Model:Option<String>,
 		/// The question, sent as written.
+		///
+		/// Required unless `--clear` or `--probe` is given: neither types a
+		/// question, and demanding one would make a recovery call state a
+		/// question it will never ask.
 		#[arg(long)]
-		Question:String,
+		Question:Option<String>,
+		/// Empty the addressed composer with real key events and exit.
+		///
+		/// The recovery for a composer left holding a draft by an earlier call.
+		/// It sends the platform's select-all chord and a delete, reads the
+		/// editor back, and exits non-zero with one blocker line when text
+		/// remains.
+		#[arg(long)]
+		Clear:bool,
+		/// Report what the composer row holds and exit, typing nothing.
+		///
+		/// Every `aria-haspopup` control the model selector matched, what each
+		/// one says, why it was or was not taken as the model, and what the
+		/// editor holds. One run is enough to diagnose a build that moved the
+		/// model control.
+		#[arg(long)]
+		Probe:bool,
 		/// Attach to a browser already listening here instead of launching one.
 		#[arg(long)]
 		Attach:Option<String>,

@@ -27,12 +27,11 @@ use std::{
 
 use ::RunTime::{Call, FutureBox};
 use chromiumoxide::{
-	Browser, BrowserConfig, Handler, Page,
-	cdp::browser_protocol::input::{
-		DispatchKeyEventParams,
-		DispatchKeyEventType,
-		InsertTextParams,
-	},
+	Browser,
+	BrowserConfig,
+	Handler,
+	Page,
+	cdp::browser_protocol::input::{DispatchKeyEventParams, DispatchKeyEventType, InsertTextParams},
 };
 use futures_util::StreamExt;
 use serde_json::Value;
@@ -306,6 +305,7 @@ impl Transport for ChromeTransport {
 						.code(Code)
 						.windows_virtual_key_code(KeyCode)
 						.native_virtual_key_code(KeyCode)
+						.commands(Chord.Command.iter().cloned().collect::<Vec<String>>())
 						.build();
 					let Ok(Down) = Mutated else {
 						return Err(Error::Navigation("the key event could not be built", format!("{Input:?}")));

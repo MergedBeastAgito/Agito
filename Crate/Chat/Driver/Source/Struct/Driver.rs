@@ -55,18 +55,49 @@ use crate::{
 			PressSubmit,
 			ReadAnswers,
 			ReadCollapse,
+			ReadComposer,
 			ReadMode,
 			ReadModel,
+			ReadPlatform,
 			ReadSources,
 			ReadTrace,
 			TypeQuestion,
 		},
-		Read::{Answers, AsAnswers, AsSources, AsSteps, Describe, DescribeText, Mark, Normalise, TextOf},
+		Read::{
+			Answers,
+			AsAnswers,
+			AsComposer,
+			AsInspection,
+			AsMac,
+			AsSources,
+			AsSteps,
+			Compare,
+			Describe,
+			DescribeText,
+			Fold,
+			Mark,
+			Normalise,
+			TextOf,
+		},
 	},
 	Struct::{
 		Error::Error,
 		Format::Format,
-		Port::{Answer, Chat, Control, Observation, Page, Question, Target},
+		Port::{
+			Answer,
+			Chat,
+			Cleared,
+			Composer,
+			Control,
+			Input,
+			Inspection,
+			Modifiers,
+			Observation,
+			Page,
+			Press,
+			Question,
+			Target,
+		},
 		Selectors::{DefaultSelectors, Selectors},
 		Settlement::Settlement,
 	},
@@ -77,6 +108,38 @@ pub const DefaultPoll:Duration = Duration::from_millis(250);
 
 /// A release that has not finished in this long is reported, not waited on.
 pub const DefaultDisposeBudget:Duration = Duration::from_secs(5);
+
+/// The longest question this driver will type into a composer.
+///
+/// Measured, not chosen, against the reference product's composer - a Lexical
+/// contenteditable - through both insertion paths:
+///
+/// | characters | what the editor did                                    |
+/// | ---------- | ------------------------------------------------------ |
+/// | 4,219      | inserted, read back in full                            |
+/// | 200,000    | inserted, read back in full                            |
+/// | 240,000    | inserted, read back in full                            |
+/// | 400,000    | inserted, read back in full                            |
+/// | 800,000    | reported success, held its previous content            |
+/// | 1,200,000  | reported success, held its previous content            |
+///
+/// The failure mode above the ceiling is the dangerous one: the editing command
+/// answers `true` and the editor keeps what it already had, so nothing but a
+/// read-back can tell the caller that the question never landed. `getconf
+/// ARG_MAX` on the machine that measured this answers 1,048,576, so a question
+/// above that never reaches `--question` at all.
+///
+/// This bound is a quarter of the largest size measured to work. It is not the
+/// editor's limit - the editor has none below 400,000 - it is the point past
+/// which this driver will not promise an insert landed, and a question above it
+/// is refused with its own length instead of surfacing as a read-back mismatch
+/// nobody can act on.
+///
+/// A second measurement belongs beside this one and is not a length at all: an
+/// insert sent to a composer whose editor has not finished initialising reports
+/// success and holds nothing, at any size. That is what the read-back and the
+/// one retry through the input domain exist for.
+pub const MaxQuestion:usize = 100_000;
 
 /// Where a dispose failure goes, because it may not be returned.
 pub type Report = Arc<dyn Fn(&Target, &Error) + Send + Sync>;
@@ -188,6 +251,189 @@ impl Driver {
 		}
 	}
 
+	/// One input, run inside whatever budget is left.
+	///
+	/// The same bounding and the same mapping as [`Driver::Probe`], because a
+	/// press that never arrives is the same failure as an expression that never
+	/// answers: the page did not do what it was asked, and the caller's deadline
+	/// is the only thing that ends the wait.
+	async fn Deliver(&self, Phase:&str, Target:&Target, Input:Input, Call:&Call, Budget:Duration) -> Result<(), Error> {
+		if Call.Cancelled() {
+			return Err(Error::NotReady(
+				format!("{Phase} was cancelled before it started"),
+				"the caller's signal had already fired",
+			));
+		}
+		if Call.Expired(self.Pace.as_ref()) {
+			return Err(Error::NotReady(
+				format!("{Phase} exceeded the {}ms deadline", Budget.as_millis()),
+				"the page was still working when the budget ran out",
+			));
+		}
+		let Work = self.Page.Input(Target, &Input, Call.clone());
+		match Bound(Work, Call, self.Pace.as_ref()).await {
+			Ok(Ok(())) => Ok(()),
+			Ok(Err(Failure)) => {
+				Err(Error::NotReady(
+					format!("{Phase} could not be delivered to the page"),
+					Failure.Message,
+				))
+			},
+			Err(Expired::Timeout) => {
+				Err(Error::NotReady(
+					format!("{Phase} exceeded the {}ms deadline", Budget.as_millis()),
+					"the page never answered",
+				))
+			},
+			Err(Expired::Cancelled) => {
+				Err(Error::NotReady(
+					format!("{Phase} was cancelled by the caller"),
+					"the signal fired while the page was being typed into",
+				))
+			},
+		}
+	}
+
+	/// The composer row's popup controls, and which one names the model.
+	async fn Row(&self, Phase:&str, Target:&Target, Call:&Call, Budget:Duration) -> Result<Inspection, Error> {
+		let Value = self
+			.Probe(Phase, ReadModel(&self.Options.Selectors), Target, Call, Budget)
+			.await?;
+		AsInspection(&Value).ok_or_else(|| {
+			Error::NotReady(
+				format!("{Phase} could not be read from the page"),
+				format!(
+					"the page answered {} instead of a list of popup controls",
+					Describe(Some(&Value))
+				),
+			)
+		})
+	}
+
+	/// What the composer holds, read from the editor and from its rendering.
+	async fn Composer(&self, Phase:&str, Target:&Target, Call:&Call, Budget:Duration) -> Result<Composer, Error> {
+		let Selectors = &self.Options.Selectors;
+		let Value = self.Probe(Phase, ReadComposer(Selectors), Target, Call, Budget).await?;
+		AsComposer(&Value).ok_or_else(|| {
+			Error::NotReady(
+				format!("{Phase} could not be found on the page"),
+				format!("nothing matched {:?}", Selectors.Composer),
+			)
+		})
+	}
+
+	/// Whether the page selects everything with Command.
+	///
+	/// A page that will not say falls back to this process's platform, which is
+	/// right whenever the browser is local and a named guess when it is not. It
+	/// is a fallback and not an assumption: the clear reads the composer back,
+	/// so a wrong chord is a refusal with the composer's length in it rather
+	/// than a silent append.
+	async fn Platform(&self, Target:&Target, Call:&Call, Budget:Duration) -> bool {
+		match self.Probe("platform", ReadPlatform(), Target, Call, Budget).await {
+			Ok(Value) => AsMac(&Value),
+			Err(_) => cfg!(target_os = "macos"),
+		}
+	}
+
+	/// Empty the composer with real input, and refuse when it will not empty.
+	///
+	/// Two attempts, because the first press can land on a page whose editor has
+	/// not taken focus yet and a single lost press would read as a composer that
+	/// cannot be emptied. Two is not a retry loop: a chord that does nothing on
+	/// the second press is a page this driver will not type into.
+	async fn ClearAt(&self, Target:&Target, Call:&Call, Budget:Duration) -> Result<Cleared, Error> {
+		let Before = self.Composer("composer", Target, Call, Budget).await?;
+		let Mac = self.Platform(Target, Call, Budget).await;
+		let Mutating = Press::New("a", Modifiers::SelectAll(Mac)).Meaning("selectAll");
+		let Deleting = Press::New("Backspace", Modifiers::default()).Meaning("deleteBackward");
+		let Pressed = vec![format!("{}+a", if Mac { "Meta" } else { "Control" }), "Backspace".to_string()];
+		let mut After = Before.clone();
+		for _ in 0..2 {
+			if After.Empty() {
+				break;
+			}
+			self.Deliver("composer clear", Target, Input::Press(Mutating.clone()), Call, Budget)
+				.await?;
+			self.Deliver("composer clear", Target, Input::Press(Deleting.clone()), Call, Budget)
+				.await?;
+			After = self.Composer("composer", Target, Call, Budget).await?;
+		}
+		let Cleared = Cleared {
+			URL:Target.URL.clone(),
+			Before:Before.Text().to_string(),
+			After:After.Text().to_string(),
+			Pressed,
+		};
+		if !Cleared.Empty() {
+			return Err(Error::NotReady(
+				"the composer could not be emptied",
+				format!(
+					"after {} and a delete the editor still holds {} characters through {}; a composer this driver \
+					 cannot empty is refused before the question is typed",
+					Cleared.Pressed.join(", "),
+					After.Text().chars().count(),
+					if After.Source.is_empty() {
+						"no readable model"
+					} else {
+						After.Source.as_str()
+					}
+				),
+			));
+		}
+		Ok(Cleared)
+	}
+
+	/// Put the question in the composer, and prove it landed.
+	///
+	/// One path, then one different path. The first is an editing command inside
+	/// the page; a failure - the command refusing, or the read-back disagreeing -
+	/// is retried once through the protocol's own insert, after the composer has
+	/// been emptied again, because a half-landed insert is appended to by an
+	/// insert and replaced by nothing.
+	async fn Write(&self, Text:&str, Target:&Target, Call:&Call, Budget:Duration) -> Result<(), Error> {
+		let Selectors = &self.Options.Selectors;
+		let Verdict = self
+			.Probe("composer", TypeQuestion(Selectors, Text), Target, Call, Budget)
+			.await?;
+		match TextOf(Some(&Verdict)).as_str() {
+			"typed" => {},
+			"missing" => {
+				return Err(Error::NotReady(
+					"the composer could not be found",
+					format!("nothing matched {:?}", Selectors.Composer),
+				));
+			},
+			// `refused`, or a page that answered something this driver does not
+			// recognise: both mean the edit did not happen, and both are
+			// retried below.
+			_ => {},
+		}
+		let mut Held = self.Composer("composer", Target, Call, Budget).await?;
+		let mut Checked = Compare(Held.Text(), Text);
+		if Checked.Matched {
+			return Ok(());
+		}
+		// The second path: empty the composer through the input domain and type
+		// the text the way a paste arrives. This is the path an editor that
+		// refuses an editing command still obeys.
+		self.ClearAt(Target, Call, Budget).await?;
+		self.Deliver("composer", Target, Input::Type(Text.to_string()), Call, Budget)
+			.await?;
+		Held = self.Composer("composer", Target, Call, Budget).await?;
+		Checked = Compare(Held.Text(), Text);
+		if !Checked.Matched {
+			return Err(Error::NotReady(
+				"the composer does not hold the question",
+				format!(
+					"{} - after an editing command and then the protocol's own insert, so nothing was sent",
+					Checked.Detail()
+				),
+			));
+		}
+		Ok(())
+	}
+
 	/// Open the configured page, bounded.
 	async fn Open(&self, Call:&Call, Budget:Duration) -> Result<Target, Error> {
 		if Call.Cancelled() {
@@ -283,16 +529,26 @@ impl Driver {
 			}
 		}
 
-		// The model is a precondition, and it is compared before the send.
-		let Label = self.Probe("model", ReadModel(Selectors), Target, Call, Budget).await?;
-		let Wanted = Value::String(Question.Model.clone());
-		if Normalise(Some(&Label)) != Normalise(Some(&Wanted)) {
+		// The model is a report field, and a gate only when the caller named one.
+		//
+		// It used to be a gate unconditionally, reading whatever the model
+		// selector matched first. On a build whose composer row puts a drafts
+		// control before the model control that read "1 draft", so no model name
+		// could satisfy it and the value it demanded changed with the number of
+		// drafts. A label that cannot be identified is now `unknown` and the call
+		// proceeds: a build this driver cannot read is not a build it will refuse
+		// a caller over.
+		let Seen = self.Row("model", Target, Call, Budget).await?;
+		if !Question.Model.trim().is_empty()
+			&& let Some(Identified) = &Seen.Model
+			&& Fold(Identified) != Fold(&Question.Model)
+		{
 			return Err(Error::WrongModel(
 				"the page is set to a different model",
 				format!(
 					"wanted {}, the page reads {}",
 					serde_json::to_string(&Question.Model).unwrap_or_else(|_| format!("{:?}", Question.Model)),
-					Describe(Some(&Label))
+					serde_json::to_string(Identified).unwrap_or_else(|_| format!("{Identified:?}"))
 				),
 			));
 		}
@@ -309,27 +565,61 @@ impl Driver {
 			));
 		}
 
-		let Typed = self
-			.Probe("composer", TypeQuestion(Selectors, &Question.Text), Target, Call, Budget)
-			.await?;
-		if Typed.as_bool() != Some(true) {
+		// The composer, before anything is typed into it.
+		//
+		// Three refusals and one repair, in this order, because each one is
+		// cheaper than the one after it and every one of them is cheaper than a
+		// wrong answer:
+		//
+		// - no composer at all is `not-ready` before anything else happens;
+		// - an editor whose model disagrees with its DOM is refused rather than
+		//   typed into: the DOM is not what the editor will send;
+		// - a composer that already holds something is emptied through the input
+		//   domain, and a composer that will not empty is a named blocker here
+		//   rather than a read-back mismatch after the insert.
+		let Held = self.Composer("composer", Target, Call, Budget).await?;
+		if Held.Kind.is_empty() {
 			return Err(Error::NotReady(
 				"the composer could not be found",
 				format!("nothing matched {:?}", Selectors.Composer),
 			));
 		}
+		if Held.Diverged() {
+			return Err(Error::NotReady(
+				"the composer's editor and its rendering disagree",
+				format!(
+					"the editor holds {} characters through {} and the DOM reads {}; typing into it would append to a \
+					 draft that was never read",
+					Held.Text().chars().count(),
+					if Held.Source.is_empty() { "no readable model" } else { Held.Source.as_str() },
+					Held.DOM.chars().count()
+				),
+			));
+		}
+		if !Held.Empty() {
+			self.ClearAt(Target, Call, Budget).await?;
+		}
 
-		let Sent = self
-			.Probe("submit", PressSubmit(Selectors, &Question.Text), Target, Call, Budget)
-			.await?;
+		// The length, before typing. A question past the bound is refused with
+		// its own length instead of arriving as an insert that silently did
+		// nothing and a read-back that cannot say why.
+		let Length = Question.Text.chars().count();
+		if Length > MaxQuestion {
+			return Err(Error::NotReady(
+				"the question is longer than this driver will type",
+				format!(
+					"the question is {Length} characters and the limit is {MaxQuestion}; the reference editor was \
+					 measured to insert 400,000 and to report success while dropping 800,000, so past this bound a \
+					 refusal is the only honest answer"
+				),
+			));
+		}
+
+		self.Write(&Question.Text, Target, Call, Budget).await?;
+
+		let Sent = self.Probe("submit", PressSubmit(Selectors), Target, Call, Budget).await?;
 		match Sent.as_str() {
 			Some("sent") => {},
-			Some("mismatch") => {
-				return Err(Error::NotReady(
-					"the composer does not hold the question",
-					"the editor kept a different text than the one that was typed, so nothing was sent",
-				));
-			},
 			Some("disabled") => {
 				return Err(Error::NotReady(
 					"the question could not be sent",
@@ -451,10 +741,7 @@ impl Driver {
 			)
 		})?;
 
-		let Model = {
-			let Read = TextOf(Some(&Label)).trim().to_string();
-			if Read.is_empty() { Question.Model.trim().to_string() } else { Read }
-		};
+		let Model = Seen.Named().to_string();
 
 		Ok(Answer {
 			URL:Target.URL.clone(),
@@ -501,6 +788,32 @@ impl Driver {
 impl Chat for Driver {
 	fn Ask<'a>(&'a self, Question:Question, Call:Call) -> FutureBox<'a, Result<Answer, Error>> {
 		Box::pin(async move { self.Perform(Question, Call, None).await })
+	}
+
+	fn Clear<'a>(&'a self, Call:Call) -> FutureBox<'a, Result<Cleared, Error>> {
+		Box::pin(async move {
+			let Budget = self.Budget(&Call);
+			let Target = self.Open(&Call, Budget).await?;
+			let Outcome = self.ClearAt(&Target, &Call, Budget).await;
+			self.Release(&Target).await;
+			Outcome
+		})
+	}
+
+	fn Inspect<'a>(&'a self, Call:Call) -> FutureBox<'a, Result<Inspection, Error>> {
+		Box::pin(async move {
+			let Budget = self.Budget(&Call);
+			let Target = self.Open(&Call, Budget).await?;
+			let Outcome = async {
+				let mut Seen = self.Row("model", &Target, &Call, Budget).await?;
+				Seen.Composer = self.Composer("composer", &Target, &Call, Budget).await?;
+				Seen.URL = Target.URL.clone();
+				Ok(Seen)
+			}
+			.await;
+			self.Release(&Target).await;
+			Outcome
+		})
 	}
 
 	fn Observe<'a>(

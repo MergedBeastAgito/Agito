@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::{
 	Fn::{
-		Entry::{BodyFile, CorpusIndexes, Read, IndexFile, IsDirectory, IsFile, ReferenceDirectory, Text},
+		Entry::{BodyFile, CorpusIndexes, IndexFile, IsDirectory, IsFile, Read, ReferenceDirectory, Text},
 		Frontmatter::Split,
 	},
 	Struct::Skill::Skill,

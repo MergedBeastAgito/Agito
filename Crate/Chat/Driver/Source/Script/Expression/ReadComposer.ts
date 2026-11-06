@@ -3,8 +3,16 @@ declare const __PARAM_Composer__: string;
 (() => {
 	const Composer = document.querySelector(__PARAM_Composer__);
 	if (Composer === null) return null;
-	const Kind = Composer.tagName === "TEXTAREA" ? "textarea" : Composer.tagName === "INPUT" ? "input" : "editable";
-	const DOM = Kind === "editable" ? Composer.innerText || Composer.textContent || "" : Composer.value || "";
+	const Kind =
+		Composer.tagName === "TEXTAREA"
+			? "textarea"
+			: Composer.tagName === "INPUT"
+				? "input"
+				: "editable";
+	const DOM =
+		Kind === "editable"
+			? Composer.innerText || Composer.textContent || ""
+			: Composer.value || "";
 	// The editor's own document, when the editor can be asked for it. A
 	// contenteditable is a rendering of a model it keeps elsewhere, and the two
 	// are not the same string: the model is what an insert actually changed,
@@ -15,7 +23,12 @@ declare const __PARAM_Composer__: string;
 	if (Kind === "editable") {
 		// ProseMirror hangs its view description on the node it renders into.
 		const Description = Composer.pmViewDesc;
-		if (Description && Description.view && Description.view.state && Description.view.state.doc) {
+		if (
+			Description &&
+			Description.view &&
+			Description.view.state &&
+			Description.view.state.doc
+		) {
 			Model = Description.view.state.doc.textContent;
 			Source = "prosemirror";
 		} else if (typeof Composer.__lexicalTextContent === "string") {
@@ -32,4 +45,4 @@ declare const __PARAM_Composer__: string;
 		Source = "plain";
 	}
 	return { kind: Kind, dom: DOM, model: Model, source: Source };
-})()
+})();

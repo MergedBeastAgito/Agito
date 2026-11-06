@@ -4,12 +4,7 @@
 	"Version": "0.1.3",
 	"Provide": {
 		"Port": "agito.chat.ask",
-		"Error": [
-			"not-ready",
-			"wrong-mode",
-			"wrong-model",
-			"truncated"
-		],
+		"Error": ["not-ready", "wrong-mode", "wrong-model", "truncated"],
 		"Verb": {
 			"agito.chat.note": {
 				"Error": []
@@ -17,9 +12,7 @@
 		}
 	},
 	"Require": {
-		"Port": [
-			"agito.browse"
-		]
+		"Port": ["agito.browse"]
 	},
 	"Artefact": {
 		"Entry": "Target/debug/libDriver.rlib",

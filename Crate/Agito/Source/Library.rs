@@ -27,9 +27,9 @@ pub use crate::{
 	Fn::{
 		Composition::{Browser, Chat, Design},
 		Discover::Discover,
+		Module::Verify::{Declared, Readiness, Verify},
 		Note::{Note, ThreadOf},
 		Run::{Drive, Run},
-		Module::Verify::{Declared, Readiness, Verify},
 	},
 	Struct::{
 		Binary::{

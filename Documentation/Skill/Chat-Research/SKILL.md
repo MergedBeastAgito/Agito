@@ -35,12 +35,30 @@ Target/debug/agito chat \
   --timeout 300000
 ```
 
+`--model` and `--question` are both optional in the sense that a call which asks nothing does not
+need them:
+
+```sh
+agito chat --url <product> --attach <ws> --bind <target> --probe   # what the composer row holds
+agito chat --url <product> --attach <ws> --bind <target> --clear   # empty the composer
+```
+
 The result is `{"url", "format", "text", "model", "mode", "trace", "sources"}`, where `url` is the
 page's own and not the one the call was given - with a bind the two differ. `--format note` is the
 exception: it prints the note itself on stdout, so a redirect gets a file rather than a JSON string
 holding a document. `--bind` drives the tab a person is already looking at; without it the call
 opens a page of its own. Use a bind for research that belongs in an existing thread, and a new page
 for a probe you intend to throw away.
+
+`--probe` prints every `aria-haspopup` control the model selector matched, what each one says, why
+it was or was not taken as the model, and what the editor holds. It types nothing. It exists because
+a build that moves the model control otherwise shows up as a `wrong-model` naming something absurd,
+and one probe run is what makes that diagnosable.
+
+`--clear` empties the addressed composer with real key events - the platform's select-all chord
+carrying the protocol's own `selectAll` command, then a delete - and reads the editor back. A
+composer that still holds text exits non-zero with one `blocker:` line. `chat` runs the same path
+before it types, so a caller never has to know the editor was dirty.
 
 ---
 
@@ -119,24 +137,111 @@ inferred from a filename, a directory or a previous note.
 
 ---
 
-## Four preconditions, refused rather than assumed
+## The mode is a precondition, refused rather than assumed
 
-**The mode is a precondition.** The composer's toggle is read before anything is typed. Not `search`
-means it is pressed once, read again, and then refused as `wrong-mode` - nothing was sent. One
-press, not a loop: a toggle that does not move on the first press will not move on the fifth, and a
-retry loop spends the caller's deadline proving it.
+The composer's toggle is read before anything is typed. Not `search` means it is pressed once, read
+again, and then refused as `wrong-mode` - nothing was sent. One press, not a loop: a toggle that
+does not move on the first press will not move on the fifth, and a retry loop spends the caller's
+deadline proving it.
 
-**The model is a precondition.** The label is compared to `--model` before anything is typed, and a
-mismatch is `wrong-model`. A driver that cannot say which model answered cannot defend its output.
+---
 
-**Completion is a rule, not a sleep.** See below.
+## The model is a report field, and a gate only when one is demanded
+
+The label is read before anything is typed. What it reads is the model control's own name, or
+`unknown`.
+
+`unknown` is the honest answer more often than it looks: the reference product's composer row
+renders its popup controls in a state-dependent order, and on a build whose first popup is a drafts
+control the label is a count - `1 draft` - which is a fact about the drafts, not about the model. So
+every control the selector matched is classified, and a label that is a count or that names a
+control rather than a model is never taken as one. A row with nothing left answers `unknown`, the
+call proceeds, and the result says `"model": "unknown"` rather than naming something it did not
+read.
+
+A model that _is_ identified and differs from `--model` is still refused as `wrong-model`, and
+nothing was typed. `--model` absent means no model is demanded at all; the page's own label is
+reported.
+
+One consequence worth stating: `--model` can no longer be satisfied by a value that changes when the
+number of drafts changes, because a count is never read as a model.
+
+---
+
+## Typing is an edit, not a property write
+
+A contenteditable editor keeps its own document model. Writing `innerText` changes the DOM and
+leaves the send control disabled, because no edit happened - the symptom is
+`not-ready: the send control is disabled after the question was typed`.
+
+Three things follow, and each one was a defect before it was a rule.
+
+**A draft is emptied through the input domain, not through an editing command.**
+`execCommand("delete")` over a selected range answers `true` on an editor that keeps its own model
+and deletes nothing, so a "select all, delete, insert" sequence appends. Measured on the reference
+product: a composer holding 4,167 characters grew to 8,496 over two calls while every delete
+reported success. The clear is now a real select-all chord carrying the protocol's `selectAll`
+editing command, then a delete, then a read-back. A composer that will not empty is a named blocker
+_before_ the insert, never a `mismatch` after it.
+
+The command matters and the chord alone is not enough: a chord is something the page has to
+interpret, and a plain contenteditable or a `textarea` does not interpret it. Measured on a plain
+contenteditable, `Meta+a` left the selection empty while the same press carrying `selectAll`
+selected the whole editor.
+
+**The composer is read back, and the comparison is whitespace-blind with a length range.** An editor
+may lose a paragraph break - this product's editor renders one with no separator at all, so the text
+reads `them.The` where the caller wrote `them. The` - so whitespace is removed from both sides
+before they are compared. That alone would accept an insert that dropped text, so it is paired with
+a range: the held text may not be shorter than the question's non-whitespace length (a prefix or a
+truncation falls below it) and may not exceed the question's length plus that floor (a composer
+still holding the previous draft and this question is above it). A refusal states both lengths and
+the first differing offset:
+
+```
+not-ready: the composer does not hold the question
+held 50 characters, wanted 132; first difference at 40: "" against "leventwelvethirteenfourt"
+```
+
+**A failed insert is retried once through the protocol's own input.** If the editing command
+refuses, or the read-back disagrees, the composer is emptied again and the text is inserted with
+`Input.insertText`, which is what a paste or an IME commit does and what an editor that refuses an
+editing command still obeys. The retry is once: a second failure is the refusal above, and nothing
+was sent.
+
+---
+
+## A long question has a stated limit
+
+`MaxQuestion` is 100,000 characters, and it is measured rather than chosen. Against the reference
+product's composer, through both insertion paths:
+
+- **4,219** characters inserted and read back - the question this limit was written for;
+- **200,000**, **240,000** and **400,000** inserted and read back in full;
+- **800,000** and **1,200,000**: the editing command answered `true` and the editor kept its
+  previous content. Nothing but a read-back can tell the caller the question never landed;
+- `getconf ARG_MAX` on the machine that measured this answers 1,048,576, so a question above that
+  never reaches `--question` at all.
+
+The bound is a quarter of the largest size measured to work. A question above it is refused before
+typing, with its own length in the detail, instead of arriving as a read-back mismatch nobody can
+act on.
+
+A second measurement belongs beside that one and is not a length at all: an insert sent to a
+composer whose editor has not finished initialising reports success and holds nothing, at any size.
+That is what the read-back and the one retry exist for, and it is why a call that fails to insert is
+not automatically a call about a long question.
+
+---
+
+## What is left over is `not-ready`
 
 **A collapsed answer is `truncated`.** The control that hides the rest of an answer is looked for
 inside the newest answer once it has settled, because at that point the text in the DOM is
 demonstrably not all of it.
 
-Everything else the page does that is not one of those four is `not-ready`, with the cause in the
-detail. The manifest has four codes and the driver does not invent a fifth.
+Everything else the page does is `not-ready`, with the cause in the detail. The manifest has four
+codes and the driver does not invent a fifth.
 
 ---
 
@@ -175,31 +280,6 @@ not hold that answer. Reading one answer twice means reading the page twice, not
 The honest limit: `busy` false is not proof of success. A cancelled or failed turn also stops
 generating. The driver's own turn identity and deadline are what distinguish those, and a caller
 that needs certainty reads the trace and the text rather than trusting the settle alone.
-
----
-
-## Typing is an edit, not a property write
-
-A contenteditable editor keeps its own document model. Writing `innerText` changes the DOM and
-leaves the send control disabled, because no edit happened - the symptom is
-`not-ready: the send control is disabled after the question was typed`.
-
-`TypeQuestion` therefore performs a real edit: focus, select the contents, and
-`document.execCommand('insertText', …)`, falling back to a written `innerText` plus an `input` event
-only when the browser refuses. A `textarea` or `input` is set through its prototype's own value
-setter, so a framework tracking the value sees the change. An existing draft is replaced through the
-editor as well - select, `execCommand('delete')`, then insert - because overwriting the DOM under an
-editor that already holds a question leaves its model holding the old one.
-
-**The composer is read back before the send, and a mismatch sends nothing.** `PressSubmit` compares
-the composer's text with the question, normalised, and returns `mismatch` instead of clicking. An
-editor can report a successful insert while keeping the previous draft; sending that asks a question
-nobody wrote, and nothing in the result would say so. That is the one failure worse than sending
-nothing, so it is refused as `not-ready` with the cause in the detail.
-
-The CDP-native alternative is `Input.insertText` after focusing the editable host. It is the better
-primitive for an editor that resists `execCommand`, and it is the next step this substrate does not
-yet expose.
 
 ---
 
@@ -260,7 +340,7 @@ and what makes it compete with everything already there for the answer budget.
 
 | Claim                                            | Test                                                                                                                                                                                                              |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A question is answered and read back             | `agito chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                 |
+| A question is answered and read back             | `agito chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                   |
 | The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                                                                                         |
 | The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                                                                                  |
 | A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                                                                                             |
@@ -269,12 +349,18 @@ and what makes it compete with everything already there for the answer budget.
 | A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                                                                                     |
 | A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                                                                                   |
 | A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM                                                               |
-| A stale draft is replaced, not appended          | type question A, abandon it, then ask B: the answer is to B, and the composer never sends A                                                                                                                       |
-| A composer that kept the old draft is refused    | with a draft present, ask a different question: the call exits non-zero as `not-ready` naming `mismatch`, and no turn is added                                                                                    |
+| A stale draft is replaced, not appended          | type question A by hand, then ask B: the answer is to B, and the editor's length after the send is B's, not A's plus B's                                                                                          |
+| A composer that cannot be emptied is a blocker   | point `composer` at a selector matching nothing: `--clear` exits non-zero naming the selector, and no question is typed                                                                                           |
+| A truncated insert is refused                    | a composer that keeps only a prefix of the question exits `not-ready` with both lengths and the first differing offset, and no turn is added                                                                      |
+| A multi-paragraph question sends first time      | a question with blank lines between its paragraphs is sent on the first attempt against an editor that renders a break with no separator                                                                          |
+| The model is never a count                       | `--probe` on a row whose first popup is a drafts control reports that candidate as `count` and the model as `unknown`                                                                                             |
+| An unidentified model proceeds                   | `--model 'anything'` on a row with no identifiable model answers, and the result says `"model": "unknown"`                                                                                                        |
+| An identified model still gates                  | `--model 'not-the-page-label'` against a row that names its model exits `wrong-model` and sends nothing                                                                                                           |
+| A long question is refused by name               | a question above `MaxQuestion` exits `not-ready` naming its length and the limit, before anything is typed                                                                                                        |
 | A settled answer equals the page's               | with the default `--format text`, compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                                                   |
 | A Markdown capture keeps the answer's structure  | `--format markdown` on a page holding a table, a fence, a formula and a nested list returns a pipe table with one line per row, a fence carrying the code's language, and `$…$` equal to the formula's annotation |
 | A citation is not a link                         | a numeric citation anchor inside the answer comes back as the number the page showed, not as `[1](https://…)`                                                                                                     |
-| The note is a file a reader opens                | `agito chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                 |
+| The note is a file a reader opens                | `agito chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                   |
 | The note carries TeX where text carries glyphs   | on one settled answer, `--format note` transcribes `$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$` while the same element's `innerText` is one glyph per line                                                          |
 | A note with no thread is refused, not filed      | `--format note --url https://example.test/` exits non-zero naming `--thread`, and no question is typed                                                                                                            |
 | One read yields both renderings                  | `--format both` returns `text` and `markdown` from one call, and `--observe` prints the same reads - the same count and the same character counts - as `--format text` on the same page                           |

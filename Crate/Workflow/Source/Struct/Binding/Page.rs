@@ -21,8 +21,16 @@ use std::{
 	sync::{Arc, Mutex, MutexGuard},
 };
 
-use ::CDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions, Target as BrowserTarget};
-use ::Driver::{Failure, Page as ChatPage, Target};
+use ::CDP::{
+	Browse as BrowserBrowse,
+	Error as BrowserError,
+	Input as BrowserInput,
+	Modifiers as BrowserModifiers,
+	OpenOptions,
+	Press as BrowserPress,
+	Target as BrowserTarget,
+};
+use ::Driver::{Failure, Input as ChatInput, Page as ChatPage, Target};
 use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
@@ -70,6 +78,30 @@ fn Classify(Why:BrowserError) -> Failure {
 	}
 }
 
+/// The driver's input, said in the substrate's vocabulary.
+///
+/// A translation and not a cast: the two ports declare the same four modifiers
+/// and the same two kinds of input because they are describing the same thing,
+/// and each crate owning its own copy is what lets either one change without
+/// the other. The cost of that is this function.
+fn Translate(Input:&ChatInput) -> BrowserInput {
+	match Input {
+		ChatInput::Press(Chord) => {
+			BrowserInput::Press(BrowserPress {
+				Key:Chord.Key.clone(),
+				Modifiers:BrowserModifiers {
+					Alt:Chord.Modifiers.Alt,
+					Control:Chord.Modifiers.Control,
+					Meta:Chord.Modifiers.Meta,
+					Shift:Chord.Modifiers.Shift,
+				},
+				Command:Chord.Command.clone(),
+			})
+		},
+		ChatInput::Type(Text) => BrowserInput::Type(Text.clone()),
+	}
+}
+
 impl ChatPage for Page {
 	fn Open<'a>(&'a self, URL:&'a str, Call:Call) -> FutureBox<'a, Result<Target, Failure>> {
 		Box::pin(async move {
@@ -96,6 +128,17 @@ impl ChatPage for Page {
 				return Err(Failure::Of("this binding holds no browser target for the page"));
 			};
 			self.Browse.Evaluate(&Held, Expression, Call).await.map_err(Classify)
+		})
+	}
+
+	fn Input<'a>(&'a self, Target:&'a Target, Input:&'a ChatInput, Call:Call) -> FutureBox<'a, Result<(), Failure>> {
+		Box::pin(async move {
+			let Held = self.Lock().get(&Target.URL).cloned();
+			let Some(Held) = Held else {
+				return Err(Failure::Of("this binding holds no browser target for the page"));
+			};
+			let Translated = Translate(Input);
+			self.Browse.Input(&Held, &Translated, Call).await.map_err(Classify)
 		})
 	}
 

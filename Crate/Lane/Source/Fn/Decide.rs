@@ -62,7 +62,7 @@
 use ::RunTime::Call;
 
 use crate::{
-	Fn::{Ask::Ask, Compose::Compose, Resolve::Choose, Lane::Select::Select},
+	Fn::{Ask::Ask, Compose::Compose, Lane::Select::Select, Resolve::Choose},
 	Struct::{
 		Answer::Answer,
 		Context::Context,

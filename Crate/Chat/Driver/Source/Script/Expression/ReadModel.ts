@@ -58,4 +58,4 @@ declare const __PARAM_Model__: string;
 		model: Chosen === null ? null : Candidates[Chosen].label,
 		candidates: Candidates,
 	};
-})()
+})();

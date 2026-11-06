@@ -8,17 +8,17 @@ not a contract: re-probe before trusting any line below.
 
 ## The selectors the defaults use
 
-| Role     | Selector                                                                                                              | What it matched                                                         |
-| -------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| mode     | `[data-command-menu-control] button`                                                                                  | two buttons, `aria-label` `Search` / `Computer`, `aria-pressed` on each |
-| model    | `[class*='composer-row'] button[aria-haspopup='dialog'], [data-appearance='framed'] button[aria-haspopup='dialog']`   | one button whose `aria-label` is the model name                         |
-| composer | `textarea, [contenteditable='true']`                                                                                  | one `div[contenteditable=true]`                                         |
-| submit   | `[data-testid='submit-button'], button[aria-label='Submit']`                                                          | one button, `disabled` while the composer is empty                      |
-| answer   | `.prose[data-renderer='lm']`                                                                                          | the answer body, one per turn                                           |
-| busy     | `button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i]` | `Stop response (Esc)`, visible only while generating                    |
-| collapse | `button` (scoped inside the answer)                                                                                   | no control matched: nothing is clamped behind a "read more"             |
-| trace    | `[data-testid='trace-step'], [role='listitem']` (scoped inside the answer)                                            | nothing: the trace lives outside the answer body                        |
-| sources  | `a[href^='http']` (scoped inside the answer)                                                                          | nothing: citations are not anchors inside the body                      |
+| Role     | Selector                                                                                                              | What it matched                                                                    |
+| -------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| mode     | `[data-command-menu-control] button`                                                                                  | two buttons, `aria-label` `Search` / `Computer`, `aria-pressed` on each            |
+| model    | `[class*='composer-row'] button[aria-haspopup], [data-appearance='framed'] button[aria-haspopup]`                     | one or two buttons: a drafts count and the model's name, or the model's name alone |
+| composer | `textarea, [contenteditable='true']`                                                                                  | one `div[contenteditable=true]`                                                    |
+| submit   | `[data-testid='submit-button'], button[aria-label='Submit']`                                                          | one button, `disabled` while the composer is empty                                 |
+| answer   | `.prose[data-renderer='lm']`                                                                                          | the answer body, one per turn                                                      |
+| busy     | `button[data-testid='stop-generating-response-button'], button[aria-label*='Stop' i], button[aria-label*='Cancel' i]` | `Stop response (Esc)`, visible only while generating                               |
+| collapse | `button` (scoped inside the answer)                                                                                   | no control matched: nothing is clamped behind a "read more"                        |
+| trace    | `[data-testid='trace-step'], [role='listitem']` (scoped inside the answer)                                            | nothing: the trace lives outside the answer body                                   |
+| sources  | `a[href^='http']` (scoped inside the answer)                                                                          | nothing: citations are not anchors inside the body                                 |
 
 ---
 
@@ -88,16 +88,38 @@ as well, which survives the unmounting.
 
 ---
 
-## The model control's role attribute is not stable
+## The model control is not stable, and the row's first popup is not always it
 
-The model button has been observed with `aria-haspopup="dialog"` and, on a later build,
+The model button has been observed with `aria-haspopup="dialog"` and, on a later build, with
 `aria-haspopup="menu"`. A selector pinned to `dialog` reads `null` on the build that uses `menu`,
 and the driver then refuses the call as `wrong-model` with `the page reads nothing` - a correct
 refusal about a selector that aged out.
 
 Select on the attribute's presence, not its value, and scope it to the composer:
-`[class*='composer-row'] button[aria-haspopup]`. On the observed builds the only composer button
-carrying it is the model control.
+`[class*='composer-row'] button[aria-haspopup]`. But presence is not enough either, because the row
+renders more than one popup control and their order is state-dependent:
+
+| State                       | The row's popup controls, in document order |
+| --------------------------- | ------------------------------------------- |
+| a thread with a saved draft | `1 draft`, `Model`                          |
+| a page with no draft        | `GPT-6.1 Sol`                               |
+
+So on one build the first popup's label is a count and on another it is the model's own name. A
+driver that read the first match returned `1 draft` as the model, which no `--model` value could
+satisfy and which changed whenever the number of drafts changed.
+
+What the driver does now: it reads every match, classifies each label - a count is `count`, a word
+naming a control (`model`, `drafts`, `session`, `share`, …) is `names-a-control` - and takes the
+first one that is neither. A row with nothing left answers `unknown` and the call proceeds.
+`--probe` prints the whole inventory, which is what makes the next build's change diagnosable in one
+run.
+
+Two live examples, both from `agito chat --probe`:
+
+```json
+{"model": "GPT-6.1 Sol", "chosen": 0, "candidates": [{"label": "GPT-6.1 Sol", "reason": "model"}]}
+{"model": "unknown", "chosen": null, "candidates": [{"label": "1 draft", "reason": "count"}]}
+```
 
 ## The scroll control and the in-flight flag
 
@@ -123,15 +145,31 @@ Measured here: a question was typed over a 642-character leftover, the call repo
 the answer came back to the _leftover_ question - 7,133 characters of confident answer to something
 nobody asked.
 
-Two rules follow, and both are in the driver now:
+The same editor answers `execCommand('delete')` over a selected range with `true` and deletes
+nothing, so the obvious repair - select all, delete, insert - appends instead: a composer holding
+4,167 characters grew to 8,496 over two calls while every delete reported success, and every later
+call refused with `not-ready: the composer does not hold the question`. The tab was wedged; nothing
+in the tool could recover it.
 
-- replace an existing draft through the editor (`execCommand('delete')` after selecting), not by
-  writing the DOM under it;
-- read the composer back before clicking send, and refuse with `mismatch` rather than sending a
-  question that is not the one that was typed.
+Three rules follow, and all three are in the driver now:
 
-An empty composer is the easy case and it hides this: every early probe passed because the composer
-started empty. The failure only appears on the second consecutive call in the same tab.
+- empty the composer through the input domain - a select-all chord carrying the protocol's own
+  `selectAll` command, then a delete - and read the editor back; a composer that will not empty is a
+  named blocker before the insert;
+- read the composer back after typing and compare it to the question with whitespace removed, plus a
+  length range, because this editor renders a paragraph break with no separator at all;
+- retry a failed insert once through `Input.insertText`, which is what an editor that refuses an
+  editing command still obeys.
+
+An empty composer is the easy case and it hides all of this: every early probe passed because the
+composer started empty. The failure only appears on the second consecutive call in the same tab.
+
+Two further measurements from the same editor, both of which the crate's `MaxQuestion` records:
+
+- an insert sent before the editor has finished initialising reports success and holds nothing, at
+  any size - which is why a failed insert is retried rather than reported as a length problem;
+- 400,000 characters insert and read back; 800,000 report success and leave the previous content in
+  place. `getconf ARG_MAX` is 1,048,576, so a question larger than that never reaches `--question`.
 
 ## The cold-start race on a newly opened page
 

@@ -39,7 +39,7 @@ matches everything.
 | Key        | What it must find                                                                                  | What breaks without it                                                               |
 | ---------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `mode`     | the composer's mode toggles, each carrying its mode as a label and its selection as `aria-pressed` | the search-mode precondition cannot be read, and the call is refused as `wrong-mode` |
-| `model`    | the element naming the model the composer will send to                                             | the model precondition cannot be read, and the call is refused as `wrong-model`      |
+| `model`    | every popup control where the model is named, and nothing else                                     | the model cannot be identified, and the report says `unknown`                        |
 | `composer` | the editable that accepts text                                                                     | nothing can be typed                                                                 |
 | `submit`   | the control that sends                                                                             | nothing can be sent                                                                  |
 | `answer`   | every answer in the thread, in document order                                                      | the thread cannot be counted, so a new turn cannot be told from an old one           |
@@ -53,17 +53,26 @@ matches everything.
 
 ---
 
-## Three keys must never be inferred
+## Two keys must never be inferred, and one must not be trusted
 
-`model`, `busy` and `answer` are the three the driver refuses to guess at:
+`answer` and `busy` are the two the driver refuses to guess at:
 
-- **`model`** because a driver that cannot say which model answered cannot defend its output;
 - **`busy`** because without it completion is a guess about silence;
 - **`answer`** because without a turn boundary a driver returns an old answer and calls it new.
+
+`model` is the opposite case and the more dangerous one: a selector that matches too much is worse
+than one that matches nothing. The composer row of a real product renders several `aria-haspopup`
+controls and their order is state-dependent, so a selector that matches the row's popups can read a
+drafts count as the model's name. The driver classifies every match - a count is `count`, a word
+naming a control is `names-a-control` - and answers `unknown` when nothing is left. `unknown` is a
+report field, not a failure: the call proceeds and the result says so.
 
 A missing `busy` is not fatal the way a missing `answer` is: the driver reads "nothing says it is
 still working" and leaves the text rule in charge. That is a degraded mode, not a correct one, and
 the report should say so.
+
+`agito chat --probe` is the check: it prints every control the `model` selector matched, what each
+one says, and which one was chosen.
 
 ---
 

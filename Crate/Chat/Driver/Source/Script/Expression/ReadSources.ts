@@ -9,4 +9,4 @@ declare const __PARAM_Sources__: string;
 		url: Source.getAttribute("href") || "",
 		label: (Source.innerText || "").trim(),
 	}));
-})()
+})();

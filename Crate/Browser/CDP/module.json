@@ -4,11 +4,7 @@
 	"Version": "0.1.3",
 	"Provide": {
 		"Port": "agito.browse",
-		"Error": [
-			"browser-unavailable",
-			"navigation-failed",
-			"timeout"
-		]
+		"Error": ["browser-unavailable", "navigation-failed", "timeout"]
 	},
 	"Require": {
 		"Endpoint": "env:CDP_URL"
@@ -23,9 +19,7 @@
 		"ColdMs": 900,
 		"WarmMs": 5,
 		"Network": true,
-		"Process": [
-			"chromium"
-		]
+		"Process": ["chromium"]
 	},
 	"Verify": "agito verify --module @agito/browser-cdp"
 }

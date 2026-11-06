@@ -10,4 +10,4 @@ declare const __PARAM_Collapse__: string;
 		if (/^read more$/i.test(Label)) return Label;
 	}
 	return null;
-})()
+})();

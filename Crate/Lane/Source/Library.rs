@@ -107,11 +107,11 @@ pub use crate::{
 		Compose::Compose,
 		Decide::{Decide, DecideOn},
 		Decode::{Decode, DecodeBytes, DecodeWithin},
+		Lane::Select::Select,
 		Load::{Load, Read},
 		Model::{Bare, Models, Price, Route},
 		Parse::Parse,
 		Resolve::{Choose, Resolve},
-		Lane::Select::Select,
 	},
 	Struct::{
 		Answer::{Answer, Answered, Usage},

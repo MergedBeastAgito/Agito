@@ -18,8 +18,8 @@ use crate::{
 	Fn::{
 		Composition::{Browser, Chat as ChatOver, ChatSpec, Design, Headless},
 		Discover,
-		Resolve,
 		Module::Verify::{ReadinessJSON, VerbOf},
+		Resolve,
 	},
 	Struct::{
 		Binary::{Command::Verb, Shape::Shape},
@@ -159,6 +159,8 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			Captured,
 			Observe,
 			Timeout,
+			Clear,
+			Probe,
 		} => {
 			let mut Selectors = match &Overrides {
 				Some(Named) => {
@@ -197,6 +199,61 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			Selectors.Format = Shape.Reading();
 			let Reading = Selectors.Format.Name();
 			let Given = Given { Thread, Title, Project, Account, Captured };
+			let Driver = ChatOver(
+				Browser(Headless()),
+				ChatSpec { URL:URL.clone(), Attach, Bind:Bind.clone(), Selectors },
+			);
+			let Call = Budget(Timeout);
+			// Two calls that act on the composer and ask nothing. Both run
+			// before the note check because neither produces a note, and both
+			// return before a question is required.
+			if Probe {
+				let Seen = Driver
+					.Inspect(Call)
+					.await
+					.map_err(|Why| Refused(Why.Code().Name(), Why.Message(), Why.Detail()))?;
+				return Ok(serde_json::to_string_pretty(&json!({
+					"url": Seen.URL,
+					"model": Seen.Named(),
+					"chosen": Seen.Chosen,
+					"candidates": Seen.Candidates.iter().map(|One| json!({
+						"index": One.Index,
+						"label": One.Label,
+						"text": One.Text,
+						"haspopup": One.Popup,
+						"reason": One.Reason,
+					})).collect::<Vec<_>>(),
+					"composer": json!({
+						"kind": Seen.Composer.Kind,
+						"source": Seen.Composer.Source,
+						"model": Seen.Composer.Model,
+						"dom": Seen.Composer.DOM,
+						"empty": Seen.Composer.Empty(),
+						"diverged": Seen.Composer.Diverged(),
+					}),
+				}))
+				.unwrap_or_else(|_| "{}".to_string()));
+			}
+			if Clear {
+				let Done = Driver
+					.Clear(Call)
+					.await
+					.map_err(|Why| Refused(Why.Code().Name(), Why.Message(), Why.Detail()))?;
+				return Ok(serde_json::to_string_pretty(&json!({
+					"url": Done.URL,
+					"cleared": Done.Empty(),
+					"before": Done.Before.chars().count(),
+					"after": Done.After.chars().count(),
+					"pressed": Done.Pressed,
+				}))
+				.unwrap_or_else(|_| "{}".to_string()));
+			}
+			let Some(Text) = Text else {
+				return Err(
+					"--question is required unless --clear or --probe is given: neither of those asks anything"
+						.to_string(),
+				);
+			};
 			// A note is filed under the thread it came from, and the page's
 			// own URL is the only thing that says which one that was. With a
 			// bind that URL is not known until the page opens, so this check
@@ -214,8 +271,6 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			{
 				return Err(crate::Fn::Note::Unfiled(&URL));
 			}
-			let Driver = ChatOver(Browser(Headless()), ChatSpec { URL:URL.clone(), Attach, Bind, Selectors });
-			let Call = Budget(Timeout);
 			// An observer is a sink and a stop, the way a mutation observer is
 			// a callback and a disconnect: the driver pushes every
 			// read here and this decides when it has seen enough.
@@ -238,9 +293,13 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 				Driver::Control::Continue
 			};
 			let Answer = Driver
-				.Observe(Question { Text, Mode:Mode::Search, Model }, Call, &mut Seen)
+				.Observe(
+					Question { Text, Mode:Mode::Search, Model:Model.unwrap_or_default() },
+					Call,
+					&mut Seen,
+				)
 				.await
-				.map_err(|Why| format!("{}: {}\n{}", Why.Code().Name(), Why.Message(), Why.Detail()))?;
+				.map_err(|Why| Refused(Why.Code().Name(), Why.Message(), Why.Detail()))?;
 			// A note is the whole of stdout: a caller redirecting the call
 			// gets a file a reader opens, not a document inside a JSON string.
 			if Shape == Shape::Note {
@@ -280,6 +339,13 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 		},
 	}
 }
+
+/// The line a failed capability prints: its code, its sentence, what it saw.
+///
+/// One function rather than a closure per call site, because the three parts
+/// are always printed in this order and a call site that forgot the detail
+/// would print a failure nobody can act on.
+fn Refused(Code:&str, Message:&str, Detail:&str) -> String { format!("{Code}: {Message}\n{Detail}") }
 
 /// One row of the manifest listing: name, kind, port, verbs, state and where
 /// it came from.
@@ -348,9 +414,7 @@ fn Envelope(Answer:&Driver::Answer, Reading:&str) -> serde_json::Value {
 ///
 /// The composition root is the one place a wall clock is read: a capability is
 /// handed a deadline, never a clock of its own.
-fn Budget(Milliseconds:u64) -> Call {
-	Call::Within(Duration::from_millis(Milliseconds), &CDP::Tokio, Arc::new(Never))
-}
+fn Budget(Milliseconds:u64) -> Call { Call::Within(Duration::from_millis(Milliseconds), &CDP::Tokio, Arc::new(Never)) }
 
 /// Drive a future to completion, for the two verbs that are pure.
 ///

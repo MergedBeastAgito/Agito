@@ -4,11 +4,7 @@
 	"Version": "0.1.3",
 	"Provide": {
 		"Port": "agito.skill.validate",
-		"Error": [
-			"unparsable",
-			"unlisted-reference",
-			"uncited"
-		]
+		"Error": ["unparsable", "unlisted-reference", "uncited"]
 	},
 	"Require": {},
 	"Artefact": {

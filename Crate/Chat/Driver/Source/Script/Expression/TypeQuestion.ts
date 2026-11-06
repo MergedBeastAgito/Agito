@@ -7,7 +7,10 @@ declare const __PARAM_Text__: string;
 	const Text = __PARAM_Text__;
 	Composer.focus();
 	if (Composer.tagName === "TEXTAREA" || Composer.tagName === "INPUT") {
-		const Proto = Composer.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+		const Proto =
+			Composer.tagName === "TEXTAREA"
+				? HTMLTextAreaElement.prototype
+				: HTMLInputElement.prototype;
 		const Set = Object.getOwnPropertyDescriptor(Proto, "value").set;
 		Set.call(Composer, Text);
 		Composer.dispatchEvent(new Event("input", { bubbles: true }));
@@ -34,4 +37,4 @@ declare const __PARAM_Text__: string;
 	Selection.addRange(Range);
 	if (!document.execCommand("insertText", false, Text)) return "refused";
 	return "typed";
-})()
+})();

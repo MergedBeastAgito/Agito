@@ -20,10 +20,7 @@ use std::sync::Arc;
 use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
-use crate::Struct::{
-	Error::Error,
-	Port::Input,
-};
+use crate::Struct::{Error::Error, Port::Input};
 
 /// One live page connection.
 pub trait Transport: Send + Sync {

@@ -175,9 +175,7 @@ impl Modifiers {
 	/// The platform is the page's own statement, read from `navigator`, rather
 	/// than this process's: a driver attached to somebody else's browser is
 	/// typing into the machine that browser runs on.
-	pub const fn SelectAll(Mac:bool) -> Self {
-		Self { Alt:false, Control:!Mac, Meta:Mac, Shift:false }
-	}
+	pub const fn SelectAll(Mac:bool) -> Self { Self { Alt:false, Control:!Mac, Meta:Mac, Shift:false } }
 }
 
 /// One key press.
@@ -187,11 +185,25 @@ pub struct Press {
 	pub Key:String,
 	/// The modifiers held while it is pressed.
 	pub Modifiers:Modifiers,
+	/// The editing command the press means, when it means one.
+	///
+	/// A chord is something the page has to interpret, and a plain
+	/// contenteditable or a `textarea` does not interpret it: measured on a
+	/// plain contenteditable, `Meta+a` left the selection empty while the same
+	/// press carrying `selectAll` selected the whole editor. The command is
+	/// what makes the clear work on an editor with no keymap of its own.
+	pub Command:Option<String>,
 }
 
 impl Press {
-	/// A press of `Key` with `Modifiers` held.
-	pub fn New(Key:impl Into<String>, Modifiers:Modifiers) -> Self { Self { Key:Key.into(), Modifiers } }
+	/// A press of `Key` with `Modifiers` held, and no editing command.
+	pub fn New(Key:impl Into<String>, Modifiers:Modifiers) -> Self { Self { Key:Key.into(), Modifiers, Command:None } }
+
+	/// The same press, also carrying the editing command it means.
+	pub fn Meaning(mut self, Command:impl Into<String>) -> Self {
+		self.Command = Some(Command.into());
+		self
+	}
 }
 
 /// One thing the page's input domain can do to whatever has focus.
@@ -281,6 +293,8 @@ pub struct Candidate {
 /// that says what the row looks like now.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Inspection {
+	/// The page the row was read from.
+	pub URL:String,
 	/// Every popup control in the composer row, in document order.
 	pub Candidates:Vec<Candidate>,
 	/// Which candidate was taken as the model, by index.
@@ -299,6 +313,8 @@ impl Inspection {
 /// What clearing a composer did.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Cleared {
+	/// The page the composer was cleared on.
+	pub URL:String,
 	/// What the composer held before it was cleared.
 	pub Before:String,
 	/// What it holds afterwards.

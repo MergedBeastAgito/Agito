@@ -78,11 +78,27 @@ pub struct Press {
 	pub Key:String,
 	/// The modifiers held while it is pressed.
 	pub Modifiers:Modifiers,
+	/// The editing command the press means, when it means one.
+	///
+	/// A chord is a statement the *page* has to interpret: an editor with its
+	/// own keymap turns `Meta+a` into "select all", and a plain contenteditable
+	/// or a `textarea` does not - the chord reaches the page and nothing
+	/// selects. The protocol carries the command as well, so the browser's own
+	/// editing engine applies it whatever the page does with the keys. Measured
+	/// on a plain contenteditable: the chord alone left the selection empty,
+	/// and the same press carrying `selectAll` selected the whole editor.
+	pub Command:Option<String>,
 }
 
 impl Press {
-	/// A press of `Key` with `Modifiers` held.
-	pub fn New(Key:impl Into<String>, Modifiers:Modifiers) -> Self { Self { Key:Key.into(), Modifiers } }
+	/// A press of `Key` with `Modifiers` held, and no editing command.
+	pub fn New(Key:impl Into<String>, Modifiers:Modifiers) -> Self { Self { Key:Key.into(), Modifiers, Command:None } }
+
+	/// The same press, also carrying the editing command it means.
+	pub fn Meaning(mut self, Command:impl Into<String>) -> Self {
+		self.Command = Some(Command.into());
+		self
+	}
 }
 
 /// One thing the input domain can do to whatever has focus.
@@ -168,12 +184,7 @@ pub trait Browse: Send + Sync {
 		Options:OpenOptions,
 	) -> FutureBox<'a, Result<Target, crate::Struct::Error::Error>>;
 	/// Evaluate an expression in the page and return its value.
-	fn Evaluate<'a>(
-		&'a self,
-		Target:&'a Target,
-		Expression:&'a str,
-		Call:Call,
-	) -> FutureBox<'a, Result<Value, Error>>;
+	fn Evaluate<'a>(&'a self, Target:&'a Target, Expression:&'a str, Call:Call) -> FutureBox<'a, Result<Value, Error>>;
 	/// Put one thing into the page's input domain, at whatever has focus.
 	///
 	/// Separate from [`Browse::Evaluate`] because it is a different claim about

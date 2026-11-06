@@ -63,9 +63,10 @@ pub fn TextOf(Value:Option<&Value>) -> String {
 /// A label as it is compared: case and runs of whitespace are not part of a
 /// model's name, so both sides are folded. Nothing else is folded: a different
 /// model is a different model.
-pub fn Normalise(Value:Option<&Value>) -> String {
-	TextOf(Value).split_whitespace().collect::<Vec<&str>>().join(" ").to_lowercase()
-}
+pub fn Normalise(Value:Option<&Value>) -> String { Fold(&TextOf(Value)) }
+
+/// The same folding, over a string rather than a page's value.
+pub fn Fold(Text:&str) -> String { Text.split_whitespace().collect::<Vec<&str>>().join(" ").to_lowercase() }
 
 /// What was read, for a failure's detail, without pretending `null` is a value.
 pub fn Describe(Value:Option<&Value>) -> String {
@@ -197,6 +198,7 @@ pub fn AsInspection(Value:&Value) -> Option<Inspection> {
 		})
 		.unwrap_or_default();
 	Some(Inspection {
+		URL:String::new(),
 		Chosen:Object.get("chosen").and_then(Value::as_f64).map(|At| At as usize),
 		Model:Object.get("model").and_then(Value::as_str).map(|Text| Text.to_string()),
 		Candidates,
@@ -272,7 +274,12 @@ pub fn Compare(Held:&str, Expected:&str) -> Comparison {
 	let Want = Expected.chars().count();
 	let Matched = Actual == Wanted && Held >= Floor && Held <= Ceiling;
 	let Limit = Actual.chars().count().min(Wanted.chars().count());
-	let Offset = Actual.chars().zip(Wanted.chars()).take_while(|(Left, Right)| Left == Right).count().min(Limit);
+	let Offset = Actual
+		.chars()
+		.zip(Wanted.chars())
+		.take_while(|(Left, Right)| Left == Right)
+		.count()
+		.min(Limit);
 	Comparison {
 		Matched,
 		Held,

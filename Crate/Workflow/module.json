@@ -7,12 +7,7 @@
 		"Error": []
 	},
 	"Require": {
-		"Port": [
-			"agito.browse",
-			"agito.chat.ask",
-			"agito.verify.design",
-			"agito.skill.validate"
-		]
+		"Port": ["agito.browse", "agito.chat.ask", "agito.verify.design", "agito.skill.validate"]
 	},
 	"Artefact": {
 		"Entry": "Target/debug/libWorkflow.rlib",

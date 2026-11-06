@@ -237,7 +237,9 @@ const Serialise = (Root: Element | null): string => {
 		// Rows of *this* table. A nested table's rows belong to the cell that
 		// holds them, and lifting them into the outer table would invent columns
 		// the outer table does not have.
-		const Rows = [...Table.querySelectorAll("tr")].filter((Row) => Row.closest("table") === Table);
+		const Rows = [...Table.querySelectorAll("tr")].filter(
+			(Row) => Row.closest("table") === Table,
+		);
 		if (Rows.length === 0) return "";
 		const Head = Table.querySelector("thead");
 		const Named =

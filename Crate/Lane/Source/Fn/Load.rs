@@ -78,8 +78,7 @@ use std::{
 use serde_json::{Map, Value};
 
 use crate::Struct::{
-	Corpus::Corpus,
-	Corpus::Error::CorpusError,
+	Corpus::{Corpus, Error::CorpusError},
 	Lane::Lane,
 	Predicate::Predicate,
 	Question::Question,

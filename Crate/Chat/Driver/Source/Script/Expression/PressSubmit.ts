@@ -17,4 +17,4 @@ declare const __PARAM_Submit__: string;
 	if (Submit.disabled === true) return "disabled";
 	Submit.click();
 	return "sent";
-})()
+})();

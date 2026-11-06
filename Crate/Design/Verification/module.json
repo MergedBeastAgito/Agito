@@ -4,16 +4,10 @@
 	"Version": "0.1.3",
 	"Provide": {
 		"Port": "agito.verify.design",
-		"Error": [
-			"absent-element",
-			"invariant-broke",
-			"not-ready"
-		]
+		"Error": ["absent-element", "invariant-broke", "not-ready"]
 	},
 	"Require": {
-		"Port": [
-			"agito.browse"
-		]
+		"Port": ["agito.browse"]
 	},
 	"Artefact": {
 		"Entry": "Target/debug/libVerification.rlib",

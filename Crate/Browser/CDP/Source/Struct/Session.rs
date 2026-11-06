@@ -124,10 +124,12 @@ impl Session {
 			Ok(Ok(())) => Ok(()),
 			Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
 			Err(Expired::Timeout) => Err(Error::Timeout("input exceeded its deadline", "the page never answered")),
-			Err(Expired::Cancelled) => Err(Error::Timeout(
-				"input was cancelled by the caller",
-				"the signal fired while the page was being typed into",
-			)),
+			Err(Expired::Cancelled) => {
+				Err(Error::Timeout(
+					"input was cancelled by the caller",
+					"the signal fired while the page was being typed into",
+				))
+			},
 		}
 	}
 }
@@ -248,7 +250,10 @@ impl Browse for Session {
 				));
 			}
 			if Call.Cancelled() {
-				return Err(Error::Timeout("input was cancelled before it started", "the signal was already fired"));
+				return Err(Error::Timeout(
+					"input was cancelled before it started",
+					"the signal was already fired",
+				));
 			}
 			self.Deliver(&Transport, Input, &Call).await
 		})

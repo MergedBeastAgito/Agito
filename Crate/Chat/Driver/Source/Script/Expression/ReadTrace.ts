@@ -10,4 +10,4 @@ declare const __PARAM_Trace__: string;
 		label: (Step.innerText || "").trim(),
 		detail: (Step.getAttribute("data-detail") || Step.getAttribute("aria-label") || "").trim(),
 	}));
-})()
+})();

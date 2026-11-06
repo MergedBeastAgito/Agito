@@ -70,7 +70,7 @@ pub fn PressMode(Selectors:&Selectors) -> String { script!("Expression/PressMode
 pub fn ReadModel(Selectors:&Selectors) -> String { script!("Expression/ReadModel"; Model = &Selectors.Model) }
 
 /// Which chord this page's platform selects everything with.
-pub fn ReadPlatform() -> String { script!("Expression/ReadPlatform") }
+pub fn ReadPlatform() -> String { script!("Expression/ReadPlatform").to_string() }
 
 /// What the composer holds, as the editor says it holds it.
 ///
@@ -81,7 +81,9 @@ pub fn ReadPlatform() -> String { script!("Expression/ReadPlatform") }
 ///
 /// `null` when the selector matches nothing, which is a different fact from a
 /// composer that is empty.
-pub fn ReadComposer(Selectors:&Selectors) -> String { script!("Expression/ReadComposer"; Composer = &Selectors.Composer) }
+pub fn ReadComposer(Selectors:&Selectors) -> String {
+	script!("Expression/ReadComposer"; Composer = &Selectors.Composer)
+}
 
 /// Put the question in the composer.
 ///

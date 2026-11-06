@@ -6,4 +6,4 @@
 	const Data = navigator.userAgentData;
 	const Name = (Data && Data.platform) || navigator.platform || "";
 	return { mac: /mac|iphone|ipad|ipod/i.test(Name) };
-})()
+})();

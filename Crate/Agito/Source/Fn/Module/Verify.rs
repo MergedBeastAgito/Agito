@@ -105,12 +105,7 @@ pub fn Declared(Name:&str) -> Option<Vec<&'static str>> {
 }
 
 /// The states the manifest may name.
-fn States() -> Vec<&'static str> {
-	RunTime::States
-		.into_iter()
-		.map(RunTime::StateClass::Name)
-		.collect()
-}
+fn States() -> Vec<&'static str> { RunTime::States.into_iter().map(RunTime::StateClass::Name).collect() }
 
 /// A string field of a parsed manifest, or the empty string.
 fn Text(Parsed:&Value, Key:&str) -> String { Parsed.get(Key).and_then(Value::as_str).unwrap_or_default().to_string() }
