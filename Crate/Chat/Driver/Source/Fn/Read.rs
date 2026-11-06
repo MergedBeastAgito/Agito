@@ -68,6 +68,10 @@ pub fn Normalise(Value:Option<&Value>) -> String { Fold(&TextOf(Value)) }
 /// The same folding, over a string rather than a page's value.
 pub fn Fold(Text:&str) -> String { Text.split_whitespace().collect::<Vec<&str>>().join(" ").to_lowercase() }
 
+/// The opening of a text, for a failure's detail: enough to tell one draft from
+/// another without quoting a whole prompt into a log.
+pub fn Opening(Text:&str) -> String { Text.chars().take(60).collect() }
+
 /// What was read, for a failure's detail, without pretending `null` is a value.
 pub fn Describe(Value:Option<&Value>) -> String {
 	match Value {

@@ -7,8 +7,8 @@ The formal apparatus is worth using only up to a point; this note says where tha
 
 **Decision: this repository** - the term, the definition and the three things a safety claim may
 name. No capture uses "manifest-enforcement coherence". The observation-boundary half of the third
-item is the subject of capture `575cb198`, which argues what an observation must name
-and record; no section here draws on it yet.
+item is the subject of capture `575cb198`, which argues what an observation must name and record; no
+section here draws on it yet.
 
 **Manifest-enforcement coherence:** the capability manifest a runtime reports is the manifest it
 actually enforces.
@@ -22,9 +22,9 @@ equivalence theorem. A claim that names none of them is prose.
 
 **Decision: this repository** - the argument that a self-check has no independent basis, and the
 choice of the composition root plus the process that launches it as the party outside the mutation
-authority. **Source:** capture `4ffde6d5` §3 for the mechanism the section relies on: a
-source descriptor embedded in the crate and an external release descriptor binding it to the
-delivered bytes, so a manifest read from the mutable store is not the only copy that exists.
+authority. **Source:** capture `4ffde6d5` §3 for the mechanism the section relies on: a source
+descriptor embedded in the crate and an external release descriptor binding it to the delivered
+bytes, so a manifest read from the mutable store is not the only copy that exists.
 
 If the mutation path can rewrite the reporter, the enforcer and the verifier, an internal self-check
 has no independent basis for detecting coordinated deception - it is checking the story against
@@ -108,8 +108,8 @@ port, or across two interpreter versions. Congruence is the obligation when clai
 comparisons survive inspection and mutation contexts. Neither is needed to say "this generation
 enforces what it reports".
 
-**Source:** capture `4ffde6d5` §2 - the acceptance suite the capture requires before the
-TypeScript sidecar is removed (attach/launch, navigation races, evaluation timeout, disconnect,
-disposal, shared-browser ownership) is one such comparison, named concretely rather than gestured
-at. **Decision: this repository** - the bisimulation and congruence framing, and the claim that
-neither is needed for enforcement coherence.
+**Source:** capture `4ffde6d5` §2 - the acceptance suite the capture requires before the TypeScript
+sidecar is removed (attach/launch, navigation races, evaluation timeout, disconnect, disposal,
+shared-browser ownership) is one such comparison, named concretely rather than gestured at.
+**Decision: this repository** - the bisimulation and congruence framing, and the claim that neither
+is needed for enforcement coherence.

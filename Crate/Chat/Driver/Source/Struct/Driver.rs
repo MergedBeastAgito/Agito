@@ -77,6 +77,7 @@ use crate::{
 			Fold,
 			Mark,
 			Normalise,
+			Opening,
 			TextOf,
 		},
 	},
@@ -588,11 +589,11 @@ impl Driver {
 			return Err(Error::NotReady(
 				"the composer's editor and its rendering disagree",
 				format!(
-					"the editor holds {} characters through {} and the DOM reads {}; typing into it would append to a \
-					 draft that was never read",
-					Held.Text().chars().count(),
+					"the editor holds {:?} through {} and the DOM reads {:?}; typing into it would append to a draft \
+					 that was never read",
+					Opening(Held.Text()),
 					if Held.Source.is_empty() { "no readable model" } else { Held.Source.as_str() },
-					Held.DOM.chars().count()
+					Opening(&Held.DOM)
 				),
 			));
 		}

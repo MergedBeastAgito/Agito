@@ -22,8 +22,8 @@ believed. What it established is recorded in `Documentation/Parity.md`.
 
 The verification layer went the same way: the per-crate test suites, the parity corpus, the
 out-of-workspace fixture crate and the path audit are gone, and `Documentation/Parity.md` records
-what they held. What remains is what ships - the crates, their manifests, the `agito` binary and
-the corpus under `Documentation/Skill` that `agito skills` validates.
+what they held. What remains is what ships - the crates, their manifests, the `agito` binary and the
+corpus under `Documentation/Skill` that `agito skills` validates.
 
 The one TypeScript that remains is under `Crate/*/Source/Script/`: the expressions a driver sends to
 a page, compiled by that crate's `build.rs` into the JavaScript the page receives. That is not a
@@ -69,10 +69,10 @@ the TypeScript compiled into the JavaScript sent to a page, PascalCase module na
 - **`agito-adapter`** - the port shape a substrate this workspace did not write implements: the
   `Adapter` trait, the claim check its manifest needs, and a scripted stand-in. No behaviour, and no
   substrate of its own.
-- **`agito-lane`** - `agito.lane.decide`: a template corpus as data, selected by predicate,
-  composed into a decision-model request and read back as typed answers under a metered budget. The
-  round trip leaves through a `Poster` the crate declares and never implements, so the suite answers
-  from a fixture and the crate opens no socket.
+- **`agito-lane`** - `agito.lane.decide`: a template corpus as data, selected by predicate, composed
+  into a decision-model request and read back as typed answers under a metered budget. The round
+  trip leaves through a `Poster` the crate declares and never implements, so the suite answers from
+  a fixture and the crate opens no socket.
 - **`agito-spacetime-catalog`** - the database model as data: six tables, seven rules, and no
   dependency at all, not even the server SDK. No dependencies.
 - **`agito-skill-contract`** - corpus discovery, validation and a stable digest.
@@ -131,8 +131,8 @@ workflow step asserts anything the build did not produce.
 
 The corpus under `Scenario/` stated 82 cases across the browser, the chat driver and the skill
 contract, and three parity suites answered them through scripted fakes. `Fixture/SDK/` was a crate
-outside the workspace that depended on `agito-sdk` alone, and it existed to prove the facade from
-a consumer's side. `Script/AuditPaths.sh` refused an absolute machine path in a tracked file. All
+outside the workspace that depended on `agito-sdk` alone, and it existed to prove the facade from a
+consumer's side. `Script/AuditPaths.sh` refused an absolute machine path in a tracked file. All
 three are deleted; `Documentation/Parity.md` records what they held and what the deletion took.
 
 ---

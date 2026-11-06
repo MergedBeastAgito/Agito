@@ -122,8 +122,8 @@ assertions ran, not that they bite. The harness was a Node script and went with 
 suites it ran are gone too, so this list is history rather than a procedure anyone can follow in
 this tree today.
 
-| Mutation                   | What it breaks                                          | File                                           | The test that had to fail                                                  |
-| -------------------------- | ------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------- |
+| Mutation                   | What it breaks                                          | File                                            | The test that had to fail                                                  |
+| -------------------------- | ------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
 | `attached-page-closed`     | dispose closes an attached page instead of detaching it | `Crate/Browser/CDP/Source/Struct/Session.rs`    | `detaches_an_attached_target_without_closing_it`                           |
 | `model-after-send`         | the model check moves after the send                    | `Crate/Chat/Driver/Source/Struct/Driver.rs`     | `refuses_with_wrong_model_and_sends_nothing`                               |
 | `partial-text-on-deadline` | a partial answer is returned when the budget expires    | `Crate/Chat/Driver/Source/Struct/Driver.rs`     | `refuses_with_not_ready_when_the_answer_never_stops_changing`              |

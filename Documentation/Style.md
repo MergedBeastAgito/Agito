@@ -49,17 +49,17 @@ listed rather than discovered:
   it, and `-p agito-chat-driver` is the spelling a caller types. The directory and the library carry
   the PascalCase form; the package id does not.
 - **A Rust crate root cannot be nested** - the leaf is the library, the group folder is the path.
-- **A dependency's API keeps its spelling** - the Chrome DevTools Protocol domain `Runtime.evaluate`,
-  `chromiumoxide`'s types, `oxc`'s AST nodes, `serde`'s attributes. Renaming one would break a call,
-  not a convention.
-- **Dotted port ids and scoped package ids stay lowercase** - `agito.chat.ask`, `@agito/chat-driver`.
-  They are wire identifiers a manifest carries, not names a reader scans.
+- **A dependency's API keeps its spelling** - the Chrome DevTools Protocol domain
+  `Runtime.evaluate`, `chromiumoxide`'s types, `oxc`'s AST nodes, `serde`'s attributes. Renaming one
+  would break a call, not a convention.
+- **Dotted port ids and scoped package ids stay lowercase** - `agito.chat.ask`,
+  `@agito/chat-driver`. They are wire identifiers a manifest carries, not names a reader scans.
 - **Database table and column names stay lowercase** - `Crate/Spacetime/Catalog` states a schema a
   SpacetimeDB module publishes; a column renamed for style is a migration.
-- **The template corpus keys stay lowercase** - `version`, `fields`, `lanes`, `templates`, `order` in
-  `Templates/Observation.json` and `Questions.json`. That file is data an ingestion writes.
-- **The skill corpus keeps `<Root>/<Name>/SKILL.md`** with frontmatter `name` and `description`. That
-  layout is the format the validator implements, not a choice this tree makes.
+- **The template corpus keys stay lowercase** - `version`, `fields`, `lanes`, `templates`, `order`
+  in `Templates/Observation.json` and `Questions.json`. That file is data an ingestion writes.
+- **The skill corpus keeps `<Root>/<Name>/SKILL.md`** with frontmatter `name` and `description`.
+  That layout is the format the validator implements, not a choice this tree makes.
 - **The ecosystem's root files keep their names** - `Cargo.toml`, `module.json`, `LICENSE`,
   `.editorconfig`, `SKILL.md`.
 
@@ -82,12 +82,12 @@ listed rather than discovered:
 
 ## Claim to test
 
-| Claim                                        | Probe                                                              | Pass condition                                       |
-| -------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------- |
-| No old vocabulary survives                   | `grep -rIn 'Agentic\|TimeLine-DELO\|ChatDriver\|BlockOn'`           | no hits outside this file                            |
-| No lowercase role folder remains             | `find Crate Documentation -type d`                                  | every name PascalCase except the listed boundaries   |
-| Every crate builds under its new name        | `cargo build --release -p agito`                                     | `Finished`                                           |
-| The manifest schema is the one the reader expects | `./Target/release/agito manifests` and `agito verify --module …` | ten rows, `Ready: true`, PascalCase keys             |
-| The skill corpus still validates             | `./Target/release/agito skills Documentation/Skill`                 | `0 finding(s)`                                       |
-| A consumer still builds against the facade   | `cargo build --release` in `Use/NFSU2/App/driver`                    | `Finished`                                           |
-| The tree carries no machine path             | `git ls-files -z \| xargs -0 grep -In '/Volumes/\|/Users/'`         | no hits                                              |
+| Claim                                             | Probe                                                            | Pass condition                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| No old vocabulary survives                        | `grep -rIn 'Agentic\|TimeLine-DELO\|ChatDriver\|BlockOn'`        | no hits outside this file                          |
+| No lowercase role folder remains                  | `find Crate Documentation -type d`                               | every name PascalCase except the listed boundaries |
+| Every crate builds under its new name             | `cargo build --release -p agito`                                 | `Finished`                                         |
+| The manifest schema is the one the reader expects | `./Target/release/agito manifests` and `agito verify --module …` | ten rows, `Ready: true`, PascalCase keys           |
+| The skill corpus still validates                  | `./Target/release/agito skills Documentation/Skill`              | `0 finding(s)`                                     |
+| A consumer still builds against the facade        | `cargo build --release` in `Use/NFSU2/App/driver`                | `Finished`                                         |
+| The tree carries no machine path                  | `git ls-files -z \| xargs -0 grep -In '/Volumes/\|/Users/'`      | no hits                                            |

@@ -123,11 +123,11 @@ a correctness rule, not a courtesy.
 
 ## Claim → test
 
-| Claim                                       | Test                                                                                                                             |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Claim                                       | Test                                                                                                                           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | A bind drives the page that is already open | `agito browse --attach <ws> --bind <id> --expression 'location.href'` returns that tab's URL, and `/json/list` gains no target |
-| An attach without a bind opens a page       | the same command without `--bind` makes `/json/list` show one more `page` target                                                 |
+| An attach without a bind opens a page       | the same command without `--bind` makes `/json/list` show one more `page` target                                               |
 | A bind without an attach is refused         | `agito browse --bind <id>` exits non-zero naming `--attach`                                                                    |
-| A wrong target id is reported, not guessed  | `--bind deadbeef` exits non-zero and lists the pages the browser holds                                                           |
-| Ownership is honoured on release            | after a bind, the bound tab is still in `/json/list`; after a launch, the browser is gone                                        |
-| The browser-level endpoint is the one used  | attaching with a per-tab `/json/list` websocket fails as `browser-unavailable`                                                   |
+| A wrong target id is reported, not guessed  | `--bind deadbeef` exits non-zero and lists the pages the browser holds                                                         |
+| Ownership is honoured on release            | after a bind, the bound tab is still in `/json/list`; after a launch, the browser is gone                                      |
+| The browser-level endpoint is the one used  | attaching with a per-tab `/json/list` websocket fails as `browser-unavailable`                                                 |

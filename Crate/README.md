@@ -58,9 +58,9 @@ digest. Dependencies: `agito-runtime`, `serde`, `serde_json`, `sha2`.
 Dependencies: `agito-runtime`, `serde_json`. No browser, no executor.
 
 **`agito-browser-cdp`** - `Crate/Browser/CDP/`. The concrete substrate: attach versus launch,
-bounded evaluation, disposal that closes only what it launched. Dependencies: `agito-runtime`,
-`serde_json`, `tokio`, `tokio-util`, `futures-util`, `chromiumoxide`. The only crate that names
-`chromiumoxide`.
+bounded evaluation, the protocol's input domain, disposal that closes only what it launched.
+Dependencies: `agito-runtime`, `serde_json`, `tokio`, `tokio-util`, `futures-util`, `chromiumoxide`.
+The only crate that names `chromiumoxide`.
 
 **`agito-design-verification`** - `Crate/Design/Verification/`. Measurement and evidence, holding no
 design of its own. Dependencies: `agito-runtime`, `serde_json`.

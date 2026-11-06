@@ -12,10 +12,11 @@
 //!
 //! The capability declares the port it needs. [`Struct::Port::Page`] is this
 //! crate's own trait - not `agito-browser-cdp`'s `Browse`, and deliberately
-//! not a copy of it: the same three verbs, because a page is opened, asked and
-//! released, and it stops there. No ownership, no attach, no transport, no
-//! launcher. The composition root adapts a browser to this, and that is where
-//! "a browser this session launched" and "a tab somebody else owns" is settled.
+//! not a copy of it: open, ask, type and release, because a page is opened,
+//! read, written to through the input domain, and released, and it stops
+//! there. No ownership, no attach, no transport, no launcher. The composition
+//! root adapts a browser to this, and that is where "a browser this session
+//! launched" and "a tab somebody else owns" is settled.
 //!
 //! The dependency list is the enforcement: no browser crate and no executor.
 //! Time arrives as a [`RunTime::Call`] and a [`RunTime::Pace`],

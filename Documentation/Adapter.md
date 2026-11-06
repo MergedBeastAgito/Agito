@@ -7,10 +7,10 @@ to say before the workspace will believe it.
 
 Agito ships capabilities and one concrete substrate. A third party with a different substrate -
 another protocol, another device, a game port - could copy the browser crate's plumbing and be
-consumed by path, and that is what happened first: a driver that required `agito.browse`, provided
-a port of its own, kept its JavaScript in `Source/Script/`, and had nowhere to say so. Nothing
-outside the workspace could state "I provide this port" and be believed, because the manifest table
-is compiled in and `Crate/*` is what it describes.
+consumed by path, and that is what happened first: a driver that required `agito.browse`, provided a
+port of its own, kept its JavaScript in `Source/Script/`, and had nowhere to say so. Nothing outside
+the workspace could state "I provide this port" and be believed, because the manifest table is
+compiled in and `Crate/*` is what it describes.
 
 `Crate/Adapter` (`agito-adapter`) is that missing statement. It holds one trait, one check, and a
 stand-in; it holds no behaviour.
@@ -48,8 +48,8 @@ pub trait Adapter: Send + Sync {
 
 ## The facade carries the port
 
-A third-party adapter depends on `agito-sdk` - the workspace's facade - and on nothing else, so
-the port has to be reachable from there or a crate outside the tree cannot implement it. The facade
+A third-party adapter depends on `agito-sdk` - the workspace's facade - and on nothing else, so the
+port has to be reachable from there or a crate outside the tree cannot implement it. The facade
 re-exports `Adapter`, `Serves` and `StandIn` at its root, and the adapter's own `Error` at
 `Port::Adapter::Error`, because the root's `Error` is the browse port's - a consumer matches on that
 one first:
@@ -86,8 +86,8 @@ The composition root constructs the adapter once, holds it as `Arc<dyn Adapter>`
 the same shape the browser port already has. With no registry there is nobody to ask "who serves
 this port", and that is the point: the root constructed the value, so it already knows. What it
 cannot know from the value alone is whether the value agrees with the manifest a harness read, and
-that is what `Adapter::Serves(&dyn Adapter, Port)` answers - at the one place both halves are
-in hand.
+that is what `Adapter::Serves(&dyn Adapter, Port)` answers - at the one place both halves are in
+hand.
 
 ---
 
@@ -125,8 +125,8 @@ Nothing is compiled into Agito, and nothing is registered. Two verbs read a thir
 
 - `agito manifests --adapter <dir>` lists every module under the given roots after the ones the
   workspace ships, with the `module.json` each was read from in the fifth column.
-- `agito verify --module <name> --adapter <dir>` reports readiness for one of them. The command
-  line is the same one the workspace's own modules use.
+- `agito verify --module <name> --adapter <dir>` reports readiness for one of them. The command line
+  is the same one the workspace's own modules use.
 
 `--adapter` is repeatable, and `AGITO_ADAPTER_PATH` - a path list, split the way `PATH` is -
 supplies the roots when the flag is absent. That is what lets a consumer run
@@ -193,12 +193,12 @@ code makes, and because a reader deserves to know which ones nothing checks now.
 | A foreign implementation satisfies the trait                                 | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
 | A consumer outside the tree reaches the port through the facade alone        | `Crate/SDK/Test/Facade.rs`, `Fixture/SDK/` (both gone) |
 | The port a value reports matches the manifest that named it                  | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
-| An adapter under a root is listed with its port and its directory            | `Crate/Agito/Test/Composition.rs` (deleted)          |
-| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agito/Test/Composition.rs` (deleted)          |
-| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agito/Test/Composition.rs` (deleted)          |
-| A stale root is skipped and the listing survives                             | `Crate/Agito/Test/Composition.rs` (deleted)          |
-| `adapter` is a kind the boundary rule knows                                  | `Crate/Agito/Test/Boundaries.rs` (deleted)           |
+| An adapter under a root is listed with its port and its directory            | `Crate/Agito/Test/Composition.rs` (deleted)            |
+| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agito/Test/Composition.rs` (deleted)            |
+| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agito/Test/Composition.rs` (deleted)            |
+| A stale root is skipped and the listing survives                             | `Crate/Agito/Test/Composition.rs` (deleted)            |
+| `adapter` is a kind the boundary rule knows                                  | `Crate/Agito/Test/Boundaries.rs` (deleted)             |
 
-`agito manifests --adapter <root>` and `agito verify --module <name> --adapter <root>` still
-answer the four middle claims at run time: a root that is stale is skipped with a warning, a
-duplicate name is refused, an unknown kind is refused, and a foreign module reports `code: null`.
+`agito manifests --adapter <root>` and `agito verify --module <name> --adapter <root>` still answer
+the four middle claims at run time: a root that is stale is skipped with a warning, a duplicate name
+is refused, an unknown kind is refused, and a foreign module reports `code: null`.

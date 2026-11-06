@@ -22,12 +22,12 @@ capabilities out without lifting the product with them.
 
 ## The four layers
 
-**Source:** capture `4ffde6d5` - the layer table, "the arrows point inward", "a
-capability importing an adapter is a defect" and "ports are owned by their consumers, not by a
-central crate" are stated there, and §1 answers the Cargo consequence: no shared ports crate, two
-consumer-owned `Browse` traits. **Decision: this repository** - the reason given for the defect (a
-capability untestable without its provider) and the rule that a shared contract is extracted only
-when two consumers genuinely share semantics and evolution policy.
+**Source:** capture `4ffde6d5` - the layer table, "the arrows point inward", "a capability importing
+an adapter is a defect" and "ports are owned by their consumers, not by a central crate" are stated
+there, and §1 answers the Cargo consequence: no shared ports crate, two consumer-owned `Browse`
+traits. **Decision: this repository** - the reason given for the defect (a capability untestable
+without its provider) and the rule that a shared contract is extracted only when two consumers
+genuinely share semantics and evolution policy.
 
 | Layer            | Owns                                       | May import                   |
 | ---------------- | ------------------------------------------ | ---------------------------- |
@@ -50,13 +50,12 @@ still behave differently.
 
 ## The manifest
 
-**Source:** capture `4ffde6d5` - the four state classes and their admission role, the
-hashed `artefact` entry point and the cold/warm `cost` are stated there, and §3 answers how they
-survive into Rust: a checked-in `module.json`, serde validation in CI, read by a harness that never
-starts the application. **Decision: this repository** - the observation each class implies: a
-liveness probe for `HoldTransport`, a freshness check for `HoldIdentity`, a reset proof for
-`HoldWorkspace`. The capture says what a harness must revalidate at admission, not which
-observation proves it.
+**Source:** capture `4ffde6d5` - the four state classes and their admission role, the hashed
+`artefact` entry point and the cold/warm `cost` are stated there, and §3 answers how they survive
+into Rust: a checked-in `module.json`, serde validation in CI, read by a harness that never starts
+the application. **Decision: this repository** - the observation each class implies: a liveness
+probe for `HoldTransport`, a freshness check for `HoldIdentity`, a reset proof for `HoldWorkspace`.
+The capture says what a harness must revalidate at admission, not which observation proves it.
 
 Every package carries `module.json`. The field that does the most work is `state`:
 
@@ -86,10 +85,10 @@ starts returning wrong answers quickly.
 
 ## Why the packages are these five
 
-**Source:** capture `4ffde6d5` - the five packages with their kinds, state classes and
-errors, and §1's decision that all five stay separate crates rather than becoming modules of one.
-**Decision: this repository** - the build order, and each reason for building that package when it
-is built. The capture says which crates exist, not which one to write first.
+**Source:** capture `4ffde6d5` - the five packages with their kinds, state classes and errors, and
+§1's decision that all five stay separate crates rather than becoming modules of one. **Decision:
+this repository** - the build order, and each reason for building that package when it is built. The
+capture says which crates exist, not which one to write first.
 
 Chosen in build order, each justified by a consumer that already exists:
 
@@ -118,11 +117,11 @@ default unless somebody refuses it.
 
 ## The two failures this design expects
 
-**Source:** capture `4ffde6d5` §2 for the ownership half -
-`Ownership::{Attached, Launched}`, attach and launch as separate operations, disposal of an attached
-session that must not terminate the browser, and a disconnected session that invalidates warm
-readiness. **Decision: this repository** - the five-surface inventory, the global warm browser
-scenario, and the extraction failure. No capture examines either.
+**Source:** capture `4ffde6d5` §2 for the ownership half - `Ownership::{Attached, Launched}`, attach
+and launch as separate operations, disposal of an attached session that must not terminate the
+browser, and a disconnected session that invalidates warm readiness. **Decision: this repository** -
+the five-surface inventory, the global warm browser scenario, and the extraction failure. No capture
+examines either.
 
 **Competing browser owners.** Five surfaces already touch browser execution with different ownership
 needs - a driver, a verifier, a scraper, a relaunch tool, an audit. A global warm browser can close

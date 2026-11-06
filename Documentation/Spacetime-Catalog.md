@@ -1,9 +1,9 @@
 # SpacetimeDB Catalog
 
-The agito database model as rules and data: capabilities, generations, leases with a fence,
-probes, beliefs and trace. It lives here rather than in the consuming repository because none of it
-needs SpacetimeDB to be true, and a module that imported the server SDK to hold it could not be
-tested without a published database.
+The agito database model as rules and data: capabilities, generations, leases with a fence, probes,
+beliefs and trace. It lives here rather than in the consuming repository because none of it needs
+SpacetimeDB to be true, and a module that imported the server SDK to hold it could not be tested
+without a published database.
 
 This is an adoption note. It says what the catalog is, which invariant each rule enforces, and
 exactly what TimeLine takes to adopt it in one step. The statement of the model is
@@ -284,11 +284,10 @@ What each invariant was proved by is named in its section above. Three further g
 one of them still runs:
 
 - `cargo test --workspace` counted these cases with the rest of the tree, and
-  `Crate/Agito/Test/Composition.rs` held the manifest to the crate's code vocabulary - both
-  deleted.
-- `agito verify --module @agito/spacetime-catalog` reports ready: the manifest's
-  `provides.errors` is `admission-refused`, `lease-held` and `budget-exhausted`, which is exactly
-  `Code` in `Source/Struct/Code.rs`. This one is a command, not a test, and it still runs.
+  `Crate/Agito/Test/Composition.rs` held the manifest to the crate's code vocabulary - both deleted.
+- `agito verify --module @agito/spacetime-catalog` reports ready: the manifest's `provides.errors`
+  is `admission-refused`, `lease-held` and `budget-exhausted`, which is exactly `Code` in
+  `Source/Struct/Code.rs`. This one is a command, not a test, and it still runs.
 - `Crate/Agito/Test/Boundaries.rs` kept the arrow - the crate is a capability, it imports nothing,
   and only the composition root imports it - and is deleted;
   `cargo tree -p agito-spacetime-catalog --depth 1` shows the same graph.

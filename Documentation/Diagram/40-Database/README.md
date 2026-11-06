@@ -62,5 +62,5 @@ change.
 [`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
 `Abandoned` and `Quarantined` do not exist - they are drawn as installable steps. Expiry covers the
-clock; nothing covers the workspace a dead holder may have left dirty, which is the
-`HoldWorkspace` class the manifest names and the schema does not yet model.
+clock; nothing covers the workspace a dead holder may have left dirty, which is the `HoldWorkspace`
+class the manifest names and the schema does not yet model.

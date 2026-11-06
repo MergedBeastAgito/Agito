@@ -46,20 +46,20 @@ that table is what `agito manifests` and `agito verify` read.
 
 One convention, everywhere in the tree: folders, files, identifiers and prose.
 
-| Kind       | Rule                                                             | Example                                                |
-| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
+| Kind       | Rule                                                             | Example                                                 |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
 | Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/Browser/CDP/Source`; `module.json`, `Cargo.toml` |
-| File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`                    |
-| Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`                     |
-| Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                                |
+| File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`                     |
+| Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`                      |
+| Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                                 |
 
 A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a leaf keeps it - `CDP`,
 `CDPSession`.
 
 `Documentation/Style.md` is the whole rule, including the parts this table is too short to carry: a
 verb names the leaf of a `Fn/` path, a folder names one role in the singular, a serialized key is
-PascalCase and singular (`Provide`, not `Provides`), and a crate directory whose name would carry two
-concepts is two directories - `Crate/Chat/Driver`, whose library is `Driver`.
+PascalCase and singular (`Provide`, not `Provides`), and a crate directory whose name would carry
+two concepts is two directories - `Crate/Chat/Driver`, whose library is `Driver`.
 
 Two kinds of name sit outside the rule because something else already fixes their spelling: the
 ecosystem's root files (`module.json`, `Cargo.toml`, `Cargo.lock`) and wire-format field names such

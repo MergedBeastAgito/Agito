@@ -22,11 +22,10 @@ their `cargo add` resolved to on the same day.
   both files.
 - **A `build.rs` per owning crate**, three lines around `Build/Script.rs`, which is the one
   statement of what a script may contain and how it becomes bytes. `Crate/Chat/Driver` and
-  `Crate/Workflow` both
-  include it, so the rule cannot drift between them.
-- **The macro**, `RunTime::script!`, expands to `include_str!` of the compiled file in the
-  caller's `OUT_DIR` and, when parameters are given, to `FillDeclared` with the script's own
-  declared parameter list.
+  `Crate/Workflow` both include it, so the rule cannot drift between them.
+- **The macro**, `RunTime::script!`, expands to `include_str!` of the compiled file in the caller's
+  `OUT_DIR` and, when parameters are given, to `FillDeclared` with the script's own declared
+  parameter list.
 - **The compiled artefact is JavaScript, not a template**: the parameter markers are valid
   identifiers, so the file the compiler parses is the file the page runs, and the only difference
   between the two is the markers.

@@ -11,8 +11,8 @@ metadata:
 
 # Browser Eval
 
-Ask a live page one question and read the answer as JSON. The verb is `agito browse`; the
-operation is `Browse::Evaluate`.
+Ask a live page one question and read the answer as JSON. The verb is `agito browse`; the operation
+is `Browse::Evaluate`.
 
 ---
 

@@ -20,8 +20,8 @@ stated - an unbuilt fixture is a finding about the work, not a gap in the record
 
 # Thread 1 - hidden properties and disclosure
 
-Source: capture `575cb198`. Nothing in this workspace talks to SpacetimeDB yet, so every
-experiment below is a probe against a local instance rather than a test in this tree.
+Source: capture `575cb198`. Nothing in this workspace talks to SpacetimeDB yet, so every experiment
+below is a probe against a local instance rather than a test in this tree.
 `spacetime sql <database> "<query>"` is the shape of the check; `<database>` has to exist first.
 
 ## Q1 - What does a failed transaction roll back?
@@ -124,9 +124,9 @@ experiment's job is to show those are the _only_ channels left.
 
 # Thread 2 - the transport audit
 
-Source: capture `e9b61659`. Every finding in this thread is a source reading plus an
-inference, and the thread says so at `:47-50`. None of the nine has been run. The experiments below
-are the thread's own, restated as the assertion each one has to make.
+Source: capture `e9b61659`. Every finding in this thread is a source reading plus an inference, and
+the thread says so at `:47-50`. None of the nine has been run. The experiments below are the
+thread's own, restated as the assertion each one has to make.
 
 These block this workspace, not the repository they were read from: the audit is evidence about what
 a browser transport must carry, and `agito-browser-cdp` is the crate that has to carry it.
@@ -139,9 +139,9 @@ a browser transport must carry, and `agito-browser-cdp` is the crate that has to
 index 0 with B, then run the exported selector expression for the toggle and record which button
 receives the click. No live account and no real mutation.
 
-**Blocks:** the port shape of `agito-browser-cdp`. If the transport can address a post by
-position, the port has to accept an identity, not an index - which changes `Browse::Evaluate` as
-specified in `Documentation/Rust.md`.
+**Blocks:** the port shape of `agito-browser-cdp`. If the transport can address a post by position,
+the port has to accept an identity, not an index - which changes `Browse::Evaluate` as specified in
+`Documentation/Rust.md`.
 
 ## Q10 - Does a URL target resolve the post named in the URL, or index 0?
 
@@ -170,8 +170,8 @@ condition (`:107-132`).
 **Settle it with:** one photo post, read four ways - by id with no existing tab, by id with a
 pre-existing background tab, by url with no tab, by url with a tab. Compare the media fields.
 
-**Blocks:** `agito-browser-cdp`'s focus-emulation rule, which today applies to one of the four
-paths only (`:163-184`).
+**Blocks:** `agito-browser-cdp`'s focus-emulation rule, which today applies to one of the four paths
+only (`:163-184`).
 
 ## Q13 - Does "network idle" resolve with a request still in flight?
 
@@ -192,8 +192,8 @@ means a finished write.
 destruction, and assert not only that both terminate but that the permanent error's cause is still
 available to the caller.
 
-**Blocks:** `agito-browser-cdp`'s error taxonomy. A dead connection reported as "the page showed
-no posts" is the failure the port exists to prevent.
+**Blocks:** `agito-browser-cdp`'s error taxonomy. A dead connection reported as "the page showed no
+posts" is the failure the port exists to prevent.
 
 ## Q15 - Does an attachment failure leak the tab it opened?
 
@@ -233,8 +233,8 @@ produces evidence that reads as a measurement.
 
 # Thread 3 - the Rust port
 
-Source: capture `4ffde6d5`. The answer reaches all six questions it was asked, ending at
-`:807-828`, so what this file gathers is what the answer leaves to be built and run here.
+Source: capture `4ffde6d5`. The answer reaches all six questions it was asked, ending at `:807-828`,
+so what this file gathers is what the answer leaves to be built and run here.
 
 ## Q18 - Can a Rust adapter pass the TypeScript conformance suite?
 

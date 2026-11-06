@@ -10,14 +10,14 @@ and nothing here is required for TimeLine to build.
 
 ## What Agito is
 
-| Capability            | What it does                                                             | State class     |
-| --------------------- | ------------------------------------------------------------------------ | --------------- |
+| Capability            | What it does                                                             | State class   |
+| --------------------- | ------------------------------------------------------------------------ | ------------- |
 | `browser-cdp`         | attach to or launch a browser, evaluate in a page, dispose               | HoldTransport |
 | `chat-driver`         | ask a chat product, verify mode and model, read the answer and its trace | HoldTransport |
-| `design-verification` | measure a built page and produce evidence, with no design baked in       | stateless       |
-| `skill-contract`      | discover, validate and digest a corpus of skill documents                | stateless       |
+| `design-verification` | measure a built page and produce evidence, with no design baked in       | stateless     |
+| `skill-contract`      | discover, validate and digest a corpus of skill documents                | stateless     |
 | `runtime`             | admission, leases with a fence, per-run budgets, cleanup                 | HoldWorkspace |
-| `spacetime-catalog`   | the database rules: capabilities, generations, leases, probes, trace     | stateless       |
+| `spacetime-catalog`   | the database rules: capabilities, generations, leases, probes, trace     | stateless     |
 
 ## What TimeLine is
 
@@ -32,7 +32,7 @@ and nothing here is required for TimeLine to build.
 
 ## Parity: what one has that the other does not
 
-| Concern                           | Agito                                                            | TimeLine                                     |
+| Concern                           | Agito                                                              | TimeLine                                     |
 | --------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
 | A browser session                 | yes - attach or launch, with ownership recorded                    | yes, but only to verify its own pages        |
 | Asking a chat product             | yes - mode and model verified, trace captured                      | no                                           |
@@ -56,6 +56,6 @@ does not import TimeLine's code, does not read its database, and is not a depend
 
 - Agito does not grow a copy of the site, the archive or the RFC board.
 - TimeLine does not grow a copy of the runtime, the chat driver or the research corpus.
-- A capability that both need - measurement, skill validation - lives in Agito as the engine and
-  in TimeLine as the site's own expectations, which is why the two versions of `design-verification`
+- A capability that both need - measurement, skill validation - lives in Agito as the engine and in
+  TimeLine as the site's own expectations, which is why the two versions of `design-verification`
   are not duplicates.

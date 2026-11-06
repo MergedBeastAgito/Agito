@@ -36,8 +36,8 @@ The skills this repository ships, and the contract that keeps them loadable.
 ## The contract
 
 Each skill is a directory holding `SKILL.md` and, when it has supporting files,
-`Reference/Index.md`. `agito skills Documentation/Skill` checks three rules and reports rather
-than returns early:
+`Reference/Index.md`. `agito skills Documentation/Skill` checks three rules and reports rather than
+returns early:
 
 - **parsable** - the frontmatter block is closed, states a non-empty `description`, and its `name`
   matches the directory;

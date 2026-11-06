@@ -4,9 +4,9 @@ How the five packages become a Cargo workspace, in the house style of `github.co
 `Source/` with `Fn/` and `Struct/` trees, PascalCase modules, one `Library.rs` per crate, `Target/`
 as the build directory.
 
-**Source:** capture `4ffde6d5` throughout. The house style is unverified: the capture
-says the repository could not be retrieved and takes the description as specification (`:192-194`),
-so nothing here should be read as a measurement of that repository.
+**Source:** capture `4ffde6d5` throughout. The house style is unverified: the capture says the
+repository could not be retrieved and takes the description as specification (`:192-194`), so
+nothing here should be read as a measurement of that repository.
 
 ## Crates
 
@@ -14,19 +14,19 @@ so nothing here should be read as a measurement of that repository.
 (`:198-304`), and the decision that the five stay separate crates (`:183-190`, `:300-303`). The
 capture makes the workflow crate conditional on a real composition (`:183-186`).
 
-| Directory             | Package                       | Library                     | Responsibility                               |
-| --------------------- | ----------------------------- | --------------------------- | -------------------------------------------- |
-| `Adapter/`            | `agito-adapter`             | `Adapter`            | the port a third-party substrate implements  |
-| `Agito/`            | `agito`                     | `Agito`                   | wiring and executable entry points           |
-| `Browser/CDP/`         | `agito-browser-cdp`         | `CDP`         | concrete browser substrate                   |
-| `Chat/Driver/`         | `agito-chat-driver`         | `Driver`         | chat use case and its browse contract        |
+| Directory              | Package                     | Library        | Responsibility                               |
+| ---------------------- | --------------------------- | -------------- | -------------------------------------------- |
+| `Adapter/`             | `agito-adapter`             | `Adapter`      | the port a third-party substrate implements  |
+| `Agito/`               | `agito`                     | `Agito`        | wiring and executable entry points           |
+| `Browser/CDP/`         | `agito-browser-cdp`         | `CDP`          | concrete browser substrate                   |
+| `Chat/Driver/`         | `agito-chat-driver`         | `Driver`       | chat use case and its browse contract        |
 | `Design/Verification/` | `agito-design-verification` | `Verification` | measurement and evidence                     |
-| `Lane/`               | `agito-lane`                | `Lane`               | template corpus and typed answers            |
-| `RunTime/`            | `agito-runtime`             | `RunTime`            | execution policy and resource ownership      |
-| `SDK/`                | `agito-sdk`                 | `SDK`                | the facade a consumer outside the tree names |
-| `Skill/Contract/`      | `agito-skill-contract`      | `Contract`      | corpus discovery, validation, packaging      |
-| `Spacetime/Catalog/`   | `agito-spacetime-catalog`   | `Catalog`   | the database model as rules and data         |
-| `Workflow/`           | `agito-workflow`            | `Workflow`           | adapter-independent compositions             |
+| `Lane/`                | `agito-lane`                | `Lane`         | template corpus and typed answers            |
+| `RunTime/`             | `agito-runtime`             | `RunTime`      | execution policy and resource ownership      |
+| `SDK/`                 | `agito-sdk`                 | `SDK`          | the facade a consumer outside the tree names |
+| `Skill/Contract/`      | `agito-skill-contract`      | `Contract`     | corpus discovery, validation, packaging      |
+| `Spacetime/Catalog/`   | `agito-spacetime-catalog`   | `Catalog`      | the database model as rules and data         |
+| `Workflow/`            | `agito-workflow`            | `Workflow`     | adapter-independent compositions             |
 
 A directory that names two concepts is two directories: the group folder carries the object and the
 crate folder carries the leaf, which is also the library's name. The package id stays one lowercase
@@ -45,8 +45,8 @@ the facade a consumer outside this workspace names, and the database model as da
 
 ## Dependencies
 
-**Source:** capture `4ffde6d5` §1's dependency graph (`:305-330`), and its reading of
-`RunTime` as a policy engine rather than a registry (`:330-331`).
+**Source:** capture `4ffde6d5` §1's dependency graph (`:305-330`), and its reading of `RunTime` as a
+policy engine rather than a registry (`:330-331`).
 
 ```
 Agito  → RunTime, Browser/CDP, Chat/Driver, Design/Verification, Skill/Contract, Workflow
@@ -67,9 +67,9 @@ opens no socket and the composition root supplies the one that does.
 
 ## "Ports belong to their consumers", in Rust
 
-**Source:** capture `4ffde6d5` §1 (`:333-375`) - the two consumer-owned traits, the
-root-owned wrapper, and the warning that a universal request type quietly becomes the ports crate.
-Whether the two traits actually differ is `Documentation/Open-Questions.md` Q22.
+**Source:** capture `4ffde6d5` §1 (`:333-375`) - the two consumer-owned traits, the root-owned
+wrapper, and the warning that a universal request type quietly becomes the ports crate. Whether the
+two traits actually differ is `Documentation/Open-Questions.md` Q22.
 
 There is no shared `ports` crate. There are two distinct traits with the same name in different
 crates:
@@ -121,11 +121,11 @@ style: `opt-level 3`, `codegen-units 1`, `debug false`, `lto true`, `panic "abor
 
 ## Still open
 
-**Source:** capture `4ffde6d5` - the list below is the set of questions the request
-asked, and the capture answers every one: 1 (`:376-450`), 2 (`:451-493`), 3 (`:494-589`), 4
-(`:590-696`) and 5 (`:697-764`). What stays open is not the capture's answer but this repository's
-implementation of it, and each is tracked with its experiment and blocker in
-`Documentation/Open-Questions.md` Q18-Q24.
+**Source:** capture `4ffde6d5` - the list below is the set of questions the request asked, and the
+capture answers every one: 1 (`:376-450`), 2 (`:451-493`), 3 (`:494-589`), 4 (`:590-696`) and 5
+(`:697-764`). What stays open is not the capture's answer but this repository's implementation of
+it, and each is tracked with its experiment and blocker in `Documentation/Open-Questions.md`
+Q18-Q24.
 
 These were asked, and the capture answers them. What is left is to hold this tree to each answer:
 

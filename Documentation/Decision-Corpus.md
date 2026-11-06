@@ -43,8 +43,8 @@ on one authority and on what a generation is - which is also the writing order. 
 whenever. All five start `proposed`, so the corpus opens with zero `settled` records: that is the
 finding, not a gap.
 
-**Rejected as a sixth: port ownership.** `Design.md` argues it and
-`Crate/Agito/Test/Boundaries.rs` enforces it; a record would be its third statement.
+**Rejected as a sixth: port ownership.** `Design.md` argues it and `Crate/Agito/Test/Boundaries.rs`
+enforces it; a record would be its third statement.
 
 ---
 
@@ -113,9 +113,9 @@ trustworthy, so a record that restates one is refused as duplication.
 **No board.** A board triages work; a record states a decision. The records that block work are
 already cards, and `status` is not work state - conflating the two is how TimeLine's board and its
 corpus came to need a sync whose disagreement is a bug. `Scope.md` rules the direction out for a
-stronger reason than this proposal has: Agito "does not grow a copy of the site, the archive or
-the RFC board". No triage need is named here that the existing board cannot serve, so
-`rfc_board.py`'s model is neither copied nor adapted.
+stronger reason than this proposal has: Agito "does not grow a copy of the site, the archive or the
+RFC board". No triage need is named here that the existing board cannot serve, so `rfc_board.py`'s
+model is neither copied nor adapted.
 
 ---
 

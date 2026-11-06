@@ -41,9 +41,9 @@ is never re-emitted.
 - **Two artefacts per script.** `OUT_DIR/Script/Expression/ReadAnswers.js` is the page's copy;
   `.params` is the parameter contract, one `Name:kind` line each. A `.js` file whose bytes are
   unchanged is not rewritten, so a no-op edit leaves its mtime alone.
-- **The macro** is `RunTime::script!`, which expands to `include_str!` of the compiled file
-  in the **caller's** `OUT_DIR` - `env!("OUT_DIR")` inside a `macro_rules!` expands where the macro
-  is called, which is how each crate reads the scripts its own build compiled.
+- **The macro** is `RunTime::script!`, which expands to `include_str!` of the compiled file in the
+  **caller's** `OUT_DIR` - `env!("OUT_DIR")` inside a `macro_rules!` expands where the macro is
+  called, which is how each crate reads the scripts its own build compiled.
 
 A file with no type syntax compiles to itself. That is the property to check first when a byte
 comparison fails: if the output differs from the input, something is re-printing the file.
@@ -197,13 +197,13 @@ and the determinism check.
 
 ## Claim → test
 
-| Claim                                          | How it was checked, or what is left                                                                                                                                                                           |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The compiled artefact is the old bytes         | the chat driver's suite (deleted); nothing compares the output to a baseline now                                                                                                                              |
-| The workflow's expression is held too          | the workflow's suite (deleted)                                                                                                                                                                                |
-| Every marker is filled, and the check bites    | the chat driver's suite (deleted); `AssertParameters` still refuses a call site that omits one                                                                                                                |
+| Claim                                          | How it was checked, or what is left                                                                                                                                                                        |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The compiled artefact is the old bytes         | the chat driver's suite (deleted); nothing compares the output to a baseline now                                                                                                                           |
+| The workflow's expression is held too          | the workflow's suite (deleted)                                                                                                                                                                             |
+| Every marker is filled, and the check bites    | the chat driver's suite (deleted); `AssertParameters` still refuses a call site that omits one                                                                                                             |
 | A malformed script names its position          | write `Crate/Chat/Driver/Source/Script/Expression/Broken.ts` holding an unclosed call, run `cargo build -p agito-chat-driver`, require `Source/Script/Expression/Broken.ts:<line>:<col>: Unexpected token` |
-| A call site cannot forget a parameter          | delete one argument from a `script!` call, run `cargo build -p agito-chat-driver`, require `E0080` naming that call site                                                                                    |
-| A rebuild that changes nothing touches nothing | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agito-chat-driver/*/out/Script/` before and after                                                                    |
-| Escaping matches the old encoder               | the runtime's suite (deleted); `Escape` is what a page receives, unasserted                                                                                                                                   |
-| The build needs no node and no network         | `cargo build --workspace --offline` succeeds                                                                                                                                                                  |
+| A call site cannot forget a parameter          | delete one argument from a `script!` call, run `cargo build -p agito-chat-driver`, require `E0080` naming that call site                                                                                   |
+| A rebuild that changes nothing touches nothing | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agito-chat-driver/*/out/Script/` before and after                                                                   |
+| Escaping matches the old encoder               | the runtime's suite (deleted); `Escape` is what a page receives, unasserted                                                                                                                                |
+| The build needs no node and no network         | `cargo build --workspace --offline` succeeds                                                                                                                                                               |

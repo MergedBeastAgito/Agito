@@ -23,8 +23,8 @@ the only one that holds the rules the database enforces.
 [`Who-May-Know.mmd`](Who-May-Know.mmd) · [`Who-May-Know.svg`](Who-May-Know.svg)
 
 A crate that knows more than its ring is a defect even when it compiles, which is why
-`cargo tree -p agito-chat-driver | grep -c browser` must answer `0`. The boundary check that used
-to fail an edge the design does not allow is deleted; the graph `cargo tree` prints is what is left.
+`cargo tree -p agito-chat-driver | grep -c browser` must answer `0`. The boundary check that used to
+fail an edge the design does not allow is deleted; the graph `cargo tree` prints is what is left.
 
 ---
 
