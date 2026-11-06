@@ -1,5 +1,5 @@
 [package]
-name = "agentic"
+name = "agito"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,25 +8,25 @@ publish.workspace = true
 description = "The composition root: wiring, executable entry points, and the manifest table."
 
 [lib]
-name = "Agentic"
+name = "Agito"
 path = "Source/Library.rs"
 
 [[bin]]
-name = "agentic"
+name = "agito"
 path = "Source/Main.rs"
 
 [dependencies]
-agentic-runtime = { workspace = true }
-agentic-skill-contract = { workspace = true }
-agentic-chat-driver = { workspace = true }
-agentic-design-verification = { workspace = true }
-agentic-browser-cdp = { workspace = true }
-agentic-workflow = { workspace = true }
-agentic-spacetime-catalog = { workspace = true }
-agentic-lane = { workspace = true }
+agito-runtime = { workspace = true }
+agito-skill-contract = { workspace = true }
+agito-chat-driver = { workspace = true }
+agito-design-verification = { workspace = true }
+agito-browser-cdp = { workspace = true }
+agito-workflow = { workspace = true }
+agito-spacetime-catalog = { workspace = true }
+agito-lane = { workspace = true }
 # The manifest table is the facade's, and this crate re-exports it. A root that
 # owned a copy would be a second answer to "what does the workspace ship".
-agentic-sdk = { workspace = true }
+agito-sdk = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }

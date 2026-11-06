@@ -4,6 +4,6 @@
 //! lives in `Build/Script.rs`, shared with `Crate/Workflow`, so there is one
 //! statement of it rather than one per crate.
 
-include!("../../Build/Script.rs");
+include!("../../../Build/Script.rs");
 
 fn main() { CompileScripts("Source/Script", "Script"); }

@@ -5,7 +5,7 @@
 //! wait the caller's `Pace` supplies. That is why a capability can be bounded
 //! without knowing which executor is running it.
 
-pub mod BlockOn;
+pub mod Block;
 pub mod Bound;
 pub mod Race;
 pub mod Script;

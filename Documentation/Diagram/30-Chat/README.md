@@ -5,9 +5,9 @@ sent.
 
 ## Page 1 - the ask
 
-![Mode checked, model checked, sent, streaming, settled, complete or refused](lifecycle.svg)
+![Mode checked, model checked, sent, streaming, settled, complete or refused](Lifecycle.svg)
 
-[`lifecycle.mmd`](lifecycle.mmd) · [`lifecycle.svg`](lifecycle.svg)
+[`Lifecycle.mmd`](Lifecycle.mmd) · [`Lifecycle.svg`](Lifecycle.svg)
 
 `Refused` is reached from four different places and means four different things. The manifest gives
 it four codes for that reason: `not-ready`, `wrong-mode`, `wrong-model`, `truncated`.
@@ -16,9 +16,9 @@ it four codes for that reason: `not-ready`, `wrong-mode`, `wrong-model`, `trunca
 
 ## Page 2 - completion, which is a rule and not a sleep
 
-![Baseline, submit, count, stability, and the Read more control deciding the outcome](completion.svg)
+![Baseline, submit, count, stability, and the Read more control deciding the outcome](Completion.svg)
 
-[`completion.mmd`](completion.mmd) · [`completion.svg`](completion.svg)
+[`Completion.mmd`](Completion.mmd) · [`Completion.svg`](Completion.svg)
 
 The three-read rule proves text stability, not that generation finished. That is the review's
 qualification, and it is why `truncated` is a separate outcome rather than a retry.
@@ -27,9 +27,9 @@ qualification, and it is why `truncated` is a separate outcome rather than a ret
 
 ## Page 3 - the trace, which is not the answer
 
-![Answer text, step tree, sources and mode reaching the record, and nothing else excluded](trace.svg)
+![Answer text, step tree, sources and mode reaching the record, and nothing else excluded](Trace.svg)
 
-[`trace.mmd`](trace.mmd) · [`trace.svg`](trace.svg)
+[`Trace.mmd`](Trace.mmd) · [`Trace.svg`](Trace.svg)
 
 The trace is how the answer was reached and it is not in the answer text. A capture that keeps only
 prose has lost the evidence, which is why the extractor reads the tree separately from the
@@ -39,9 +39,9 @@ transcript.
 
 ## Page 4 - missing states
 
-![Queued and interrupted, the two states the product has and nobody reports](missing.svg)
+![Queued and interrupted, the two states the product has and nobody reports](Missing.svg)
 
-[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+[`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
 `Queued` and `Interrupted` are real and unmodelled - they are drawn as installable steps. The first
 is why a fixed sleep looks necessary; the second is why "text stable for three reads" can settle on

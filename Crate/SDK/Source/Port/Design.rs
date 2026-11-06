@@ -1,4 +1,4 @@
-//! `agentic.verify.design`, from `agentic-design-verification`: measure a page
+//! `agito.verify.design`, from `agito-design-verification`: measure a page
 //! and judge the measurements against invariants the caller supplies.
 //!
 //! [`Browse`] here is this crate's own port, not [`crate::Browse`]: a
@@ -12,7 +12,7 @@
 //! and so nothing here names a site. A verifier that knew one rail's width could
 //! not measure another site at all.
 
-pub use AgenticDesignVerification::{
+pub use ::Verification::{
 	Browse,
 	Code,
 	Create,

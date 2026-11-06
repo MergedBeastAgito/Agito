@@ -1,32 +1,32 @@
 {
-	"name": "@agentic/composition",
-	"kind": "composition",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.compose",
-		"errors": []
+	"Name": "@agito/composition",
+	"Kind": "Composition",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.compose",
+		"Error": []
 	},
-	"requires": {
-		"ports": [
-			"agentic.browse",
-			"agentic.catalog.rules",
-			"agentic.chat.ask",
-			"agentic.verify.design",
-			"agentic.skill.validate",
-			"agentic.runtime",
-			"agentic.workflow"
+	"Require": {
+		"Port": [
+			"agito.browse",
+			"agito.catalog.rules",
+			"agito.chat.ask",
+			"agito.verify.design",
+			"agito.skill.validate",
+			"agito.runtime",
+			"agito.workflow"
 		]
 	},
-	"artefact": {
-		"entry": "Target/debug/agentic",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Artefact": {
+		"Entry": "Target/debug/agito",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "stateless",
-	"cost": {
-		"coldMs": 5,
-		"warmMs": 1,
-		"network": false
+	"State": "Stateless",
+	"Cost": {
+		"ColdMs": 5,
+		"WarmMs": 1,
+		"Network": false
 	},
-	"verify": "agentic verify --module @agentic/composition"
+	"Verify": "agito verify --module @agito/composition"
 }

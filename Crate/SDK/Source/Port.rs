@@ -1,8 +1,8 @@
 //! The whole surface of each port, at one path.
 //!
-//! [`Browse`] is `agentic.browse`, [`Chat`] is `agentic.chat.ask`, [`Design`]
-//! is `agentic.verify.design`, [`Skill`] is `agentic.skill.validate`,
-//! [`Runtime`] is `agentic.runtime` and [`Adapter`] is `agentic.adapter`. Each
+//! [`Browse`] is `agito.browse`, [`Chat`] is `agito.chat.ask`, [`Design`]
+//! is `agito.verify.design`, [`Skill`] is `agito.skill.validate`,
+//! [`RunTime`] is `agito.runtime` and [`Adapter`] is `agito.adapter`. Each
 //! name is the short form of a port, not of a crate: a consumer is choosing a
 //! capability, and the package that happens to implement it is the thing this
 //! facade exists to hide.
@@ -17,5 +17,5 @@ pub mod Adapter;
 pub mod Browse;
 pub mod Chat;
 pub mod Design;
-pub mod Runtime;
+pub mod RunTime;
 pub mod Skill;

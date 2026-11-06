@@ -21,9 +21,9 @@ use std::{
 	sync::{Arc, Mutex, MutexGuard},
 };
 
-use AgenticBrowserCDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions, Target as BrowserTarget};
-use AgenticChatDriver::{Failure, Page as ChatPage, Target};
-use AgenticRuntime::{Call, FutureBox};
+use ::CDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions, Target as BrowserTarget};
+use ::Driver::{Failure, Page as ChatPage, Target};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 /// The chat driver's page, served by the browser substrate.

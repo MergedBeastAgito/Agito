@@ -25,23 +25,23 @@ is never re-emitted.
 
 ## The shape
 
-- **One file per expression.** `Crate/ChatDriver/Source/Script/Expressions/ReadAnswers.ts` and the
+- **One file per expression.** `Crate/Chat/Driver/Source/Script/Expression/ReadAnswers.ts` and the
   ten beside it; `Crate/Workflow/Source/Script/Measure.ts`. The path under `Source/Script/` is the
   path the macro takes, minus the extension: `script!("Expressions/ReadAnswers")`.
-- **A second file only when the first is pinned.** `Expressions/ReadBoth.ts` reads the thread with
+- **A second file only when the first is pinned.** `Expression/ReadBoth.ts` reads the thread with
   the same code as `ReadAnswers.ts` and returns the page's Markdown beside the text, because the two
   single-format expressions are the bytes a page already receives and an expression that gained a
   field would not be that expression. The two files are written so the thread read is the same text
   in both, from its first line to the object each one returns: a change to one that is not a change
   to the other is a change to what a page receives.
-- **One rule, included twice.** `Crate/ChatDriver/build.rs` and `Crate/Workflow/build.rs` are each
-  three lines around `include!("../../Build/Script.rs")`, and each calls
+- **One rule, included twice.** `Crate/Chat/Driver/build.rs` and `Crate/Workflow/build.rs` are each
+  three lines around `include!("../../../Build/Script.rs")`, and each calls
   `CompileScripts("Source/Script", "Script")`. The rule for what a script may contain lives in
   `Build/Script.rs` and cannot drift between the two crates.
 - **Two artefacts per script.** `OUT_DIR/Script/Expressions/ReadAnswers.js` is the page's copy;
   `.params` is the parameter contract, one `Name:kind` line each. A `.js` file whose bytes are
   unchanged is not rewritten, so a no-op edit leaves its mtime alone.
-- **The macro** is `AgenticRuntime::script!`, which expands to `include_str!` of the compiled file
+- **The macro** is `RunTime::script!`, which expands to `include_str!` of the compiled file
   in the **caller's** `OUT_DIR` - `env!("OUT_DIR")` inside a `macro_rules!` expands where the macro
   is called, which is how each crate reads the scripts its own build compiled.
 
@@ -132,7 +132,7 @@ in a page:
 
 ```
 error[E0080]: evaluation panicked: script parameters: a declared parameter is missing
-  --> Crate/ChatDriver/Source/Fn/Expressions.rs:<line>:2
+  --> Crate/Chat/Driver/Source/Fn/Expression.rs:<line>:2
 ```
 
 `panic!` in a `const fn` cannot format, so the message names the problem and the compiler's error
@@ -202,8 +202,8 @@ and the determinism check.
 | The compiled artefact is the old bytes         | the chat driver's suite (deleted); nothing compares the output to a baseline now                                                                                                                              |
 | The workflow's expression is held too          | the workflow's suite (deleted)                                                                                                                                                                                |
 | Every marker is filled, and the check bites    | the chat driver's suite (deleted); `AssertParameters` still refuses a call site that omits one                                                                                                                |
-| A malformed script names its position          | write `Crate/ChatDriver/Source/Script/Expressions/Broken.ts` holding an unclosed call, run `cargo build -p agentic-chat-driver`, require `Source/Script/Expressions/Broken.ts:<line>:<col>: Unexpected token` |
-| A call site cannot forget a parameter          | delete one argument from a `script!` call, run `cargo build -p agentic-chat-driver`, require `E0080` naming that call site                                                                                    |
-| A rebuild that changes nothing touches nothing | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agentic-chat-driver/*/out/Script/` before and after                                                                    |
+| A malformed script names its position          | write `Crate/Chat/Driver/Source/Script/Expression/Broken.ts` holding an unclosed call, run `cargo build -p agito-chat-driver`, require `Source/Script/Expression/Broken.ts:<line>:<col>: Unexpected token` |
+| A call site cannot forget a parameter          | delete one argument from a `script!` call, run `cargo build -p agito-chat-driver`, require `E0080` naming that call site                                                                                    |
+| A rebuild that changes nothing touches nothing | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agito-chat-driver/*/out/Script/` before and after                                                                    |
 | Escaping matches the old encoder               | the runtime's suite (deleted); `Escape` is what a page receives, unasserted                                                                                                                                   |
 | The build needs no node and no network         | `cargo build --workspace --offline` succeeds                                                                                                                                                                  |

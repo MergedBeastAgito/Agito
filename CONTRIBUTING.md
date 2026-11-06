@@ -30,7 +30,7 @@ A change is ready when these pass, and none of them needs the network:
 cargo build --workspace --release
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
-cargo run -q -p agentic -- manifests
+cargo run -q -p agito -- manifests
 ```
 
 There is no test suite. The per-crate suites, the parity corpus under `Scenario/`, the
@@ -38,7 +38,7 @@ out-of-workspace fixture crate and the path audit were deleted with the rest of 
 layer, and no workflow step asserts anything a build did not produce. What a change is held to is
 that it compiles, that clippy is silent, that the formatting matches `rustfmt.toml`, and that the
 module table still prints - a new crate needs a `module.json` before it needs anything else, because
-that table is what `agentic manifests` and `agentic verify` read.
+that table is what `agito manifests` and `agito verify` read.
 
 ---
 
@@ -48,24 +48,30 @@ One convention, everywhere in the tree: folders, files, identifiers and prose.
 
 | Kind       | Rule                                                             | Example                                                |
 | ---------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/BrowserCDP/Source`; `module.json`, `Cargo.toml` |
+| Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/Browser/CDP/Source`; `module.json`, `Cargo.toml` |
 | File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`                    |
 | Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`                     |
 | Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                                |
 
-A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a file or crate named after one
-keeps it - `BrowserCDP`, `CDPSession`.
+A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a leaf keeps it - `CDP`,
+`CDPSession`.
+
+`Documentation/Style.md` is the whole rule, including the parts this table is too short to carry: a
+verb names the leaf of a `Fn/` path, a folder names one role in the singular, a serialized key is
+PascalCase and singular (`Provide`, not `Provides`), and a crate directory whose name would carry two
+concepts is two directories - `Crate/Chat/Driver`, whose library is `Driver`.
 
 Two kinds of name sit outside the rule because something else already fixes their spelling: the
 ecosystem's root files (`module.json`, `Cargo.toml`, `Cargo.lock`) and wire-format field names such
 as `webSocketDebuggerUrl`. A third is narrower than it looks: a script under `Source/Script/` is
 TypeScript that the crate's `build.rs` compiles, and its path is the argument the `script!` macro
-takes - `script!("Expressions/ReadAnswers")` - so the file and the macro call carry the same
+takes - `script!("Expression/ReadAnswers")` - so the file and the macro call carry the same
 PascalCase name.
 
-The tree has one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/}`. It is strict because a
-module path is a file path: `Crate/<Name>/Source/Library.rs` is the library root, `Fn/` holds
-operations, `Struct/` holds data and contracts, and every module name matches its file.
+The tree has one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/}`, or
+`Crate/<Group>/<Name>/…` where the crate's name would otherwise carry two concepts. It is strict
+because a module path is a file path: `Crate/<Name>/Source/Library.rs` is the library root, `Fn/`
+holds operations, `Struct/` holds data and contracts, and every module name matches its file.
 
 A rename is mechanical: `git mv` the path, then follow every import, the `module.json` that names
 the package, and the paths quoted in `Documentation/` and `README.md`. A half-renamed tree does not

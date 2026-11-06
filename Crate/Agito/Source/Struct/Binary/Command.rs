@@ -1,12 +1,12 @@
-//! What `agentic` can be asked to do.
+//! What `agito` can be asked to do.
 
 use clap::{Parser, Subcommand};
 
 /// The composition root.
 #[derive(Clone, Debug, Parser)]
 #[command(
-	name = "agentic",
-	about = "Compose the agentic capabilities: skills, design verification, chat and the browser they share.",
+	name = "agito",
+	about = "Compose the agito capabilities: skills, design verification, chat and the browser they share.",
 	version
 )]
 pub struct Command {
@@ -22,7 +22,7 @@ pub enum Verb {
 	/// every third-party module the adapter roots declare.
 	Manifests {
 		/// A directory holding a third-party `module.json`, or a directory of
-		/// crate directories. Repeatable; when absent, `AGENTIC_ADAPTER_PATH`
+		/// crate directories. Repeatable; when absent, `AGITO_ADAPTER_PATH`
 		/// is read instead.
 		#[arg(long = "adapter")]
 		Adapter:Vec<String>,
@@ -34,7 +34,7 @@ pub enum Verb {
 		#[arg(long)]
 		Module:String,
 		/// A directory holding a third-party `module.json`, or a directory of
-		/// crate directories. Repeatable; when absent, `AGENTIC_ADAPTER_PATH`
+		/// crate directories. Repeatable; when absent, `AGITO_ADAPTER_PATH`
 		/// is read instead.
 		#[arg(long = "adapter")]
 		Adapter:Vec<String>,
@@ -42,7 +42,7 @@ pub enum Verb {
 	/// Discover, validate and digest a skill corpus. Needs no browser.
 	Skills {
 		/// The corpus root: a directory of skill directories. Absent, the
-		/// corpus is read beside this crate, then from `AGENTIC_SKILL_PATH`,
+		/// corpus is read beside this crate, then from `AGITO_SKILL_PATH`,
 		/// then from the installed location - in that order.
 		Root:Option<String>,
 		/// Print the whole record as JSON instead of a summary.

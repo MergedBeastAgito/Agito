@@ -2,7 +2,7 @@
 
 pub mod Digest;
 pub mod Discover;
-pub mod Entries;
+pub mod Entry;
 pub mod Frontmatter;
-pub mod Names;
+pub mod Name;
 pub mod Validate;

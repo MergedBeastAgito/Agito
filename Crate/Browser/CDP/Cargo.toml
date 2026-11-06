@@ -1,5 +1,5 @@
 [package]
-name = "agentic-browser-cdp"
+name = "agito-browser-cdp"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ publish.workspace = true
 description = "The concrete browser substrate: attach or launch, bounded evaluation, and disposal that closes only what it launched."
 
 [lib]
-name = "AgenticBrowserCDP"
+name = "CDP"
 path = "Source/Library.rs"
 
 [dependencies]
-agentic-runtime = { workspace = true }
+agito-runtime = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

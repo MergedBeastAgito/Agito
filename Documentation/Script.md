@@ -12,18 +12,19 @@ their `cargo add` resolved to on the same day.
 
 ## The shape
 
-- **One file per expression**, `Source/Script/Expressions/ReadAnswers.ts` and so on, and one for the
+- **One file per expression**, `Source/Script/Expression/ReadAnswers.ts` and so on, and one for the
   workflow's `Source/Script/Measure.ts`. The path under `Source/Script/` is the path the macro
   takes: `script!("Expressions/ReadAnswers")`.
-- **A second file only when the first is pinned.** `Expressions/ReadBoth.ts` carries the same thread
-  read as `Expressions/ReadAnswers.ts` and adds the page's Markdown to what it returns, because the
+- **A second file only when the first is pinned.** `Expression/ReadBoth.ts` carries the same thread
+  read as `Expression/ReadAnswers.ts` and adds the page's Markdown to what it returns, because the
   two single-format expressions are what a page already receives: an expression that gained a field
   would not be that expression. The duplication is written so the thread read is the same text in
   both files.
 - **A `build.rs` per owning crate**, three lines around `Build/Script.rs`, which is the one
-  statement of what a script may contain and how it becomes bytes. `ChatDriver` and `Workflow` both
+  statement of what a script may contain and how it becomes bytes. `Crate/Chat/Driver` and
+  `Crate/Workflow` both
   include it, so the rule cannot drift between them.
-- **The macro**, `AgenticRuntime::script!`, expands to `include_str!` of the compiled file in the
+- **The macro**, `RunTime::script!`, expands to `include_str!` of the compiled file in the
   caller's `OUT_DIR` and, when parameters are given, to `FillDeclared` with the script's own
   declared parameter list.
 - **The compiled artefact is JavaScript, not a template**: the parameter markers are valid
@@ -64,7 +65,7 @@ determinism did not discriminate between them. The discriminator was the bytes t
 
 The cold times are from an empty `target/` with `RUSTC_WRAPPER=` empty, so a warm `sccache` does not
 flatter them; the warm times are 1,000 in-process iterations over the same 1,898-byte source. What a
-developer pays day to day is neither: the build script over all ten `ChatDriver` scripts, the
+developer pays day to day is neither: the build script over all ten `Crate/Chat/Driver` scripts, the
 13,367-byte serializer included, runs in **about 10 ms**.
 
 ---
@@ -117,7 +118,7 @@ declare const __PARAM_Pattern__: RegExp | null;
   again, so a question whose text happens to contain `__PARAM_Seen__` cannot have another
   parameter's code spliced into the middle of its string.
 - **An unfilled marker stays.** A marker with no value is left in place and reported by
-  `AgenticRuntime::Unfilled`, which the tests use; a page receiving one throws
+  `RunTime::Unfilled`, which the tests use; a page receiving one throws
   `ReferenceError: __PARAM_Scroll__ is not defined` rather than matching nothing.
 - **Escaping is held to `serde_json`.** `Escape` produces exactly what the JSON encoder these
   expressions were built with produced, byte for byte, for every control character and every
@@ -165,15 +166,15 @@ The gates, from the workspace root:
 rm -rf Target && cargo build --workspace --offline
 
 # The compilation itself: every expression under Source/Script/ is erased and emitted.
-cargo build -p agentic-chat-driver -p agentic-workflow
+cargo build -p agito-chat-driver -p agito-workflow
 
 # A malformed script names its file and line and fails the build.
-printf '(() => {\n\treturn 1;\n)()\n' > Crate/ChatDriver/Source/Script/Expressions/Broken.ts
-cargo build -p agentic-chat-driver   # error: Source/Script/Expressions/Broken.ts:3:1: Unexpected token
+printf '(() => {\n\treturn 1;\n)()\n' > Crate/Chat/Driver/Source/Script/Expression/Broken.ts
+cargo build -p agito-chat-driver   # error: Source/Script/Expression/Broken.ts:3:1: Unexpected token
 
 # A call site that disagrees with a script's declarations fails to compile, at the call site.
 #   error[E0080]: evaluation panicked: script parameters: a declared parameter is missing
-#   --> Crate/ChatDriver/Source/Fn/Expressions.rs:148:2
+#   --> Crate/Chat/Driver/Source/Fn/Expression.rs:148:2
 
 # The build itself: every script under Source/Script/ is erased and compiled, and a
 # malformed one stops the build with its position named.

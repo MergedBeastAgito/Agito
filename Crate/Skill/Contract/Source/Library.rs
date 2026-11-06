@@ -1,4 +1,4 @@
-//! `agentic.skill.validate`: discover a corpus, report what a skill breaks,
+//! `agito.skill.validate`: discover a corpus, report what a skill breaks,
 //! digest the result.
 //!
 //! A corpus is a directory of skill directories. A skill is a directory

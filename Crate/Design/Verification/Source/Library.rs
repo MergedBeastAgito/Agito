@@ -1,4 +1,4 @@
-//! `agentic.verify.design`: measure a built page and judge the measurements
+//! `agito.verify.design`: measure a built page and judge the measurements
 //! against invariants the caller supplies.
 //!
 //! This crate holds no design. No selector, no pixel value, no colour: a caller

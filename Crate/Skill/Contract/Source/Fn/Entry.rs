@@ -40,7 +40,7 @@ pub struct Entry {
 }
 
 /// The entries of a directory, or none.
-pub fn Entries(Path:&Path) -> Vec<Entry> {
+pub fn Read(Path:&Path) -> Vec<Entry> {
 	let Ok(Read) = fs::read_dir(Path) else {
 		return Vec::new();
 	};

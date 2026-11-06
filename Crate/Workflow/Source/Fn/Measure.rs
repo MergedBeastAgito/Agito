@@ -15,7 +15,7 @@
 //! script declares as `declare const __PARAM_Selectors__: string[];`. So the
 //! file is the expression and this function is only its parameter.
 
-use AgenticRuntime::script;
+use ::RunTime::script;
 use serde_json::Value;
 
 /// A JavaScript expression that answers one measurement per selector.

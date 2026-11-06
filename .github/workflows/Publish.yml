@@ -4,7 +4,7 @@ name: Publish
 # there.
 #
 # It is chained off `Build` rather than off the tag itself. A second workflow on
-# `push: tags: [Agentic/v*]` would be a second release ceremony racing the first
+# `push: tags: [Agito/v*]` would be a second release ceremony racing the first
 # over the same release and the same `SHA256SUMS.txt` - the exact collision
 # Build.yml's header rules out. `workflow_run` has no such problem: it fires
 # after the release pipeline has finished.
@@ -19,8 +19,8 @@ name: Publish
 #
 #   1. `publish = false` in `[workspace.package]`, inherited by every member via
 #      `publish.workspace = true`, so cargo itself refuses the command from any
-#      crate. Verified: `cargo publish --dry-run -p agentic` answers
-#      "`agentic` cannot be published."
+#      crate. Verified: `cargo publish --dry-run -p agito` answers
+#      "`agito` cannot be published."
 #   2. The `publish_for_real` input defaults to false, and the job's `if:` also
 #      requires `workflow_dispatch`, so no tag-driven run can reach it.
 #   3. This repository has no `CARGO_REGISTRY_TOKEN` secret, so the step has
@@ -87,7 +87,7 @@ jobs:
           toolchain: nightly
 
       # The step is here on purpose, and it cannot run today. `cargo publish`
-      # answers "`agentic` cannot be published" because `publish = false` in
+      # answers "`agito` cannot be published" because `publish = false` in
       # `[workspace.package]` is inherited by every member - even with the input
       # above armed - and no `CARGO_REGISTRY_TOKEN` secret exists to authenticate
       # with. When the crates.io namespace becomes ours, the manifest key is the
@@ -95,6 +95,6 @@ jobs:
       # the step: a publish job with no publish step is a job that reads as
       # finished work.
       - name: Publish to crates.io (refused while the namespace is not ours)
-        run: cargo publish -p agentic
+        run: cargo publish -p agito
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

@@ -1,13 +1,13 @@
 //! One failure an adapter reports, in the adapter's own vocabulary.
 //!
-//! Three parts, kept apart the way `agentic-runtime`'s error keeps them: a
+//! Three parts, kept apart the way `agito-runtime`'s error keeps them: a
 //! consumer narrows on [`Error::Code`], a human reads [`Error::Message`], and a
 //! caller that needs to know what was actually observed reads
 //! [`Error::Detail`] instead of parsing a sentence.
 //!
 //! The code is a string rather than an enum this crate defines, and that is the
 //! whole design: a code names a substrate failure - a dead socket, a page that
-//! never answered, a game that stopped - and Agentic cannot enumerate the
+//! never answered, a game that stopped - and Agito cannot enumerate the
 //! failures of a substrate it has never seen. An adapter declares its codes in
 //! its own `module.json`, and reports one of them here.
 

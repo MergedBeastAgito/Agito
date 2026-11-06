@@ -21,29 +21,29 @@
 //!
 //! # Verbs are a claim too
 //!
-//! `provides.verbs` is the other half of a module's surface: the chat driver
-//! answers `agentic.chat.ask`, and `agentic.chat.note` is a call it also
+//! `Provide.Verb` is the other half of a module's surface: the chat driver
+//! answers `agito.chat.ask`, and `agito.chat.note` is a call it also
 //! accepts. A verb declared in a manifest that nothing reads is a promise made
 //! to nobody, so both reports carry the names the file declares, and a shipped
 //! module's names are compared with the table's the way its port and its error
-//! codes are. The shape is checked rather than assumed - a `provides.verbs` that
+//! codes are. The shape is checked rather than assumed - a `Provide.Verb` that
 //! is not an object keyed by non-empty verb names is refused, in the same shape
 //! as a kind outside the vocabulary.
 //!
 //! What a foreign report cannot answer, the value can: an adapter states its own
-//! port, and `AgenticAdapter::Serves` compares that statement with the manifest
-//! that registered it. `agentic verify` never constructs an adapter - a command
+//! port, and `Adapter::Serves` compares that statement with the manifest
+//! that registered it. `agito verify` never constructs an adapter - a command
 //! that did would run a third party's code to decide whether it is well formed.
 
 use std::{collections::BTreeSet, path::PathBuf};
 
-use AgenticBrowserCDP::Code as BrowserCode;
-use AgenticChatDriver::Code as ChatCode;
-use AgenticDesignVerification::Code as DesignCode;
-use AgenticLane::Code as LaneCode;
-use AgenticRuntime::Code as RuntimeCode;
-use AgenticSkillContract::Rule as SkillRule;
-use AgenticSpacetimeCatalog::Code as CatalogCode;
+use ::CDP::Code as BrowserCode;
+use ::Driver::Code as ChatCode;
+use ::Verification::Code as DesignCode;
+use ::Lane::Code as LaneCode;
+use ::RunTime::Code as RunTimeCode;
+use ::Contract::Rule as SkillRule;
+use ::Catalog::Code as CatalogCode;
 use serde_json::{Value, json};
 
 use crate::{
@@ -64,7 +64,7 @@ pub struct Readiness {
 	pub Kind:String,
 	/// The port it provides.
 	pub Port:String,
-	/// The verbs it declares under `provides.verbs`, in the order its
+	/// The verbs it declares under `Provide.Verb`, in the order its
 	/// manifest names them. Empty for a module that declares none.
 	pub Verbs:Vec<String>,
 	/// The retention class it declares.
@@ -92,23 +92,23 @@ pub struct Readiness {
 /// it in its own manifest.
 pub fn Declared(Name:&str) -> Option<Vec<&'static str>> {
 	Some(match Name {
-		"@agentic/runtime" => RuntimeCode::All().into_iter().map(RuntimeCode::Name).collect(),
-		"@agentic/spacetime-catalog" => CatalogCode::All().into_iter().map(CatalogCode::Name).collect(),
-		"@agentic/skill-contract" => SkillRule::All().into_iter().map(SkillRule::Name).collect(),
-		"@agentic/chat-driver" => ChatCode::All().into_iter().map(ChatCode::Name).collect(),
-		"@agentic/browser-cdp" => BrowserCode::All().into_iter().map(BrowserCode::Name).collect(),
-		"@agentic/design-verification" => DesignCode::All().into_iter().map(DesignCode::Name).collect(),
-		"@agentic/lane" => LaneCode::All().into_iter().map(LaneCode::Name).collect(),
-		"@agentic/workflow" | "@agentic/composition" | "@agentic/adapter" => Vec::new(),
+		"@agito/runtime" => RunTimeCode::All().into_iter().map(RunTimeCode::Name).collect(),
+		"@agito/spacetime-catalog" => CatalogCode::All().into_iter().map(CatalogCode::Name).collect(),
+		"@agito/skill-contract" => SkillRule::All().into_iter().map(SkillRule::Name).collect(),
+		"@agito/chat-driver" => ChatCode::All().into_iter().map(ChatCode::Name).collect(),
+		"@agito/browser-cdp" => BrowserCode::All().into_iter().map(BrowserCode::Name).collect(),
+		"@agito/design-verification" => DesignCode::All().into_iter().map(DesignCode::Name).collect(),
+		"@agito/lane" => LaneCode::All().into_iter().map(LaneCode::Name).collect(),
+		"@agito/workflow" | "@agito/composition" | "@agito/adapter" => Vec::new(),
 		_ => return None,
 	})
 }
 
 /// The states the manifest may name.
 fn States() -> Vec<&'static str> {
-	AgenticRuntime::States
+	RunTime::States
 		.into_iter()
-		.map(AgenticRuntime::StateClass::Name)
+		.map(RunTime::StateClass::Name)
 		.collect()
 }
 
@@ -116,50 +116,50 @@ fn States() -> Vec<&'static str> {
 fn Text(Parsed:&Value, Key:&str) -> String { Parsed.get(Key).and_then(Value::as_str).unwrap_or_default().to_string() }
 
 /// The port a manifest says it provides.
-fn Provides(Parsed:&Value) -> String {
+fn Provide(Parsed:&Value) -> String {
 	Parsed
-		.get("provides")
-		.and_then(|Provides| Provides.get("port"))
+		.get("Provide")
+		.and_then(|Provides| Provides.get("Port"))
 		.and_then(Value::as_str)
 		.unwrap_or_default()
 		.to_string()
 }
 
 /// The errors a manifest names, in the order it names them.
-fn Errors(Parsed:&Value) -> Vec<String> {
+fn Error(Parsed:&Value) -> Vec<String> {
 	Parsed
-		.get("provides")
-		.and_then(|Provides| Provides.get("errors"))
+		.get("Provide")
+		.and_then(|Provides| Provides.get("Error"))
 		.and_then(Value::as_array)
 		.map(|Errors| Errors.iter().filter_map(Value::as_str).map(str::to_string).collect())
 		.unwrap_or_default()
 }
 
-/// The verbs a manifest declares under `provides`, in the order it names them.
+/// The verbs a manifest declares under `Provide`, in the order it names them.
 ///
 /// The shape on disk is an object keyed by the verb's own name, because a verb
-/// carries an error list the way a port does: `agentic.chat.note` is not
-/// `agentic.chat.ask`, and a code the verb reports belongs to the verb. So the
+/// carries an error list the way a port does: `agito.chat.note` is not
+/// `agito.chat.ask`, and a code the verb reports belongs to the verb. So the
 /// names are the object's keys, and declaring none is the ordinary case -
 /// every module but the chat driver declares no verb at all - which is why an
 /// absent key answers an empty list rather than an error.
 ///
-/// A `provides.verbs` that is not that shape is refused here rather than
+/// A `Provide.Verb` that is not that shape is refused here rather than
 /// reported as a verb no caller could ever name: a bare string, a list of
 /// values, a declaration that is not an object, or a key that is empty or
 /// blank. The caller turns the `Err` into the reason a module is not ready,
 /// which is the same shape as a kind outside the vocabulary.
-pub fn VerbsOf(Parsed:&Value) -> Result<Vec<String>, String> {
-	let Some(Provides) = Parsed.get("provides") else {
+pub fn VerbOf(Parsed:&Value) -> Result<Vec<String>, String> {
+	let Some(Provides) = Parsed.get("Provide") else {
 		return Ok(Vec::new());
 	};
-	match Provides.get("verbs") {
+	match Provides.get("Verb") {
 		None | Some(Value::Null) => Ok(Vec::new()),
 		Some(Value::Object(Verbs)) => {
 			let mut Names = Vec::with_capacity(Verbs.len());
 			for (Name, Declaration) in Verbs {
 				if Name.trim().is_empty() {
-					return Err("names a verb with no name in `provides.verbs`".to_string());
+					return Err("names a verb with no name in `Provide.Verb`".to_string());
 				}
 				if !Declaration.is_object() {
 					return Err(format!("declares the verb {Name:?} and its declaration is not an object"));
@@ -168,15 +168,15 @@ pub fn VerbsOf(Parsed:&Value) -> Result<Vec<String>, String> {
 			}
 			Ok(Names)
 		},
-		Some(_) => Err("`provides.verbs` is not an object keyed by verb name".to_string()),
+		Some(_) => Err("`Provide.Verb` is not an object keyed by verb name".to_string()),
 	}
 }
 
 /// The ports a manifest says it requires.
-fn Requires(Parsed:&Value) -> Vec<String> {
+fn Require(Parsed:&Value) -> Vec<String> {
 	Parsed
-		.get("requires")
-		.and_then(|Requires| Requires.get("ports"))
+		.get("Require")
+		.and_then(|Requires| Requires.get("Port"))
 		.and_then(Value::as_array)
 		.map(|Ports| Ports.iter().filter_map(Value::as_str).map(str::to_string).collect())
 		.unwrap_or_default()
@@ -184,7 +184,7 @@ fn Requires(Parsed:&Value) -> Vec<String> {
 
 /// Report one module: a module this workspace ships, or one an adapter root
 /// declares.
-pub fn VerifyModule(Name:&str, Roots:&[PathBuf]) -> Result<Readiness, String> {
+pub fn Verify(Name:&str, Roots:&[PathBuf]) -> Result<Readiness, String> {
 	if let Some(Shipped) = Find(Name) {
 		return Report(Shipped);
 	}
@@ -211,12 +211,12 @@ fn Report(One:&'static Manifest) -> Result<Readiness, String> {
 	};
 	let Parsed:Value = serde_json::from_str(One.JSON)
 		.map_err(|Why| format!("{} ships a manifest that does not parse: {Why}", One.Name))?;
-	let ManifestErrors = Errors(&Parsed);
-	let State = Text(&Parsed, "state");
-	let FileName = Text(&Parsed, "name");
-	let FileKind = Text(&Parsed, "kind");
-	let FilePort = Provides(&Parsed);
-	let Verbs = VerbsOf(&Parsed);
+	let ManifestErrors = Error(&Parsed);
+	let State = Text(&Parsed, "State");
+	let FileName = Text(&Parsed, "Name");
+	let FileKind = Text(&Parsed, "Kind");
+	let FilePort = Provide(&Parsed);
+	let Verbs = VerbOf(&Parsed);
 	let FileVerbs:Vec<&str> = Verbs
 		.as_ref()
 		.map(|List| List.iter().map(String::as_str).collect())
@@ -274,12 +274,12 @@ fn Report(One:&'static Manifest) -> Result<Readiness, String> {
 fn ReportForeign(One:&External, Ports:&[String]) -> Result<Readiness, String> {
 	let Parsed:Value = serde_json::from_str(&One.JSON)
 		.map_err(|Why| format!("{} ships a manifest that does not parse: {Why}", One.Path.display()))?;
-	let ManifestErrors = Errors(&Parsed);
-	let Verbs = VerbsOf(&Parsed);
-	let Requires = Requires(&Parsed);
+	let ManifestErrors = Error(&Parsed);
+	let Verbs = VerbOf(&Parsed);
+	let Requires = Require(&Parsed);
 	let Entry = Parsed
-		.get("artefact")
-		.and_then(|Artefact| Artefact.get("entry"))
+		.get("Artefact")
+		.and_then(|Artefact| Artefact.get("Entry"))
 		.and_then(Value::as_str)
 		.unwrap_or_default()
 		.to_string();
@@ -335,17 +335,17 @@ fn Ports(Foreign:&[External]) -> Vec<String> {
 /// A readiness report as the JSON a harness reads.
 pub fn ReadinessJSON(Readiness:&Readiness) -> Value {
 	json!({
-		"module": Readiness.Module,
-		"kind": Readiness.Kind,
-		"port": Readiness.Port,
-		"verbs": Readiness.Verbs,
-		"state": Readiness.State,
-		"ready": Readiness.Ready,
-		"external": Readiness.External,
-		"errors": { "manifest": Readiness.Manifest, "code": Readiness.Code },
-		"reason": Readiness.Reason,
+		"Module": Readiness.Module,
+		"Kind": Readiness.Kind,
+		"Port": Readiness.Port,
+		"Verb": Readiness.Verbs,
+		"State": Readiness.State,
+		"Ready": Readiness.Ready,
+		"External": Readiness.External,
+		"Error": { "Manifest": Readiness.Manifest, "Code": Readiness.Code },
+		"Reason": Readiness.Reason,
 	})
 }
 
-/// Every manifest, as the summary `agentic manifests` prints.
+/// Every manifest, as the summary `agito manifests` prints.
 pub fn Catalogue() -> Vec<Manifest> { All.to_vec() }

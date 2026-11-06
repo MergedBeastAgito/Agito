@@ -1,4 +1,4 @@
-//! `agentic.runtime`, from `agentic-runtime`: what one operation is bounded by,
+//! `agito.runtime`, from `agito-runtime`: what one operation is bounded by,
 //! and the two combinators that apply a bound.
 //!
 //! [`Call`] is the bound itself, [`FutureBox`] is the return type every port
@@ -11,12 +11,12 @@
 //! What is not here: the policy engine. `Runner`, `Authority`, `StandIn`,
 //! `Admission`, `Lease`, `Budget` and the rest of the lease vocabulary are the
 //! composition root's business, and a consumer that held a lease would be a
-//! second authority over the same resource. `BlockOn` is the runtime's std
+//! second authority over the same resource. `Block` is the runtime's std
 //! executor and is deliberately absent: the browser adapter spawns on tokio, so
-//! a consumer driving it with `BlockOn` would panic inside a launch that had
+//! a consumer driving it with `Block` would panic inside a launch that had
 //! already succeeded.
 
-pub use AgenticRuntime::{
+pub use ::RunTime::{
 	Bound,
 	Call,
 	Cancellation,

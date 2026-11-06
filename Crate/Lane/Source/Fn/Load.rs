@@ -79,7 +79,7 @@ use serde_json::{Map, Value};
 
 use crate::Struct::{
 	Corpus::Corpus,
-	CorpusError::CorpusError,
+	Corpus::Error::CorpusError,
 	Lane::Lane,
 	Predicate::Predicate,
 	Question::Question,

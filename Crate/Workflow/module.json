@@ -1,29 +1,29 @@
 {
-	"name": "@agentic/workflow",
-	"kind": "workflow",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.workflow",
-		"errors": []
+	"Name": "@agito/workflow",
+	"Kind": "Workflow",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.workflow",
+		"Error": []
 	},
-	"requires": {
-		"ports": [
-			"agentic.browse",
-			"agentic.chat.ask",
-			"agentic.verify.design",
-			"agentic.skill.validate"
+	"Require": {
+		"Port": [
+			"agito.browse",
+			"agito.chat.ask",
+			"agito.verify.design",
+			"agito.skill.validate"
 		]
 	},
-	"artefact": {
-		"entry": "Target/debug/libAgenticWorkflow.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Artefact": {
+		"Entry": "Target/debug/libWorkflow.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "stateless",
-	"cost": {
-		"coldMs": 5,
-		"warmMs": 1,
-		"network": false
+	"State": "Stateless",
+	"Cost": {
+		"ColdMs": 5,
+		"WarmMs": 1,
+		"Network": false
 	},
-	"verify": "agentic verify --module @agentic/workflow"
+	"Verify": "agito verify --module @agito/workflow"
 }

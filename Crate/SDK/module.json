@@ -1,31 +1,31 @@
 {
-	"name": "@agentic/sdk",
-	"kind": "facade",
-	"version": "0.1.3",
-	"provides": {
-		"port": null,
-		"errors": []
+	"Name": "@agito/sdk",
+	"Kind": "Facade",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": null,
+		"Error": []
 	},
-	"requires": {
-		"ports": [
-			"agentic.runtime",
-			"agentic.browse",
-			"agentic.chat.ask",
-			"agentic.verify.design",
-			"agentic.skill.validate",
-			"agentic.adapter"
+	"Require": {
+		"Port": [
+			"agito.runtime",
+			"agito.browse",
+			"agito.chat.ask",
+			"agito.verify.design",
+			"agito.skill.validate",
+			"agito.adapter"
 		]
 	},
-	"artefact": {
-		"entry": "Target/debug/libAgenticSDK.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Artefact": {
+		"Entry": "Target/debug/libSDK.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "stateless",
-	"cost": {
-		"coldMs": 5,
-		"warmMs": 1,
-		"network": false
+	"State": "Stateless",
+	"Cost": {
+		"ColdMs": 5,
+		"WarmMs": 1,
+		"Network": false
 	},
-	"verify": "cargo build -p agentic-sdk"
+	"Verify": "cargo build -p agito-sdk"
 }

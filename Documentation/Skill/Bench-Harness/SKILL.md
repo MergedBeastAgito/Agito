@@ -18,7 +18,7 @@ unreadable: a rate-limited product looks like a worse driver, and a driver that 
 the previous answer looks correct.
 
 **No harness exists in this tree.** There is no task record, no trial, no run manifest, no evidence
-store, no grader for driver correctness, no failure taxonomy and no bench verb - `agentic --help`
+store, no grader for driver correctness, no failure taxonomy and no bench verb - `agito --help`
 lists `manifests`, `verify`, `skills`, `browse`, `chat` and `design`, and nothing else. What exists
 is every ingredient the harness would be built from, and this skill names each one.
 
@@ -31,17 +31,17 @@ never cost anything and never flaked.
 
 ## What exists, and what is owed
 
-- **An evidence stream, per read.** `AgenticChatDriver::Observe` pushes one `Observation` (`Count`,
+- **An evidence stream, per read.** `Driver::Observe` pushes one `Observation` (`Count`,
   `Text`, `Busy`, `Fresh`, `Settled`) to a sink for every read it takes, and the sink answers
-  `Control::Continue` or `Control::Stop`. `Target/debug/agentic chat --observe` prints one JSON line
+  `Control::Continue` or `Control::Stop`. `Target/debug/agito chat --observe` prints one JSON line
   per read on stderr - `{"count", "chars", "busy", "fresh", "settled"}` - so stdout stays the answer
   a caller is parsing. That line is the first record of the stream a harness needs; it is not
   persisted anywhere.
 - **A settlement rule that is already the completion contract.**
-  `Crate/ChatDriver/Source/Struct/Settlement.rs` settles on the third consecutive agreement with the
+  `Crate/Chat/Driver/Source/Struct/Settlement.rs` settles on the third consecutive agreement with the
   page's own busy control clear, and resets on a busy read. A harness grades this rule; it must not
   re-implement it.
-- **A grader that is already pure and total.** `AgenticDesignVerification::Check` takes measurements
+- **A grader that is already pure and total.** `Verification::Check` takes measurements
   and invariants and returns `Verdict { Held, Evidence, Absent }`, where each `Evidence` carries
   `Label`, `Got`, `Want` and `Held`. It cannot fail: a reading that throws, a derivation that throws
   and a comparator that panics are each a row that did not hold. This is the shape to copy for a
@@ -49,8 +49,8 @@ never cost anything and never flaked.
 - **Budgets that belong to the caller.** `Call` is a deadline plus a cancellation, `Pace` is the
   clock and the wait, and `--timeout` is the whole call's budget. A harness owns the budget and
   passes it in; an adapter that keeps its own deadline makes two arms incomparable.
-- **Admission.** Every crate carries `module.json` with a `state`: `stateless`, `holds-transport`,
-  `holds-identity`, `holds-workspace`. `Target/debug/agentic verify --module @agentic/chat-driver`
+- **Admission.** Every crate carries `module.json` with a `state`: `Stateless`, `HoldTransport`,
+  `HoldIdentity`, `HoldWorkspace`. `Target/debug/agito verify --module @agito/chat-driver`
   prints `{"ready", "state", "errors", "kind", "port", "module"}`. A trial's preflight is that
   report plus the state's own check - a liveness probe for a transport, a freshness check for an
   identity, a reset proof for a workspace.
@@ -172,7 +172,7 @@ spend.
 2. An independent grader for submit, correlate, complete, extract, modelled on `Check`.
 3. A replay lane over recorded cases whose answer is known, so the grader is calibrated before it
    scores anything.
-4. A live lane whose preflight is `agentic verify --module <name>` plus the state's own check.
+4. A live lane whose preflight is `agito verify --module <name>` plus the state's own check.
 5. A report: first-attempt success, failure causes, latency, flake, coverage, cost per success.
 
 **The first run exists to correct the harness, not to score anything.** Expect the metric set to
@@ -206,6 +206,6 @@ calibrated.
 | The budget is the caller's, not the adapter's         | the chat driver's suite (deleted)                                                                   |
 | The grader records a failure instead of throwing      | the design-verification suite (deleted)                                                             |
 | An absent element fails even when every reading holds | the design-verification suite (deleted)                                                             |
-| Admission is a JSON a harness can read                | `Target/debug/agentic verify --module @agentic/chat-driver` prints `"ready": true` with its `state` |
+| Admission is a JSON a harness can read                | `Target/debug/agito verify --module @agito/chat-driver` prints `"ready": true` with its `state` |
 | The replay lane would have been the scenario suite    | deleted with the corpus; there is nothing to replay against                                         |
-| This tree ships no harness                            | `Target/debug/agentic --help` lists no verb that records a trial or a run                           |
+| This tree ships no harness                            | `Target/debug/agito --help` lists no verb that records a trial or a run                           |

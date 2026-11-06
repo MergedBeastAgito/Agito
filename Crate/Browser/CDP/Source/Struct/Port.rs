@@ -1,4 +1,4 @@
-//! The port `agentic.browse` promises, written the way a consumer asks for it.
+//! The port `agito.browse` promises, written the way a consumer asks for it.
 //!
 //! `module.json` names three errors - `browser-unavailable`,
 //! `navigation-failed` and `timeout` - and [`crate::Struct::Error`] is where
@@ -6,7 +6,7 @@
 //! fourth way is mapped onto one of the three at the boundary, so a consumer
 //! never has to guess.
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 /// Who owns the page behind a target, and therefore who may close it.

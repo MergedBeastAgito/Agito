@@ -10,10 +10,10 @@
 
 use std::sync::Arc;
 
-use AgenticBrowserCDP::{Browse, Chrome, ChromeOptions, Create as CreateSession, Options, Report, Tokio};
-use AgenticChatDriver::{Create as CreateChat, Driver, Options as ChatOptions, Page as ChatPort, Selectors};
-use AgenticDesignVerification::{Create as CreateVerify, Verifier};
-use AgenticWorkflow::Struct::Binding::{Measure, Page};
+use ::CDP::{Browse, Chrome, ChromeOptions, Create as CreateSession, Options, Report, Tokio};
+use ::Driver::{Create as CreateChat, Driver, Options as ChatOptions, Page as ChatPort, Selectors};
+use ::Verification::{Create as CreateVerify, Verifier};
+use ::Workflow::Struct::Binding::{Measure, Page};
 
 /// A browser session with the workspace's pace, reporting a failed release to
 /// stderr.

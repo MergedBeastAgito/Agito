@@ -1,6 +1,6 @@
 //! A scripted adapter, for a consumer that tests its own use of the port.
 //!
-//! Named as a test double, the way `agentic-runtime`'s `StandIn` is. A consumer
+//! Named as a test double, the way `agito-runtime`'s `StandIn` is. A consumer
 //! that holds `Arc<dyn Adapter>` needs to exercise its own code with no
 //! substrate behind it, and a fake that ships with the port is the only one
 //! every consumer can share: a copy in each consumer's test tree is a copy that
@@ -20,7 +20,7 @@ use std::{
 	},
 };
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 use crate::Struct::{Error::Error, Port::Adapter};

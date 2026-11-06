@@ -1,6 +1,6 @@
 # Build - the only distribution channel this repository has.
 #
-# `agentic` is not published to crates.io, so a file this workflow does not
+# `agito` is not published to crates.io, so a file this workflow does not
 # build and attach does not exist for anyone. There is no manual upload step and
 # no documented fallback: if a file cannot be attached, the release fails rather
 # than looking complete.
@@ -10,7 +10,7 @@
 # its own files, and `Finalize` runs once afterwards - it packages what is not a
 # per-platform binary, merges the checksums and attaches them.
 #
-# This file is the ONLY workflow that reacts to `Agentic/v*`. A second workflow
+# This file is the ONLY workflow that reacts to `Agito/v*`. A second workflow
 # on the same tag would race to create the same release and clobber the same
 # `SHA256SUMS.txt`, so the tag has exactly one owner by construction.
 name: Build
@@ -29,7 +29,7 @@ permissions:
 on:
   workflow_dispatch:
   push:
-    tags: ["Agentic/v*"]
+    tags: ["Agito/v*"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -48,7 +48,7 @@ jobs:
     # A dispatch has no tag to hang a release on, so this job skips and the
     # matrix still runs: a pipeline that cannot be dry-run is a pipeline nobody
     # exercises before the tag that matters.
-    if: startsWith(github.ref, 'refs/tags/Agentic/v')
+    if: startsWith(github.ref, 'refs/tags/Agito/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -63,13 +63,13 @@ jobs:
         run: |
           set -euo pipefail
           case "${GITHUB_REF_NAME}" in
-            Agentic/v[0-9]*) ;;
+            Agito/v[0-9]*) ;;
             *)
-              echo "::error::'${GITHUB_REF_NAME}' is not a release tag of the form Agentic/v<semver>"
+              echo "::error::'${GITHUB_REF_NAME}' is not a release tag of the form Agito/v<semver>"
               exit 1
               ;;
           esac
-          Version="${GITHUB_REF_NAME#Agentic/v}"
+          Version="${GITHUB_REF_NAME#Agito/v}"
           # Scoped to `[workspace.package]`, not `grep -m1 '^version ='`. The
           # latter reads whichever `version` key comes first in the file, so a
           # new table above `[workspace.package]` would silently release the
@@ -99,7 +99,7 @@ jobs:
             echo "TAG=${GITHUB_REF_NAME}"
             echo "VERSION=${Version}"
           } >> "${GITHUB_ENV}"
-          echo "releasing agentic ${Version} from ${GITHUB_REF_NAME}"
+          echo "releasing agito ${Version} from ${GITHUB_REF_NAME}"
 
       # The body is written by this step, not typed by hand, and it is rewritten
       # on every run: it names the commit, the targets and where the checksums
@@ -116,7 +116,7 @@ jobs:
           # parameter expansion - no `sed`, so nothing here can rewrite a line it
           # did not mean to.
           Body="$(cat <<'BODY'
-          ## agentic @VERSION@
+          ## agito @VERSION@
 
           Built by `.github/workflows/Build.yml` from commit `@SHA@` on tag `@TAG@`.
           Every asset below was built, hashed and attached by that workflow - nothing is uploaded by hand.
@@ -126,7 +126,7 @@ jobs:
           @TARGETS@
           The Linux targets are musl, so the binaries are static; the macOS targets are built
           on an arm64 runner and the Intel leg is a `--target` cross build.
-          Each archive holds the `agentic` binary with `LICENSE` and `README.md`.
+          Each archive holds the `agito` binary with `LICENSE` and `README.md`.
 
           ### Checksums
 
@@ -142,14 +142,14 @@ jobs:
 
           ### Not on crates.io
 
-          `agentic` is not published to a registry, so the source ships here too:
+          `agito` is not published to a registry, so the source ships here too:
 
-          - **`agentic-@VERSION@-source.tar.gz`** - the tagged tree, which is what actually builds.
-          - **`agentic-@VERSION@-vendor.tar.gz`** - `cargo vendor` output plus `vendor-config.toml`, so the tree builds offline.
+          - **`agito-@VERSION@-source.tar.gz`** - the tagged tree, which is what actually builds.
+          - **`agito-@VERSION@-vendor.tar.gz`** - `cargo vendor` output plus `vendor-config.toml`, so the tree builds offline.
           - **`<crate>-@VERSION@.crate`** - one per workspace crate, the `cargo package` output for that crate.
-          - **`agentic-skills-@VERSION@.tar.gz`** - `Documentation/Skill`, the corpus the binary validates.
+          - **`agito-skills-@VERSION@.tar.gz`** - `Documentation/Skill`, the corpus the binary validates.
 
-          The `.crate` files are one crate at a time. `Crate/ChatDriver` and `Crate/Workflow`
+          The `.crate` files are one crate at a time. `Crate/Chat/Driver` and `Crate/Workflow`
           compile their scripts through a shared `Build/Script.rs` that sits above them in the
           tree, so build those two from the source tarball rather than from their `.crate`.
 
@@ -168,7 +168,7 @@ jobs:
               *windows*) Extension=zip ;;
               *) Extension=tar.gz ;;
             esac
-            Targets="${Targets}- **${Target}** - **agentic-${VERSION}-${Target}.${Extension}**"$'\n'
+            Targets="${Targets}- **${Target}** - **agito-${VERSION}-${Target}.${Extension}**"$'\n'
           done
 
           Body="${Body//@TARGETS@/${Targets}}"
@@ -258,7 +258,7 @@ jobs:
       # checkout has none. The tag pins the source; the graph is resolved here.
       - name: Build
         shell: bash
-        run: cargo build --release -p agentic --target ${{ matrix.target }}
+        run: cargo build --release -p agito --target ${{ matrix.target }}
 
       # A tag names the version; a dispatch has to read it out of the manifest, so
       # the dry run exercises the same packaging path with the same name shape.
@@ -268,21 +268,21 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            Version="${GITHUB_REF_NAME#Agentic/v}"
+            Version="${GITHUB_REF_NAME#Agito/v}"
           else
             # Ask cargo rather than grepping the manifest: the version lives in
             # `[workspace.package]`, and a text search would read whichever
             # `version` key came first. This is the version of the package that
             # was just built, which is the one the archive is named after.
             Version="$(cargo metadata --no-deps --offline --format-version 1 \
-              | jq -r '.packages[] | select(.name == "agentic") | .version')"
+              | jq -r '.packages[] | select(.name == "agito") | .version')"
             if [ -z "${Version}" ]; then
-              echo "::error::cargo metadata reported no version for the agentic package"
+              echo "::error::cargo metadata reported no version for the agito package"
               exit 1
             fi
           fi
           echo "version=${Version}" >> "${GITHUB_OUTPUT}"
-          echo "packaging agentic ${Version} for ${{ matrix.target }}"
+          echo "packaging agito ${Version} for ${{ matrix.target }}"
 
       - name: Package (Unix)
         if: ${{ !contains(matrix.target, 'windows') }}
@@ -292,9 +292,9 @@ jobs:
         run: |
           set -euo pipefail
           Target="${{ matrix.target }}"
-          Name="agentic-${Version}-${Target}"
-          cp "Target/${Target}/release/agentic" agentic
-          tar czf "${Name}.tar.gz" agentic LICENSE README.md
+          Name="agito-${Version}-${Target}"
+          cp "Target/${Target}/release/agito" agito
+          tar czf "${Name}.tar.gz" agito LICENSE README.md
           ls -lh "${Name}.tar.gz"
           tar tzf "${Name}.tar.gz"
 
@@ -308,9 +308,9 @@ jobs:
           Version: ${{ steps.version.outputs.version }}
         run: |
           $Target = "${{ matrix.target }}"
-          $Name = "agentic-$env:Version-$Target"
-          Copy-Item "Target/$Target/release/agentic.exe" "agentic.exe"
-          Compress-Archive -Path "agentic.exe", "LICENSE", "README.md" -DestinationPath "$Name.zip" -CompressionLevel Optimal
+          $Name = "agito-$env:Version-$Target"
+          Copy-Item "Target/$Target/release/agito.exe" "agito.exe"
+          Compress-Archive -Path "agito.exe", "LICENSE", "README.md" -DestinationPath "$Name.zip" -CompressionLevel Optimal
           Get-ChildItem "$Name.zip"
 
       # Windows hashes with `Get-FileHash`, not bash + `certutil`/`findstr`: Git
@@ -325,7 +325,7 @@ jobs:
           Version: ${{ steps.version.outputs.version }}
         run: |
           $Target = "${{ matrix.target }}"
-          $File = "agentic-$env:Version-$Target.zip"
+          $File = "agito-$env:Version-$Target.zip"
           $Hash = (Get-FileHash $File -Algorithm SHA256).Hash.ToLower()
           $Line = "$Hash  $File`n"
           [IO.File]::WriteAllText("SHA256SUMS-$Target.txt", $Line, [Text.UTF8Encoding]::new($false))
@@ -339,7 +339,7 @@ jobs:
         run: |
           set -euo pipefail
           Target="${{ matrix.target }}"
-          File="agentic-${Version}-${Target}.tar.gz"
+          File="agito-${Version}-${Target}.tar.gz"
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "${File}" > "SHA256SUMS-${Target}.txt"
           else
@@ -350,9 +350,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: agentic-${{ matrix.target }}
+          name: agito-${{ matrix.target }}
           path: |
-            agentic-*.*
+            agito-*.*
             SHA256SUMS-${{ matrix.target }}.txt
           if-no-files-found: error
 
@@ -360,10 +360,10 @@ jobs:
       # archive and its own checksum list here. `gh release upload` rather than
       # the release action, because an action call that carries no `draft` input
       # is one edit away from publishing the release before the assets are on
-      # it. `agentic-*.*` cannot match the bare `agentic.exe` the Windows leg
+      # it. `agito-*.*` cannot match the bare `agito.exe` the Windows leg
       # stages - the hyphen is what keeps the binary out of the asset list.
       - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/Agentic/v')
+        if: startsWith(github.ref, 'refs/tags/Agito/v')
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -372,8 +372,8 @@ jobs:
           set -euo pipefail
           Target="${{ matrix.target }}"
           case "${Target}" in
-            *windows*) Archive="agentic-${Version}-${Target}.zip" ;;
-            *) Archive="agentic-${Version}-${Target}.tar.gz" ;;
+            *windows*) Archive="agito-${Version}-${Target}.zip" ;;
+            *) Archive="agito-${Version}-${Target}.tar.gz" ;;
           esac
           for File in "${Archive}" "SHA256SUMS-${Target}.txt"; do
             if [ ! -f "${File}" ]; then
@@ -389,7 +389,7 @@ jobs:
     name: Finalize release assets
     needs: [Build]
     # A dispatch has no release to finalize, so it stops after the dry run.
-    if: startsWith(github.ref, 'refs/tags/Agentic/v')
+    if: startsWith(github.ref, 'refs/tags/Agito/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -402,13 +402,13 @@ jobs:
           set -euo pipefail
           {
             echo "TAG=${GITHUB_REF_NAME}"
-            echo "VERSION=${GITHUB_REF_NAME#Agentic/v}"
+            echo "VERSION=${GITHUB_REF_NAME#Agito/v}"
           } >> "${GITHUB_ENV}"
 
       - name: Download every leg's artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: agentic-*
+          pattern: agito-*
           path: dist
           merge-multiple: true
 
@@ -511,8 +511,8 @@ jobs:
           Root="$(mktemp -d)"
           cargo vendor "${Root}/vendor" > "${Root}/vendor-config.toml"
           cat "${Root}/vendor-config.toml"
-          tar -czf "dist/agentic-${VERSION}-vendor.tar.gz" -C "${Root}" vendor vendor-config.toml
-          ls -l "dist/agentic-${VERSION}-vendor.tar.gz"
+          tar -czf "dist/agito-${VERSION}-vendor.tar.gz" -C "${Root}" vendor vendor-config.toml
+          ls -l "dist/agito-${VERSION}-vendor.tar.gz"
 
       # The tagged tree itself. The `.crate` files are per-crate package output;
       # this is the only asset that unpacks into something `cargo build`
@@ -521,14 +521,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git archive --format=tar.gz --prefix="agentic-${VERSION}/" \
-            -o "dist/agentic-${VERSION}-source.tar.gz" "${GITHUB_SHA}"
+          git archive --format=tar.gz --prefix="agito-${VERSION}/" \
+            -o "dist/agito-${VERSION}-source.tar.gz" "${GITHUB_SHA}"
           # Listed into a file, then head reads the file. `tar ... | head` dies
           # with `tar: stdout: write error` when head closes the pipe, and
           # `pipefail` turns that into a failed release.
-          tar tzf "dist/agentic-${VERSION}-source.tar.gz" > "${RUNNER_TEMP}/source-list.txt"
+          tar tzf "dist/agito-${VERSION}-source.tar.gz" > "${RUNNER_TEMP}/source-list.txt"
           head -20 "${RUNNER_TEMP}/source-list.txt"
-          ls -l "dist/agentic-${VERSION}-source.tar.gz"
+          ls -l "dist/agito-${VERSION}-source.tar.gz"
 
       # The skill corpus is part of what this repository ships, so it travels
       # with the binary that validates it. It unpacks to `Documentation/Skill`.
@@ -536,10 +536,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -czf "dist/agentic-skills-${VERSION}.tar.gz" -C . Documentation/Skill
-          tar tzf "dist/agentic-skills-${VERSION}.tar.gz" > "${RUNNER_TEMP}/skills-list.txt"
+          tar -czf "dist/agito-skills-${VERSION}.tar.gz" -C . Documentation/Skill
+          tar tzf "dist/agito-skills-${VERSION}.tar.gz" > "${RUNNER_TEMP}/skills-list.txt"
           head -20 "${RUNNER_TEMP}/skills-list.txt"
-          ls -l "dist/agentic-skills-${VERSION}.tar.gz"
+          ls -l "dist/agito-skills-${VERSION}.tar.gz"
 
       # One list over every file that will be attached - the per-target lists
       # included, since they are attached files too. Hashed from the bytes in
@@ -551,7 +551,7 @@ jobs:
           cd dist
           rm -f SHA256SUMS.txt
           {
-            printf '# agentic %s - every file attached to the %s release.\n' "${VERSION}" "${TAG}"
+            printf '# agito %s - every file attached to the %s release.\n' "${VERSION}" "${TAG}"
             printf '# Generated by .github/workflows/Build.yml from commit %s - do not edit.\n' "${GITHUB_SHA}"
             printf '# Verify with: sha256sum -c SHA256SUMS.txt\n'
           } > SHA256SUMS.txt
@@ -595,9 +595,9 @@ jobs:
             fi
           done < "${RUNNER_TEMP}/expected-crates.txt"
           for File in \
-            "agentic-${VERSION}-source.tar.gz" \
-            "agentic-${VERSION}-vendor.tar.gz" \
-            "agentic-skills-${VERSION}.tar.gz" \
+            "agito-${VERSION}-source.tar.gz" \
+            "agito-${VERSION}-vendor.tar.gz" \
+            "agito-skills-${VERSION}.tar.gz" \
             "SHA256SUMS.txt"; do
             if [ -f "dist/${File}" ]; then
               Files+=("dist/${File}")

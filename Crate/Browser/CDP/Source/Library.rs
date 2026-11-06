@@ -1,4 +1,4 @@
-//! `agentic.browse`: the concrete browser substrate.
+//! `agito.browse`: the concrete browser substrate.
 //!
 //! Attach and launch are separate operations, not a boolean hidden in a
 //! constructor, because they differ in who owns the process: a session that
@@ -14,7 +14,7 @@
 //! - a live transport that could not be used is `navigation-failed`.
 //!
 //! Cancellation belongs to the caller: every operation races the caller's
-//! signal and its own deadline through [`AgenticRuntime::Bound`], and both lose
+//! signal and its own deadline through [`RunTime::Bound`], and both lose
 //! to `timeout` rather than to a bare error, so a consumer can distinguish "I
 //! gave up" from "the browser broke".
 //!

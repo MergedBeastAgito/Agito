@@ -7,7 +7,7 @@
 //! wants the real authority substitutes a reducer adapter and this type is
 //! never constructed.
 //!
-//! What it is not: a wrapper around [`crate::Runtime::WithLease`]. `WithLease`
+//! What it is not: a wrapper around [`crate::RunTime::WithLease`]. `WithLease`
 //! admits an effect when the work starts; this refuses a record when the work
 //! ends. Between those two moments the lease can expire, be released, or be
 //! taken over by a newer fence, and the admission that already happened cannot

@@ -4,7 +4,7 @@
 //! taken as the answer. `Text` is `innerText`: what the product put on screen,
 //! with a table's columns reduced to tabs, a list's structure reduced to line
 //! breaks, and a formula reduced to its glyphs. `Markdown` serialises the same
-//! DOM through `Source/Script/Expressions/Extract.ts`, so a table keeps its
+//! DOM through `Source/Script/Expression/Extract.ts`, so a table keeps its
 //! columns, a code block keeps its fence and a formula is its TeX.
 //!
 //! `Both` is the two of them from one read. Each of the first two is a whole

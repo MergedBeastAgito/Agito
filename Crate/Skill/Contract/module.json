@@ -1,22 +1,26 @@
 {
-	"name": "@agentic/skill-contract",
-	"kind": "capability",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.skill.validate",
-		"errors": ["unparsable", "unlisted-reference", "uncited"]
+	"Name": "@agito/skill-contract",
+	"Kind": "Capability",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.skill.validate",
+		"Error": [
+			"unparsable",
+			"unlisted-reference",
+			"uncited"
+		]
 	},
-	"requires": {},
-	"artefact": {
-		"entry": "Target/debug/libAgenticSkillContract.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Require": {},
+	"Artefact": {
+		"Entry": "Target/debug/libContract.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "stateless",
-	"cost": {
-		"coldMs": 30,
-		"warmMs": 5,
-		"network": false
+	"State": "Stateless",
+	"Cost": {
+		"ColdMs": 30,
+		"WarmMs": 5,
+		"Network": false
 	},
-	"verify": "agentic verify --module @agentic/skill-contract"
+	"Verify": "agito verify --module @agito/skill-contract"
 }

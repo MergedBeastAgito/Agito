@@ -1,4 +1,4 @@
-//! `agentic.chat.ask` over a page the composition root supplies.
+//! `agito.chat.ask` over a page the composition root supplies.
 //!
 //! The four rules of the port, applied in the order that makes each of them
 //! mean something:
@@ -45,12 +45,12 @@
 
 use std::{sync::Arc, time::Duration};
 
-use AgenticRuntime::{Bound, Call, Expired, FutureBox, Never, Pace};
+use ::RunTime::{Bound, Call, Expired, FutureBox, Never, Pace};
 use serde_json::Value;
 
 use crate::{
 	Fn::{
-		Expressions::{
+		Expression::{
 			PressMode,
 			PressSubmit,
 			ReadAnswers,

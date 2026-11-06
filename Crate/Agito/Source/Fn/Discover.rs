@@ -2,7 +2,7 @@
 //!
 //! The workspace's own table is compiled in. Everything else has to be named,
 //! and there are exactly two ways to name it: `--adapter` on the command line,
-//! and `AGENTIC_ADAPTER_PATH` when the flag is absent. A path list, not a
+//! and `AGITO_ADAPTER_PATH` when the flag is absent. A path list, not a
 //! registry: nothing here is loaded, nothing is constructed, and the order is
 //! the order of the directories rather than the order of somebody's side effect.
 //!
@@ -32,7 +32,7 @@ use crate::{
 };
 
 /// The variable a caller uses when it does not pass `--adapter`.
-pub const Variable:&str = "AGENTIC_ADAPTER_PATH";
+pub const Variable:&str = "AGITO_ADAPTER_PATH";
 
 /// The directories to read: the flag when it was given, the environment
 /// otherwise.
@@ -74,11 +74,11 @@ pub fn Discover(Roots:&[PathBuf]) -> Result<Vec<External>, String> {
 	let mut Paths:BTreeSet<PathBuf> = BTreeSet::new();
 	for Root in Roots {
 		if !Root.exists() {
-			eprintln!("agentic: the adapter root {} does not exist; skipping it", Root.display());
+			eprintln!("agito: the adapter root {} does not exist; skipping it", Root.display());
 			continue;
 		}
 		if !Root.is_dir() {
-			eprintln!("agentic: the adapter root {} is not a directory; skipping it", Root.display());
+			eprintln!("agito: the adapter root {} is not a directory; skipping it", Root.display());
 			continue;
 		}
 		let Own = Root.join("module.json");

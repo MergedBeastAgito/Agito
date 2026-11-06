@@ -1,9 +1,9 @@
-//! The port `agentic.lane.decide` promises, and the seam it needs.
+//! The port `agito.lane.decide` promises, and the seam it needs.
 //!
 //! Two traits, and the split is the crate's whole claim about networks:
 //!
 //! - [`Poster`] is what the crate needs and never implements. One request in,
-//!   one reply body out, bounded by the caller's [`AgenticRuntime::Call`]. The
+//!   one reply body out, bounded by the caller's [`RunTime::Call`]. The
 //!   credentials, the transport, the status codes and the retry policy are an
 //!   adapter's business, and an implementation that answers from a captured
 //!   body is one too.
@@ -19,7 +19,7 @@
 //! - **Selection is a function of the state and the rules, and nothing else.**
 //!   No clock, no counter, no cache: two calls with the same state select the
 //!   same lane, which is what makes a trace reproducible.
-//! - **A call is bounded.** The poster honours the [`AgenticRuntime::Call`] it is
+//! - **A call is bounded.** The poster honours the [`RunTime::Call`] it is
 //!   handed; the crate checks the caller's cancellation before it posts, so a
 //!   call that was abandoned does not become a request somebody pays for.
 //! - **The meter is written around the call, never across it.** A lock held over
@@ -27,7 +27,7 @@
 //!   spawned task, so [`crate::Struct::Decider::Decider`] reads its ceiling,
 //!   drops the lock, awaits, and writes back.
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 
 use crate::Struct::{Answer::Answer, Budget::Budget, Error::Error, Lane::Selection, Request::Request, State::State};
 

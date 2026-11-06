@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::{
 	Fn::{
-		Entries::{BodyFile, CorpusIndexes, Entries, IndexFile, IsDirectory, IsFile, ReferenceDirectory, Text},
+		Entry::{BodyFile, CorpusIndexes, Read, IndexFile, IsDirectory, IsFile, ReferenceDirectory, Text},
 		Frontmatter::Split,
 	},
 	Struct::Skill::Skill,
@@ -17,11 +17,11 @@ use crate::{
 /// Every skill directory under `Root`, sorted by name.
 pub fn Discover(Root:&Path) -> Vec<Skill> {
 	let mut Skills = Vec::new();
-	for Entry in Entries(Root) {
+	for Entry in Read(Root) {
 		if !IsDirectory(&Entry, &Root.join(&Entry.Name)) {
 			continue;
 		}
-		Skills.push(Read(Root, &Entry.Name));
+		Skills.push(Load(Root, &Entry.Name));
 	}
 	Skills.sort_by(|Left, Right| Left.Name.cmp(&Right.Name));
 	Skills
@@ -29,7 +29,7 @@ pub fn Discover(Root:&Path) -> Vec<Skill> {
 
 /// One skill's record: the directory name is the skill's name, because that is
 /// the address a reader types and an index cites.
-pub fn Read(Root:&Path, Name:&str) -> Skill {
+pub fn Load(Root:&Path, Name:&str) -> Skill {
 	let Directory = Root.join(Name);
 	let Body = Text(&Directory.join(BodyFile)).unwrap_or_default();
 	let Description = Split(&Body)
@@ -46,7 +46,7 @@ pub fn Read(Root:&Path, Name:&str) -> Skill {
 
 /// The file names directly under `Reference/`, excluding the index itself.
 pub fn References(Directory:&Path) -> Vec<String> {
-	let mut Names:Vec<String> = Entries(&Directory.join(ReferenceDirectory))
+	let mut Names:Vec<String> = Read(&Directory.join(ReferenceDirectory))
 		.iter()
 		.filter(|Entry| IsFile(Entry))
 		.map(|Entry| Entry.Name.clone())

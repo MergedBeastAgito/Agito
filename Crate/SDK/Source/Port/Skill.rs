@@ -1,4 +1,4 @@
-//! `agentic.skill.validate`, from `agentic-skill-contract`: discover a corpus,
+//! `agito.skill.validate`, from `agito-skill-contract`: discover a corpus,
 //! report what a skill breaks, digest the result.
 //!
 //! [`Contract`] is the entry point, built by [`Create`]; [`Skill`] and
@@ -11,4 +11,4 @@
 //! [`Rules`] is the collection those findings arrive in, and [`Error`] is what a
 //! call that could not read the tree at all fails with.
 
-pub use AgenticSkillContract::{Contract, Create, Error, Finding, Rule, Rules, Skill, SkillContract};
+pub use ::Contract::{Contract, Create, Error, Finding, Rule, Rules, Skill, SkillContract};

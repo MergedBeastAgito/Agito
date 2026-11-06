@@ -22,7 +22,7 @@
 //! # No lane rules means the corpus's own conditions
 //!
 //! A caller with nothing to add passes [`Rules::default`], and selection then
-//! reads each lane's `select` ([`crate::Fn::SelectLane::SelectLane`]) instead of
+//! reads each lane's `select` ([`crate::Fn::Lane::Resolve::Resolve`]) instead of
 //! answering `no-match`. The two are one function because they answer one
 //! question - "which lane is this reading" - and a caller that had to know which
 //! of them its empty list would reach would be reading this crate's internals to
@@ -34,7 +34,7 @@
 //! thereby state the other.
 
 use crate::{
-	Fn::SelectLane::SelectLane,
+	Fn::Lane::Select::Select,
 	Struct::{
 		Context::Context,
 		Corpus::Corpus,
@@ -47,13 +47,13 @@ use crate::{
 };
 
 /// The lane and the template this state selects.
-pub fn Select(Corpus:&Corpus, State:&State, Lanes:&Rules, Templates:&Rules) -> Result<Selection, Error> {
+pub fn Resolve(Corpus:&Corpus, State:&State, Lanes:&Rules, Templates:&Rules) -> Result<Selection, Error> {
 	// Nothing to add: the corpus states each lane's condition, so this is the
-	// whole policy. `SelectLane` refuses an ambiguous or empty corpus rather
+	// whole policy. `Select` refuses an ambiguous or empty corpus rather
 	// than taking the first lane the map sorted, which is the same refusal a
 	// rule list with no match gives.
 	if Lanes.IsEmpty() {
-		let Lane = SelectLane(Corpus, &Context::from(State))?;
+		let Lane = Select(Corpus, &Context::from(State))?;
 		let Template = Choose(Corpus, Lane, State, Templates)?;
 		return Ok(Selection { Lane:Lane.clone(), Template:Template.clone() });
 	}

@@ -19,7 +19,7 @@ as written. A mistake the suites encoded was a mistake they defended; nothing de
 ## What the differential run established, while it existed
 
 The run drove the TypeScript packages in process, asked cargo for the Rust half through
-`AGENTIC_PARITY_OUT`, and compared the two observation files. Its last recorded result:
+`AGITO_PARITY_OUT`, and compared the two observation files. Its last recorded result:
 
 - **82 scenarios across three capabilities: 79 agreed, 3 were unported, 0 differed.** The Rust
   halves were 23 browse scenarios, 29 chat scenarios and 26 skill scenarios; the difference between
@@ -54,7 +54,7 @@ still a hole.
   not expressible in the port at all.
 - **`port-declares-its-errors`** (chat). The scenario vocabulary had no step for reading a module's
   own `module.json`. The rule - the codes the driver declares are the codes its manifest names - is
-  what `agentic verify --module @agentic/chat-driver` reports.
+  what `agito verify --module @agito/chat-driver` reports.
 - **`options-absent`** and **`question-absent`** (chat). Both were holes in the TypeScript port:
   `undefined` where an `OperationOptions` or a `Question` was declared. Rust has no `undefined` - a
   `Call` is a value the caller must construct, and `Question` is a struct with no absent value - so
@@ -124,11 +124,11 @@ this tree today.
 
 | Mutation                   | What it breaks                                          | File                                           | The test that had to fail                                                  |
 | -------------------------- | ------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------- |
-| `attached-page-closed`     | dispose closes an attached page instead of detaching it | `Crate/BrowserCDP/Source/Struct/Session.rs`    | `detaches_an_attached_target_without_closing_it`                           |
-| `model-after-send`         | the model check moves after the send                    | `Crate/ChatDriver/Source/Struct/Driver.rs`     | `refuses_with_wrong_model_and_sends_nothing`                               |
-| `partial-text-on-deadline` | a partial answer is returned when the budget expires    | `Crate/ChatDriver/Source/Struct/Driver.rs`     | `refuses_with_not_ready_when_the_answer_never_stops_changing`              |
-| `eof-as-timeout`           | a transport EOF is classified as a timeout              | `Crate/BrowserCDP/Source/Fn/Classify.rs`       | `fails_with_browser_unavailable_when_the_transport_closed_during_the_call` |
-| `threshold-one-read`       | the stability threshold drops from three reads to one   | `Crate/ChatDriver/Source/Struct/Settlement.rs` | `the_settlement_state_settles_on_the_third_agreement_and_not_before`       |
+| `attached-page-closed`     | dispose closes an attached page instead of detaching it | `Crate/Browser/CDP/Source/Struct/Session.rs`    | `detaches_an_attached_target_without_closing_it`                           |
+| `model-after-send`         | the model check moves after the send                    | `Crate/Chat/Driver/Source/Struct/Driver.rs`     | `refuses_with_wrong_model_and_sends_nothing`                               |
+| `partial-text-on-deadline` | a partial answer is returned when the budget expires    | `Crate/Chat/Driver/Source/Struct/Driver.rs`     | `refuses_with_not_ready_when_the_answer_never_stops_changing`              |
+| `eof-as-timeout`           | a transport EOF is classified as a timeout              | `Crate/Browser/CDP/Source/Fn/Classify.rs`       | `fails_with_browser_unavailable_when_the_transport_closed_during_the_call` |
+| `threshold-one-read`       | the stability threshold drops from three reads to one   | `Crate/Chat/Driver/Source/Struct/Settlement.rs` | `the_settlement_state_settles_on_the_third_agreement_and_not_before`       |
 
 Two of the five were caught by the effect list alone: `model-after-send` left the result
 `wrong-model` with the same detail and only the order of `evaluate:model` against `evaluate:submit`

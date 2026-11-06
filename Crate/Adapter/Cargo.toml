@@ -1,5 +1,5 @@
 [package]
-name = "agentic-adapter"
+name = "agito-adapter"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ publish.workspace = true
 description = "The port shape a third-party substrate implements, and the one claim check a registry-free composition root needs."
 
 [lib]
-name = "AgenticAdapter"
+name = "Adapter"
 path = "Source/Library.rs"
 
 [dependencies]
-agentic-runtime = { workspace = true }
+agito-runtime = { workspace = true }
 serde_json = { workspace = true }
 
 [lints.rust]

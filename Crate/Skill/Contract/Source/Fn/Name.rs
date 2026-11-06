@@ -11,7 +11,7 @@
 fn IsName(Character:char) -> bool { Character.is_alphanumeric() || matches!(Character, '_' | '.' | '-') }
 
 /// Whether `Text` names `Token` between two name boundaries.
-pub fn Names(Text:&str, Token:&str) -> bool {
+pub fn Match(Text:&str, Token:&str) -> bool {
 	if Token.is_empty() {
 		return false;
 	}

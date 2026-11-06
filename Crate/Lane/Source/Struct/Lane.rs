@@ -83,7 +83,7 @@ pub struct Lane {
 	///
 	/// A lane that states no `select` is [`Predicate::Always`]: it applies
 	/// whenever no more specific lane does, and two of them make a corpus that
-	/// cannot say which one wins - which [`crate::Fn::SelectLane::SelectLane`]
+	/// cannot say which one wins - which [`crate::Fn::Lane::Resolve::Resolve`]
 	/// reports rather than resolving.
 	#[serde(rename = "select", default)]
 	pub Select:Predicate,

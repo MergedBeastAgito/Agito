@@ -1,22 +1,24 @@
 # Research
 
-The three captures in `.hermes/research/` are the raw record of the threads this workspace came out
-of. They are evidence, not documentation: they hold the reasoning, the confidence labels and the
-experiments in the order they were produced, and they are never edited. This file is the index that
-makes them usable - one row per thread, what it settled, what it left open, and which
-`Documentation/` file consumed it.
+The three captures this workspace came out of were removed with the `.hermes/` archive. They were
+evidence, not documentation: the reasoning, the confidence labels and the experiments in the order
+they were produced, never edited. What is left is the index that made them usable - one row per
+thread, what it settled, what it left open, and which `Documentation/` file consumed it - and the
+capture ids below are the provenance handles every `Source:` line in `Documentation/` still names.
 
 **The rule:** every claim in `Documentation/` carries a `Source:` line naming a capture, or a
 `Decision: this repository` line saying no capture makes it. One hop from statement to origin. A
-claim with neither is unfinished, not merely undocumented.
+claim with neither is unfinished, not merely undocumented. The hop now ends here rather than in a
+file: the `:NN` anchors below and in the documents that cite them are the positions the claims were
+taken from, kept so a re-captured thread can be re-anchored against the same reading.
 
 ## Index
 
 | Capture                                          | Thread                                                              | Answered                                                                                                                                                                                                                | Left open                                                                                                                                                           | Consumed by                                                                                                                                                                                                                                                    |
 | ------------------------------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`575cb198.md`](../.hermes/research/575cb198.md) | hidden properties, disclosure, and how a subscription leaks them    | the execution model that makes atomic disclosure possible; the formal frame (action-conditioned POMDP, epistemic logic as a separate question); a relational design and a reducer rule for revealing without publishing | five SpacetimeDB questions - rollback, cross-module concurrency, scheduled ordering, subscription guarantees, replication determinism - and three of its own checks | nothing yet - `Documentation/Open-Questions.md` Q1-Q8                                                                                                                                                                                                          |
-| [`e9b61659.md`](../.hermes/research/e9b61659.md) | an audit of `Maintain/Source/Transport` in the consuming repository | nine assumptions the CDP transport makes, each with file and line, its break, and whether the break is silent                                                                                                           | whether any inferred break occurs on a live page - nine experiments, none run                                                                                       | nothing yet - `Documentation/Open-Questions.md` Q9-Q17                                                                                                                                                                                                         |
-| [`4ffde6d5.md`](../.hermes/research/4ffde6d5.md) | the port of five TypeScript packages into a Cargo workspace         | crate boundaries, consumer-owned ports in Cargo terms, the CDP backend recommendation, manifest representation, the cancellation and budget traits                                                                      | the manifest field mapping and the CI check for the arrows - answered in the capture, still to be built here - plus parity and house-style verification             | `Documentation/Rust.md` throughout; `Documentation/Design.md` §The four layers, §The manifest, §Why the packages are these five, §The two failures; `Documentation/Reflection.md` §The trust boundary, and the bisimulation paragraph closing §What gets built |
+| `575cb198` | hidden properties, disclosure, and how a subscription leaks them    | the execution model that makes atomic disclosure possible; the formal frame (action-conditioned POMDP, epistemic logic as a separate question); a relational design and a reducer rule for revealing without publishing | five SpacetimeDB questions - rollback, cross-module concurrency, scheduled ordering, subscription guarantees, replication determinism - and three of its own checks | nothing yet - `Documentation/Open-Questions.md` Q1-Q8                                                                                                                                                                                                          |
+| `e9b61659` | an audit of `Maintain/Source/Transport` in the consuming repository | nine assumptions the CDP transport makes, each with file and line, its break, and whether the break is silent                                                                                                           | whether any inferred break occurs on a live page - nine experiments, none run                                                                                       | nothing yet - `Documentation/Open-Questions.md` Q9-Q17                                                                                                                                                                                                         |
+| `4ffde6d5` | the port of five TypeScript packages into a Cargo workspace         | crate boundaries, consumer-owned ports in Cargo terms, the CDP backend recommendation, manifest representation, the cancellation and budget traits                                                                      | the manifest field mapping and the CI check for the arrows - answered in the capture, still to be built here - plus parity and house-style verification             | `Documentation/Rust.md` throughout; `Documentation/Design.md` §The four layers, §The manifest, §Why the packages are these five, §The two failures; `Documentation/Reflection.md` §The trust boundary, and the bisimulation paragraph closing §What gets built |
 
 ## What the captures are not
 
@@ -32,18 +34,11 @@ description matches its file.
   contains no occurrence of `RFC`, `verifier`, `event collision` or `issue triage`.
 - `4ffde6d5.md` matches its description.
 
-Check it rather than believing it:
-
-```sh
-grep -ciE "adapter|bisimulation|homotopy|reflection" .hermes/research/575cb198.md
-grep -ciE "RFC|verifier|event collision|issue triage" .hermes/research/e9b61659.md
-```
-
-These answer `26` and `0`. All 26 are `adapter` in the chat-UI exchange, where it means a framework
-adapter rather than a capability adapter; the half this file indexes contains none of the four
-words. Provenance that invents a consumer is worse than provenance that reports a gap, so the rows
-above say "nothing yet" where that is the truth, and the consequence for the design documents is in
-the next section.
+The counts were `26` and `0` when the captures were still on disk. All 26 are `adapter` in the
+chat-UI exchange, where it means a framework adapter rather than a capability adapter; the half this
+file indexes contains none of the four words. Provenance that invents a consumer is worse than
+provenance that reports a gap, so the rows above say "nothing yet" where that is the truth, and the
+consequence for the design documents is in the next section.
 
 ## The consequence for `Documentation/`
 
@@ -66,7 +61,7 @@ it is indexed here and left alone.
 
 ## Thread 1 - hidden properties and disclosure
 
-**Source:** [`575cb198.md`](../.hermes/research/575cb198.md), 608 lines.
+**Source:** `575cb198`, 608 lines.
 
 **Asked:** (1) is SpacetimeDB's execution model reactor-style, and what is actually documented about
 concurrency and ordering; (2) what formal frame fits capabilities whose properties are hidden at
@@ -110,7 +105,7 @@ the checks embedded in its findings (dominance, racing probes, canary, paired wo
 
 ## Thread 2 - the transport audit
 
-**Source:** [`e9b61659.md`](../.hermes/research/e9b61659.md), 324 lines.
+**Source:** `e9b61659`, 324 lines.
 
 **Asked:** read `Maintain/Source/Transport` in the consuming repository, name the invariants it
 assumes about browser and page, where each breaks, which breaks are silent, with file and line for
@@ -147,7 +142,7 @@ experiments, `Documentation/Open-Questions.md` Q9-Q17.
 
 ## Thread 3 - the Rust port
 
-**Source:** [`4ffde6d5.md`](../.hermes/research/4ffde6d5.md), 885 lines.
+**Source:** `4ffde6d5`, 885 lines.
 
 **Asked:** convert the five TypeScript packages into a Rust workspace in the house style of
 `github.com/PlayForm/Run`, answering crate boundaries under "ports belong to consumers", whether the
@@ -174,7 +169,7 @@ the manifest fields map.
   by the harness without starting the application; descriptor identity separated from artifact
   identity in two stages; never `cargo run`, never `cargo test` as an admission command
   (`:451-493`).
-- Runtime: Tokio in the runtime, the adapter and the root entry point only; capabilities stay
+- RunTime: Tokio in the runtime, the adapter and the root entry point only; capabilities stay
   executor-independent, with the `Call` / `Cancellation` / `Browse` trait shapes given (`:494-589`).
 
 **Left open:** nothing in the answer itself - it reaches all six questions, ending with the
@@ -186,9 +181,9 @@ two-trait derivation, the `panic = "abort"` conflict and the library behaviours 
 
 ## Capture integrity
 
-`.hermes/research/` is tracked, not ignored - `.gitignore` says so in as many words - so
-`git status` and `git log` do report an edit. These digests are the second check, and they name the
-exact bytes every `:NN` anchor in this file was re-anchored against:
+The captures were tracked, not ignored, so `git status` and `git log` reported an edit to them. These
+digests name the exact bytes every `:NN` anchor in this file was re-anchored against, and they stay
+as the record of that anchoring now that the files are gone:
 
 | Capture       | Lines | SHA-256                                                            |
 | ------------- | ----- | ------------------------------------------------------------------ |
@@ -196,8 +191,5 @@ exact bytes every `:NN` anchor in this file was re-anchored against:
 | `e9b61659.md` | 324   | `d62005e23f322affc24a7b04144670fbbf80bba80b94216b6be2ea29cd0f723d` |
 | `4ffde6d5.md` | 885   | `183a81fcf7532d005e5f03fb5dd1d15e399e8332d15b9e81eb36fdf4da3b406a` |
 
-```sh
-shasum -a 256 .hermes/research/*.md
-```
-
-A capture that has been tidied is no longer evidence.
+A capture that has been tidied is no longer evidence. A capture that is gone cannot be re-read at
+all, which is why the sections above carry the findings rather than a pointer to them.

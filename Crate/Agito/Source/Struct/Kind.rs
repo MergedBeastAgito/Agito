@@ -17,7 +17,7 @@
 /// `adapter` is the one a crate outside this workspace declares: it provides a
 /// port against a substrate this workspace did not write, and the composition
 /// root holds it as a value rather than naming it.
-pub const Kinds:[&str; 6] = ["runtime", "capability", "adapter", "workflow", "composition", "facade"];
+pub const Kinds:[&str; 6] = ["RunTime", "Capability", "Adapter", "Workflow", "Composition", "Facade"];
 
 /// Whether a manifest may declare this kind.
 pub fn Known(Kind:&str) -> bool { Kinds.contains(&Kind) }

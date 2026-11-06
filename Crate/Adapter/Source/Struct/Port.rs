@@ -1,12 +1,12 @@
-//! The port `agentic.adapter` promises, written the way a composition root
+//! The port `agito.adapter` promises, written the way a composition root
 //! holds it.
 //!
 //! Three methods and no more. An adapter is asked what it serves, asked to do
 //! one thing within a deadline, and asked to let go - the same three questions
-//! `agentic-browser-cdp`'s `Browse` answers, because the same thing has to be
+//! `agito-browser-cdp`'s `Browse` answers, because the same thing has to be
 //! possible for a substrate this workspace did not write.
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 use crate::Struct::Error::Error;
@@ -24,7 +24,7 @@ use crate::Struct::Error::Error;
 pub trait Adapter: Send + Sync {
 	/// The port this adapter provides, as its own `module.json` names it.
 	///
-	/// `agentic verify` cannot check this: it reads a file and never constructs
+	/// `agito verify` cannot check this: it reads a file and never constructs
 	/// the adapter. [`crate::Fn::Serves::Serves`] is what compares the two, at
 	/// the one place both are in hand - the composition root that built it.
 	fn Port(&self) -> &'static str;
@@ -47,7 +47,7 @@ pub trait Adapter: Send + Sync {
 	///
 	/// An adapter that owns a session, a socket or a device has to be able to
 	/// let go of it, and a release that can fail is a release a caller skips.
-	/// `agentic-browser-cdp` states the same rule for a browser: disposal closes
+	/// `agito-browser-cdp` states the same rule for a browser: disposal closes
 	/// only what the session launched, and reports rather than returns a
 	/// failure.
 	fn Dispose<'a>(&'a self) -> FutureBox<'a, ()>;

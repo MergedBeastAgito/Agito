@@ -1,5 +1,5 @@
 [package]
-name = "agentic-chat-driver"
+name = "agito-chat-driver"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ publish.workspace = true
 description = "Ask a chat product one question and return the answer once the page has settled. Declares its own Page port; depends on no browser and no executor."
 
 [lib]
-name = "AgenticChatDriver"
+name = "Driver"
 path = "Source/Library.rs"
 
 [dependencies]
-agentic-runtime = { workspace = true }
+agito-runtime = { workspace = true }
 serde_json = { workspace = true }
 
 # The TypeScript parser the build erases type syntax with. Build-time only:

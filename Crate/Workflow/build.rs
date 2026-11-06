@@ -1,6 +1,6 @@
 //! Compile `Source/Script/**/*.ts` into the JavaScript this crate sends.
 //!
-//! The same shared rule `Crate/ChatDriver` uses - see `Build/Script.rs` - so
+//! The same shared rule `Crate/Chat/Driver` uses - see `Build/Script.rs` - so
 //! the workflow's measurement expression is compiled, checked and filled
 //! exactly like the driver's expressions.
 

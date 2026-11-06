@@ -1,4 +1,4 @@
-//! The port `agentic.runtime` promises, written the way a consumer asks for it.
+//! The port `agito.runtime` promises, written the way a consumer asks for it.
 //!
 //! The port states more than data shapes, because two runtimes that agreed on
 //! the shapes alone would still disagree about when authority ends:
@@ -84,10 +84,10 @@ impl StateClass {
 	/// The string the manifest uses.
 	pub const fn Name(self) -> &'static str {
 		match self {
-			StateClass::Stateless => "stateless",
-			StateClass::HoldsTransport => "holds-transport",
-			StateClass::HoldsIdentity => "holds-identity",
-			StateClass::HoldsWorkspace => "holds-workspace",
+			StateClass::Stateless => "Stateless",
+			StateClass::HoldsTransport => "HoldTransport",
+			StateClass::HoldsIdentity => "HoldIdentity",
+			StateClass::HoldsWorkspace => "HoldWorkspace",
 		}
 	}
 
@@ -473,10 +473,10 @@ pub trait Destination: Send + Sync {
 /// The port this crate offers.
 ///
 /// `WithLease` is generic over the write's return type, which is why this trait
-/// is not object-safe: a boxed `dyn Runtime` would have to erase `T`, and
+/// is not object-safe: a boxed `dyn RunTime` would have to erase `T`, and
 /// erasing it is what a caller writing `withLease::<Row>` is asking not to
 /// happen. The composition root holds the concrete engine instead.
-pub trait Runtime: Send + Sync {
+pub trait RunTime: Send + Sync {
 	/// Admit a run, or refuse it with the reason.
 	fn Admit<'a>(&'a self, Request:Request) -> FutureBox<'a, Admission>;
 	/// Claim a resource for one run, with that run's budget, or fail because

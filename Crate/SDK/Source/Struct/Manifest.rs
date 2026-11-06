@@ -8,11 +8,11 @@
 //! The table describes the surface this crate re-exports, which is why it lives
 //! here rather than in the binary that prints it: a consumer asking what the
 //! workspace ships is asking about the items it just imported. The binary keeps
-//! its own path to the same values (`Agentic::All`) by re-exporting this module,
+//! its own path to the same values (`Agito::All`) by re-exporting this module,
 //! so there is one definition and no second answer.
 //!
 //! The facade itself is not one of the ten. It provides no port, so it has
-//! nothing a harness would prepare for and nothing `agentic verify --module`
+//! nothing a harness would prepare for and nothing `agito verify --module`
 //! could answer; its own `module.json` declares the `facade` kind and the ports
 //! it re-exports, which is a statement about this table rather than an entry in
 //! it.
@@ -28,10 +28,10 @@ pub struct Manifest {
 	pub Kind:&'static str,
 	/// The port it provides.
 	pub Port:&'static str,
-	/// The verbs it declares under `provides.verbs`, in its own order.
+	/// The verbs it declares under `Provide.Verb`, in its own order.
 	///
 	/// A verb is an extra thing the module can be asked to do beyond
-	/// answering its port - the chat driver's `agentic.chat.note` is the
+	/// answering its port - the chat driver's `agito.chat.note` is the
 	/// one the workspace ships - and most modules declare none, so an empty
 	/// slice is the ordinary case rather than a missing value.
 	pub Verbs:&'static [&'static str],
@@ -44,12 +44,12 @@ pub struct Manifest {
 /// Every module this workspace ships, in dependency order.
 pub const All:[Manifest; 10] = [
 	Manifest {
-		Name:"@agentic/runtime",
-		Kind:"runtime",
-		Port:"agentic.runtime",
+		Name:"@agito/runtime",
+		Kind:"RunTime",
+		Port:"agito.runtime",
 		Verbs:&[],
-		State:"holds-workspace",
-		JSON:include_str!("../../../Runtime/module.json"),
+		State:"HoldWorkspace",
+		JSON:include_str!("../../../RunTime/module.json"),
 	},
 	// The port shape a third-party substrate implements. Kind `capability` and
 	// not `adapter`: the boundary rule lets an adapter name a capability's port
@@ -58,84 +58,84 @@ pub const All:[Manifest; 10] = [
 	// forbids. Its manifest names no errors, because a code belongs to the
 	// adapter that reports it rather than to the shape it implements.
 	Manifest {
-		Name:"@agentic/adapter",
-		Kind:"capability",
-		Port:"agentic.adapter",
+		Name:"@agito/adapter",
+		Kind:"Capability",
+		Port:"agito.adapter",
 		Verbs:&[],
-		State:"stateless",
+		State:"Stateless",
 		JSON:include_str!("../../../Adapter/module.json"),
 	},
 	// The template corpus as data. It depends on the runtime and nothing else:
 	// the round trip leaves through a `Poster` this crate declares and never
 	// implements, so its manifest says `network: false` and means it.
 	Manifest {
-		Name:"@agentic/lane",
-		Kind:"capability",
-		Port:"agentic.lane.decide",
+		Name:"@agito/lane",
+		Kind:"Capability",
+		Port:"agito.lane.decide",
 		Verbs:&[],
-		State:"stateless",
+		State:"Stateless",
 		JSON:include_str!("../../../Lane/module.json"),
 	},
 	Manifest {
-		Name:"@agentic/spacetime-catalog",
-		Kind:"capability",
-		Port:"agentic.catalog.rules",
+		Name:"@agito/spacetime-catalog",
+		Kind:"Capability",
+		Port:"agito.catalog.rules",
 		Verbs:&[],
-		State:"stateless",
-		JSON:include_str!("../../../SpacetimeCatalog/module.json"),
+		State:"Stateless",
+		JSON:include_str!("../../../Spacetime/Catalog/module.json"),
 	},
 	Manifest {
-		Name:"@agentic/skill-contract",
-		Kind:"capability",
-		Port:"agentic.skill.validate",
+		Name:"@agito/skill-contract",
+		Kind:"Capability",
+		Port:"agito.skill.validate",
 		Verbs:&[],
-		State:"stateless",
-		JSON:include_str!("../../../SkillContract/module.json"),
+		State:"Stateless",
+		JSON:include_str!("../../../Skill/Contract/module.json"),
 	},
-	// The one module that declares a verb. `agentic.chat.note` is not the
-	// port: a caller asks `agentic.chat.ask` and gets an answer, while `note`
+	// The one module that declares a verb. `agito.chat.note` is not the
+	// port: a caller asks `agito.chat.ask` and gets an answer, while `note`
 	// is the call that prints a research note built from that same answer.
 	// It carries its own (empty) error list, so the verb is a statement a
 	// harness can read rather than a name nobody lists.
 	Manifest {
-		Name:"@agentic/chat-driver",
-		Kind:"capability",
-		Port:"agentic.chat.ask",
-		Verbs:&["agentic.chat.note"],
-		State:"holds-transport",
-		JSON:include_str!("../../../ChatDriver/module.json"),
+		Name:"@agito/chat-driver",
+		Kind:"Capability",
+		Port:"agito.chat.ask",
+		Verbs:&["agito.chat.note"],
+		State:"HoldTransport",
+		JSON:include_str!("../../../Chat/Driver/module.json"),
 	},
 	Manifest {
-		Name:"@agentic/browser-cdp",
-		Kind:"adapter",
-		Port:"agentic.browse",
+		Name:"@agito/browser-cdp",
+		Kind:"Adapter",
+		Port:"agito.browse",
 		Verbs:&[],
-		State:"holds-transport",
-		JSON:include_str!("../../../BrowserCDP/module.json"),
+		State:"HoldTransport",
+		JSON:include_str!("../../../Browser/CDP/module.json"),
 	},
 	Manifest {
-		Name:"@agentic/design-verification",
-		Kind:"capability",
-		Port:"agentic.verify.design",
+		Name:"@agito/design-verification",
+		Kind:"Capability",
+		Port:"agito.verify.design",
 		Verbs:&[],
-		State:"stateless",
-		JSON:include_str!("../../../DesignVerification/module.json"),
+		State:"Stateless",
+		JSON:include_str!("../../../Design/Verification/module.json"),
 	},
 	Manifest {
-		Name:"@agentic/workflow",
-		Kind:"workflow",
-		Port:"agentic.workflow",
+		Name:"@agito/workflow",
+		Kind:"Workflow",
+		Port:"agito.workflow",
 		Verbs:&[],
-		State:"stateless",
+		State:"Stateless",
 		JSON:include_str!("../../../Workflow/module.json"),
 	},
 	Manifest {
-		Name:"@agentic/composition",
-		Kind:"composition",
-		Port:"agentic.compose",
+		Name:"@agito/composition",
+		Kind:"Composition",
+		Port:"agito.compose",
 		Verbs:&[],
-		State:"stateless",
-		JSON:include_str!("../../../Agentic/module.json"),
+		State:"Stateless",
+		JSON:include_str!("../../../Agito/module.json"),
 	},
 ];
 

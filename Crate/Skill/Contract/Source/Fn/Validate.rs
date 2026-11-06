@@ -10,9 +10,9 @@ use std::path::Path;
 use crate::{
 	Fn::{
 		Discover::{CorpusIndex, References},
-		Entries::{BodyFile, CorpusIndexes, IndexFile, ReferenceDirectory, Text},
+		Entry::{BodyFile, CorpusIndexes, IndexFile, ReferenceDirectory, Text},
 		Frontmatter::Split,
-		Names::Names,
+		Name::Match,
 	},
 	Struct::{
 		Error::Rule,
@@ -77,7 +77,7 @@ pub fn Validate(Skill:&Skill) -> Vec<Finding> {
 					),
 				))
 			},
-			Some(Index) if !Names(Index, &Reference) => {
+			Some(Index) if !Match(Index, &Reference) => {
 				Findings.push(Finding::Of(
 					Skill,
 					Rule::UnlistedReference,
@@ -101,7 +101,7 @@ pub fn Validate(Skill:&Skill) -> Vec<Finding> {
 				),
 			))
 		},
-		Some((Name, Text)) if !Names(&Text, &Skill.Name) => {
+		Some((Name, Text)) if !Match(&Text, &Skill.Name) => {
 			Findings.push(Finding::Of(
 				Skill,
 				Rule::Uncited,

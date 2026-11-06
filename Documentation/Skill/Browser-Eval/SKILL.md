@@ -11,7 +11,7 @@ metadata:
 
 # Browser Eval
 
-Ask a live page one question and read the answer as JSON. The verb is `agentic browse`; the
+Ask a live page one question and read the answer as JSON. The verb is `agito browse`; the
 operation is `Browse::Evaluate`.
 
 ---
@@ -19,7 +19,7 @@ operation is `Browse::Evaluate`.
 ## The shape of a call
 
 ```sh
-Target/debug/agentic browse \
+Target/debug/agito browse \
   --url https://example.test/ \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
   [--bind <target-id>] \

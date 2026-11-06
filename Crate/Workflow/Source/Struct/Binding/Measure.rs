@@ -2,9 +2,9 @@
 //!
 //! The capability's port has one verb and no session, so this binding opens the
 //! configured page for each measurement and releases it afterwards. That is not
-//! an oversight: the manifest says `stateless`, and a binding that kept a page
+//! an oversight: the manifest says `Stateless`, and a binding that kept a page
 //! alive between measurements would turn a stateless capability into a
-//! `holds-transport` one behind its own manifest.
+//! `HoldTransport` one behind its own manifest.
 //!
 //! The expression this binding sends is the one place a page convention lives,
 //! and it is deliberately in the workflow rather than in the verification
@@ -13,9 +13,9 @@
 
 use std::sync::Arc;
 
-use AgenticBrowserCDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions};
-use AgenticDesignVerification::{Browse, Failure};
-use AgenticRuntime::{Call, FutureBox};
+use ::CDP::{Browse as BrowserBrowse, Error as BrowserError, OpenOptions};
+use ::Verification::{Browse, Failure};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 use crate::Fn::Measure::MeasurementExpression;

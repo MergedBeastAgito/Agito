@@ -12,9 +12,9 @@
 //! browser, and a page that cannot be measured does not hide the findings that
 //! were already collected.
 
-use AgenticDesignVerification::{Invariant, Measurement, Verdict, Verify};
-use AgenticRuntime::{Call, FutureBox};
-use AgenticSkillContract::{Finding, Skill, SkillContract};
+use ::Verification::{Invariant, Measurement, Verdict, Verify};
+use ::RunTime::{Call, FutureBox};
+use ::Contract::{Finding, Skill, SkillContract};
 
 /// What one release check found.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -41,7 +41,7 @@ impl Outcome {
 }
 
 /// Sweep a corpus, then measure and judge a page.
-pub fn VerifySkillPage<'a>(
+pub fn Verify<'a>(
 	Contract:&'a dyn SkillContract,
 	Verify:&'a dyn Verify,
 	Root:&'a str,

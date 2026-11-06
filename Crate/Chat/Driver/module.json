@@ -1,27 +1,36 @@
 {
-	"name": "@agentic/chat-driver",
-	"kind": "capability",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.chat.ask",
-		"errors": ["not-ready", "wrong-mode", "wrong-model", "truncated"],
-		"verbs": {
-			"agentic.chat.note": { "errors": [] }
+	"Name": "@agito/chat-driver",
+	"Kind": "Capability",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.chat.ask",
+		"Error": [
+			"not-ready",
+			"wrong-mode",
+			"wrong-model",
+			"truncated"
+		],
+		"Verb": {
+			"agito.chat.note": {
+				"Error": []
+			}
 		}
 	},
-	"requires": {
-		"ports": ["agentic.browse"]
+	"Require": {
+		"Port": [
+			"agito.browse"
+		]
 	},
-	"artefact": {
-		"entry": "Target/debug/libAgenticChatDriver.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Artefact": {
+		"Entry": "Target/debug/libDriver.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "holds-transport",
-	"cost": {
-		"coldMs": 20,
-		"warmMs": 2,
-		"network": true
+	"State": "HoldTransport",
+	"Cost": {
+		"ColdMs": 20,
+		"WarmMs": 2,
+		"Network": true
 	},
-	"verify": "agentic verify --module @agentic/chat-driver"
+	"Verify": "agito verify --module @agito/chat-driver"
 }

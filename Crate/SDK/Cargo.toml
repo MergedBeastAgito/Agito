@@ -1,5 +1,5 @@
 [package]
-name = "agentic-sdk"
+name = "agito-sdk"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,25 +8,25 @@ publish.workspace = true
 description = "One dependency for a consumer: the workspace's stable surface, re-exported and nothing else."
 
 [lib]
-name = "AgenticSDK"
+name = "SDK"
 path = "Source/Library.rs"
 
 # Only the ports. A facade that named a substrate would be a facade a consumer
 # could not depend on without depending on the substrate's choices, and the one
-# crate that names `chromiumoxide` is `agentic-browser-cdp` - two levels below
+# crate that names `chromiumoxide` is `agito-browser-cdp` - two levels below
 # this one, where a consumer never has to look.
 #
-# `agentic-adapter` is here for the one consumer this crate cannot reach
+# `agito-adapter` is here for the one consumer this crate cannot reach
 # otherwise: a substrate outside this tree. It declares `kind: "capability"`, so
 # the edge is the one the boundary rule allows, and it ships a trait, a check and
 # a stand-in - no substrate, no executor, no serialiser a consumer would inherit.
 [dependencies]
-agentic-runtime = { workspace = true }
-agentic-browser-cdp = { workspace = true }
-agentic-chat-driver = { workspace = true }
-agentic-design-verification = { workspace = true }
-agentic-skill-contract = { workspace = true }
-agentic-adapter = { workspace = true }
+agito-runtime = { workspace = true }
+agito-browser-cdp = { workspace = true }
+agito-chat-driver = { workspace = true }
+agito-design-verification = { workspace = true }
+agito-skill-contract = { workspace = true }
+agito-adapter = { workspace = true }
 
 # The house style is PascalCase everywhere: functions, modules, fields and
 # constants. These three lints are the only ones that disagree with it.

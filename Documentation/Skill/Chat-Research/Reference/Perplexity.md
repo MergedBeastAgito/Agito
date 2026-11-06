@@ -1,7 +1,7 @@
 # Perplexity: what the page actually is
 
 Every selector here was read from a live tab with
-`agentic browse --bind <target-id> --expression '<probe>'`, not guessed from a framework. Markup is
+`agito browse --bind <target-id> --expression '<probe>'`, not guessed from a framework. Markup is
 not a contract: re-probe before trusting any line below.
 
 ---

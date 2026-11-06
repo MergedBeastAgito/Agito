@@ -1,5 +1,5 @@
 [package]
-name = "agentic-lane"
+name = "agito-lane"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ publish.workspace = true
 description = "A template corpus as data: load it, select a lane by predicate, compose a decision-model request, and return typed answers with a metered budget."
 
 [lib]
-name = "AgenticLane"
+name = "Lane"
 path = "Source/Library.rs"
 
 # Three dependencies, and the short list is the claim: no HTTP client, no
@@ -16,7 +16,7 @@ path = "Source/Library.rs"
 # `Struct::Port::Poster`, so the caller supplies the round trip's other end and
 # the crate itself never opens a socket.
 [dependencies]
-agentic-runtime = { workspace = true }
+agito-runtime = { workspace = true }
 # The request's JSON form is a derive, not a hand-built `json!` literal: three
 # named fields are three keys, and a field added to the struct is a key added to
 # the body. `serde_json` is the value layer the corpus and the state already

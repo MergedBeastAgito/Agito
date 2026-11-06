@@ -1,4 +1,4 @@
-//! The port `agentic.verify.design` promises, written the way its consumer asks
+//! The port `agito.verify.design` promises, written the way its consumer asks
 //! for it.
 //!
 //! `module.json` names three errors - `absent-element`, `invariant-broke` and
@@ -21,7 +21,7 @@
 //!   caller gave them, so a failure names which invariant broke and what it
 //!   read.
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 /// One element, as the page answered for it.

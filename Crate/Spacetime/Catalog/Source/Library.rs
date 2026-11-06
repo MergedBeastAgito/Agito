@@ -1,4 +1,4 @@
-//! `agentic.catalog.rules`: the database model as data and pure functions.
+//! `agito.catalog.rules`: the database model as data and pure functions.
 //!
 //! A SpacetimeDB module compiles its tables into the published module, so a row
 //! in a table-definition table cannot create one and no reducer can execute

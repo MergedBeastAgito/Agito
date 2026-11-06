@@ -12,7 +12,7 @@ metadata:
 # Chat Research
 
 Ask a web chat product a question and read the answer once the page says it has finished. The
-capability is `agentic-chat-driver`; the verb is `agentic chat`.
+capability is `agito-chat-driver`; the verb is `agito chat`.
 
 There is no API to call. The product is a composer, a send control and a block of text, so the
 driver's rules are about what a page is allowed to claim.
@@ -22,7 +22,7 @@ driver's rules are about what a page is allowed to claim.
 ## The call
 
 ```sh
-Target/debug/agentic chat \
+Target/debug/agito chat \
   --url https://example.test/ \
   --model '<the label the page shows>' \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
@@ -260,7 +260,7 @@ and what makes it compete with everything already there for the answer budget.
 
 | Claim                                            | Test                                                                                                                                                                                                              |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A question is answered and read back             | `agentic chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                 |
+| A question is answered and read back             | `agito chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                 |
 | The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                                                                                         |
 | The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                                                                                  |
 | A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                                                                                             |
@@ -274,7 +274,7 @@ and what makes it compete with everything already there for the answer budget.
 | A settled answer equals the page's               | with the default `--format text`, compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                                                   |
 | A Markdown capture keeps the answer's structure  | `--format markdown` on a page holding a table, a fence, a formula and a nested list returns a pipe table with one line per row, a fence carrying the code's language, and `$…$` equal to the formula's annotation |
 | A citation is not a link                         | a numeric citation anchor inside the answer comes back as the number the page showed, not as `[1](https://…)`                                                                                                     |
-| The note is a file a reader opens                | `agentic chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                 |
+| The note is a file a reader opens                | `agito chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                 |
 | The note carries TeX where text carries glyphs   | on one settled answer, `--format note` transcribes `$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$` while the same element's `innerText` is one glyph per line                                                          |
 | A note with no thread is refused, not filed      | `--format note --url https://example.test/` exits non-zero naming `--thread`, and no question is typed                                                                                                            |
 | One read yields both renderings                  | `--format both` returns `text` and `markdown` from one call, and `--observe` prints the same reads - the same count and the same character counts - as `--format text` on the same page                           |

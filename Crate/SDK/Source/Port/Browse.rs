@@ -1,4 +1,4 @@
-//! `agentic.browse`, from `agentic-browser-cdp`: attach or launch, evaluate,
+//! `agito.browse`, from `agito-browser-cdp`: attach or launch, evaluate,
 //! dispose.
 //!
 //! [`Session`] is the port; [`Create`] binds it to a launcher and a pace, and
@@ -14,7 +14,7 @@
 //! codes a failure carries, the other is how a transport stops listening, and
 //! neither is a decision a caller makes.
 
-pub use AgenticBrowserCDP::{
+pub use ::CDP::{
 	Browse,
 	Chrome,
 	ChromeOptions,

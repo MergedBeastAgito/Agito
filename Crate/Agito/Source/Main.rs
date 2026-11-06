@@ -7,12 +7,12 @@
 
 use std::process::ExitCode;
 
-use Agentic::Struct::Binary::Command::Command;
+use Agito::Struct::Binary::Command::Command;
 
 #[tokio::main]
 async fn main() -> ExitCode {
 	let Command = Command::Parse();
-	match Agentic::Run(Command.Verb).await {
+	match Agito::Run(Command.Verb).await {
 		Ok(Text) => {
 			println!("{Text}");
 			ExitCode::SUCCESS

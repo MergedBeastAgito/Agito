@@ -15,18 +15,18 @@
 //! authority over the same spend. The lock is taken, read, and dropped before
 //! the request is awaited; it is taken again afterwards to record what the
 //! reply reported. Holding it across the await would make the returned future
-//! `!Send`, which is the one thing [`AgenticRuntime::FutureBox`] forbids.
+//! `!Send`, which is the one thing [`RunTime::FutureBox`] forbids.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 
 use crate::{
 	Fn::{
 		Ask::Ask,
 		Compose::Compose,
 		Model::{Bare, Models},
-		Select::Select,
+		Resolve::Resolve,
 	},
 	Struct::{
 		Answer::Answer,
@@ -126,7 +126,7 @@ impl Decider {
 
 impl Decide for Decider {
 	fn Select(&self, State:&State) -> Result<Selection, Error> {
-		Select(&self.Corpus, State, &self.Lanes, &self.Templates)
+		Resolve(&self.Corpus, State, &self.Lanes, &self.Templates)
 	}
 
 	fn Decide<'a>(

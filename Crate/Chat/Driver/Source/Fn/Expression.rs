@@ -19,7 +19,7 @@
 //! # Where the JavaScript is
 //!
 //! Not in this file. Each expression is one TypeScript file under
-//! `Source/Script/Expressions/`, compiled by this crate's `build.rs` into
+//! `Source/Script/Expression/`, compiled by this crate's `build.rs` into
 //! JavaScript and baked in by [`script!`] - so an editor, a linter and a
 //! compiler see the expression that a `format!` used to hide, and the file the
 //! compiler checks is the file the page runs.
@@ -36,20 +36,20 @@
 //! module is still the list of what the driver can say, and the script behind
 //! each one is still one expression that reads one thing.
 
-use AgenticRuntime::{Escape, script};
+use ::RunTime::{Escape, script};
 
 use crate::Struct::{Format::Format, Selectors::Selectors};
 
 /// The serializer [`ReadAnswers`] splices into that script, for
 /// [`Format::Markdown`] only.
-const SerialiseScript:&str = script!("Expressions/Extract");
+const SerialiseScript:&str = script!("Expression/Extract");
 
 /// The composer's mode: the label of the single pressed toggle.
 ///
 /// `null` when there is no toggle, when none is pressed, or when several are -
 /// a page that cannot say which mode it is in has not said it is in search
 /// mode.
-pub fn ReadMode(Selectors:&Selectors) -> String { script!("Expressions/ReadMode"; Mode = &Selectors.Mode) }
+pub fn ReadMode(Selectors:&Selectors) -> String { script!("Expression/ReadMode"; Mode = &Selectors.Mode) }
 
 /// Press the mode toggle.
 ///
@@ -57,10 +57,10 @@ pub fn ReadMode(Selectors:&Selectors) -> String { script!("Expressions/ReadMode"
 /// button per mode is switched rather than cycled; a single cycling toggle is
 /// the fallback. Pressing is not verifying - the caller reads the mode again
 /// and decides - so this returns whether anything was there to press.
-pub fn PressMode(Selectors:&Selectors) -> String { script!("Expressions/PressMode"; Mode = &Selectors.Mode) }
+pub fn PressMode(Selectors:&Selectors) -> String { script!("Expression/PressMode"; Mode = &Selectors.Mode) }
 
 /// The model label the composer will send to, as the page shows it.
-pub fn ReadModel(Selectors:&Selectors) -> String { script!("Expressions/ReadModel"; Model = &Selectors.Model) }
+pub fn ReadModel(Selectors:&Selectors) -> String { script!("Expression/ReadModel"; Model = &Selectors.Model) }
 
 /// Put the question in the composer.
 ///
@@ -72,7 +72,7 @@ pub fn ReadModel(Selectors:&Selectors) -> String { script!("Expressions/ReadMode
 /// `input`, because a composer that never saw one keeps that control disabled
 /// and the question would sit there looking sent.
 pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
-	script!("Expressions/TypeQuestion"; Composer = &Selectors.Composer, Text = Text)
+	script!("Expression/TypeQuestion"; Composer = &Selectors.Composer, Text = Text)
 }
 
 /// Press the send control, and say what stopped it when it could not be
@@ -125,7 +125,7 @@ pub fn PressSubmit(Selectors:&Selectors, Expected:&str) -> String {
 /// which is the only way the pair can be trusted to describe the same answer,
 /// because two evaluates are two moments.
 ///
-/// It is built from a second script file, `Source/Script/Expressions/ReadBoth.ts`,
+/// It is built from a second script file, `Source/Script/Expression/ReadBoth.ts`,
 /// and not from a third parameter of `ReadAnswers.ts`: an expression that gained
 /// a field would not be the expression a page already received. The two files
 /// carry one rule, and they are written so the thread read is the same text in
@@ -186,7 +186,7 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 /// expands an answer again, so an answer already open is complete and its text
 /// is what the caller asked for.
 pub fn ReadCollapse(Selectors:&Selectors) -> String {
-	script!("Expressions/ReadCollapse"; Answer = &Selectors.Answer, Collapse = &Selectors.Collapse)
+	script!("Expression/ReadCollapse"; Answer = &Selectors.Answer, Collapse = &Selectors.Collapse)
 }
 
 /// The work the newest answer reports having done, in the order it did it.
@@ -195,7 +195,7 @@ pub fn ReadCollapse(Selectors:&Selectors) -> String {
 /// thread holds every turn's steps, and a document-wide read would hand back
 /// the trace of a question the caller did not ask. No answer yet is no steps.
 pub fn ReadTrace(Selectors:&Selectors) -> String {
-	script!("Expressions/ReadTrace"; Answer = &Selectors.Answer, Trace = &Selectors.Trace)
+	script!("Expression/ReadTrace"; Answer = &Selectors.Answer, Trace = &Selectors.Trace)
 }
 
 /// The sources the newest answer cites.
@@ -204,5 +204,5 @@ pub fn ReadTrace(Selectors:&Selectors) -> String {
 /// turn's: an answer that cites nothing is a different fact from an answer
 /// whose thread happens to contain citations elsewhere.
 pub fn ReadSources(Selectors:&Selectors) -> String {
-	script!("Expressions/ReadSources"; Answer = &Selectors.Answer, Sources = &Selectors.Sources)
+	script!("Expression/ReadSources"; Answer = &Selectors.Answer, Sources = &Selectors.Sources)
 }

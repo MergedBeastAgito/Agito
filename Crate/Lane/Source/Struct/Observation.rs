@@ -158,7 +158,7 @@ impl Observation {
 	/// [`ObservationField::Extra`] under `$value` rather than refused, because
 	/// this crate does not interpret descriptors - refusing one here would
 	/// refuse a corpus that loads, over a field nothing reads.
-	pub fn OfEntries(Fields:&BTreeMap<String, Value>, Derived:&BTreeMap<String, Value>) -> Self {
+	pub fn OfRead(Fields:&BTreeMap<String, Value>, Derived:&BTreeMap<String, Value>) -> Self {
 		Self {
 			Version:0,
 			Fields:Fields

@@ -1,5 +1,5 @@
 [package]
-name = "agentic-workflow"
+name = "agito-workflow"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,19 +8,19 @@ publish.workspace = true
 description = "Adapter-independent compositions, and the only place that knows both a consumer's port and the browser substrate."
 
 [lib]
-name = "AgenticWorkflow"
+name = "Workflow"
 path = "Source/Library.rs"
 
 [dependencies]
-agentic-runtime = { workspace = true }
-agentic-chat-driver = { workspace = true }
-agentic-design-verification = { workspace = true }
-agentic-skill-contract = { workspace = true }
-agentic-browser-cdp = { workspace = true }
+agito-runtime = { workspace = true }
+agito-chat-driver = { workspace = true }
+agito-design-verification = { workspace = true }
+agito-skill-contract = { workspace = true }
+agito-browser-cdp = { workspace = true }
 serde_json = { workspace = true }
 
 # The TypeScript parser the build erases type syntax with - the same five
-# build-only dependencies `Crate/ChatDriver` declares, because both crates
+# build-only dependencies `Crate/Chat/Driver` declares, because both crates
 # compile their scripts through the one shared rule in `Build/Script.rs`.
 [build-dependencies]
 oxc_allocator = { workspace = true }

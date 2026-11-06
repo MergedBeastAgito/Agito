@@ -1,11 +1,11 @@
-//! `agentic.adapter`: the shape a third-party substrate implements.
+//! `agito.adapter`: the shape a third-party substrate implements.
 //!
-//! Agentic ships capabilities and one concrete substrate. A third party with a
+//! Agito ships capabilities and one concrete substrate. A third party with a
 //! different substrate - another game, another protocol, another device - needs
 //! one thing this workspace could not previously give it: a port it can
 //! implement that a composition root can hold without naming the crate that
 //! implements it. That is [`Struct::Port::Adapter`]. Until this crate existed a
-//! third-party driver could only copy `agentic-browser-cdp`'s plumbing and be
+//! third-party driver could only copy `agito-browser-cdp`'s plumbing and be
 //! consumed by path, which is what the NFSU2 driver did.
 //!
 //! # Why a trait and not a registry
@@ -15,7 +15,7 @@
 //! and the answer to "which one is running" depends on a side effect nobody
 //! wrote down. A trait is a value the composition root already knows how to
 //! pass. It constructs the adapter once, holds it as `Arc<dyn Adapter>`, and
-//! hands that on - the shape `agentic-browser-cdp`'s `Browse` already has, and
+//! hands that on - the shape `agito-browser-cdp`'s `Browse` already has, and
 //! the reason both return a boxed future rather than declaring `async fn`.
 //!
 //! # What this crate does not decide

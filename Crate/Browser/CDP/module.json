@@ -1,25 +1,31 @@
 {
-	"name": "@agentic/browser-cdp",
-	"kind": "adapter",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.browse",
-		"errors": ["browser-unavailable", "navigation-failed", "timeout"]
+	"Name": "@agito/browser-cdp",
+	"Kind": "Adapter",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.browse",
+		"Error": [
+			"browser-unavailable",
+			"navigation-failed",
+			"timeout"
+		]
 	},
-	"requires": {
-		"endpoint": "env:CDP_URL"
+	"Require": {
+		"Endpoint": "env:CDP_URL"
 	},
-	"artefact": {
-		"entry": "Target/debug/libAgenticBrowserCDP.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Artefact": {
+		"Entry": "Target/debug/libCDP.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "holds-transport",
-	"cost": {
-		"coldMs": 900,
-		"warmMs": 5,
-		"network": true,
-		"processes": ["chromium"]
+	"State": "HoldTransport",
+	"Cost": {
+		"ColdMs": 900,
+		"WarmMs": 5,
+		"Network": true,
+		"Process": [
+			"chromium"
+		]
 	},
-	"verify": "agentic verify --module @agentic/browser-cdp"
+	"Verify": "agito verify --module @agito/browser-cdp"
 }

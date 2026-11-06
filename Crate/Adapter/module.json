@@ -1,22 +1,22 @@
 {
-	"name": "@agentic/adapter",
-	"kind": "capability",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.adapter",
-		"errors": []
+	"Name": "@agito/adapter",
+	"Kind": "Capability",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.adapter",
+		"Error": []
 	},
-	"requires": {},
-	"artefact": {
-		"entry": "Target/debug/libAgenticAdapter.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Require": {},
+	"Artefact": {
+		"Entry": "Target/debug/libAdapter.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "stateless",
-	"cost": {
-		"coldMs": 1,
-		"warmMs": 1,
-		"network": false
+	"State": "Stateless",
+	"Cost": {
+		"ColdMs": 1,
+		"WarmMs": 1,
+		"Network": false
 	},
-	"verify": "agentic verify --module @agentic/adapter"
+	"Verify": "agito verify --module @agito/adapter"
 }

@@ -54,12 +54,12 @@
     <g class="node" data-line9-node="A" transform="translate(733, 177)">
       <defs><clipPath id="clip-A"><rect x="-70" y="-42.5" width="140" height="85" /></clipPath></defs>
       <rect x="-70" y="-42.5" width="140" height="85" rx="2" ry="2" fill="#FFFFFF" stroke="#0A2555" stroke-width="1.25" />
-      <text text-anchor="middle" fill="#111111" font-family="&#39;IBM Plex Sans&#39;, &#39;Segoe UI&#39;, system-ui, sans-serif" font-size="16" font-weight="400" clip-path="url(#clip-A)"><tspan x="0" dy="-17.28">agentic</tspan><tspan x="0" dy="22.4">names concrete</tspan><tspan x="0" dy="22.4">adapters</tspan></text>
+      <text text-anchor="middle" fill="#111111" font-family="&#39;IBM Plex Sans&#39;, &#39;Segoe UI&#39;, system-ui, sans-serif" font-size="16" font-weight="400" clip-path="url(#clip-A)"><tspan x="0" dy="-17.28">agito</tspan><tspan x="0" dy="22.4">names concrete</tspan><tspan x="0" dy="22.4">adapters</tspan></text>
     </g>
     <g class="node" data-line9-node="W" transform="translate(999, 399)">
       <defs><clipPath id="clip-W"><rect x="-70" y="-42.5" width="140" height="85" /></clipPath></defs>
       <rect x="-70" y="-42.5" width="140" height="85" rx="2" ry="2" fill="#FFFFFF" stroke="#0A2555" stroke-width="1.25" />
-      <text text-anchor="middle" fill="#111111" font-family="&#39;IBM Plex Sans&#39;, &#39;Segoe UI&#39;, system-ui, sans-serif" font-size="16" font-weight="400" clip-path="url(#clip-W)"><tspan x="0" dy="-17.28">agentic-workflow</tspan><tspan x="0" dy="22.4">owns the Browse</tspan><tspan x="0" dy="22.4">to Page bridge</tspan></text>
+      <text text-anchor="middle" fill="#111111" font-family="&#39;IBM Plex Sans&#39;, &#39;Segoe UI&#39;, system-ui, sans-serif" font-size="16" font-weight="400" clip-path="url(#clip-W)"><tspan x="0" dy="-17.28">agito-workflow</tspan><tspan x="0" dy="22.4">owns the Browse</tspan><tspan x="0" dy="22.4">to Page bridge</tspan></text>
     </g>
     <g class="node" data-line9-node="C" transform="translate(168, 530)">
       <defs><clipPath id="clip-C"><rect x="-70" y="-42.5" width="140" height="85" /></clipPath></defs>

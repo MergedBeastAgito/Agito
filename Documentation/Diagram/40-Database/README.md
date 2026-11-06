@@ -5,9 +5,9 @@ and a subscriber sees the move.
 
 ## Page 1 - a generation
 
-![Unbound, bound, superseded, and a refusal for an undeclared capability](generation.svg)
+![Unbound, bound, superseded, and a refusal for an undeclared capability](Generation.svg)
 
-[`generation.mmd`](generation.mmd) · [`generation.svg`](generation.svg)
+[`Generation.mmd`](Generation.mmd) · [`Generation.svg`](Generation.svg)
 
 A generation is appended, never updated. The rule that makes it useful: a write under a generation
 that is not the latest bound one is refused, and the refusal names the generation it saw.
@@ -16,9 +16,9 @@ that is not the latest bound one is refused, and the refusal names the generatio
 
 ## Page 2 - a lease, and the fence
 
-![Free and held, renewal, expiry, and a claim refused while another holds it](lease.svg)
+![Free and held, renewal, expiry, and a claim refused while another holds it](Lease.svg)
 
-[`lease.mmd`](lease.mmd) · [`lease.svg`](lease.svg)
+[`Lease.mmd`](Lease.mmd) · [`Lease.svg`](Lease.svg)
 
 The fence increments on every grant. A write carrying an old fence is refused - not queued, not
 applied late. `Refused` is a result, never a panic.
@@ -57,10 +57,10 @@ change.
 
 ## Page 4 - missing states
 
-![Abandoned and quarantined, the states a dead holder leaves behind](missing.svg)
+![Abandoned and quarantined, the states a dead holder leaves behind](Missing.svg)
 
-[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+[`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
 `Abandoned` and `Quarantined` do not exist - they are drawn as installable steps. Expiry covers the
 clock; nothing covers the workspace a dead holder may have left dirty, which is the
-`holds-workspace` class the manifest names and the schema does not yet model.
+`HoldWorkspace` class the manifest names and the schema does not yet model.

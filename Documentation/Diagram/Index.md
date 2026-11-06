@@ -47,14 +47,14 @@ Shapes carry kind: `(["event"])`, `[("store")]`, `{"decision"}`, `["process"]`. 
 
 | Folder                                  | Category    | What it draws                                                |
 | --------------------------------------- | ----------- | ------------------------------------------------------------ |
-| [`00-rings/`](00-rings/README.md)       | authority   | the crates as concentric rings, and the ring that is missing |
-| [`10-runtime/`](10-runtime/README.md)   | leases      | claim, admit, land, refuse - and the late arrival            |
-| [`20-browser/`](20-browser/README.md)   | effects     | attach versus launch, and the dead-but-open socket           |
-| [`30-chat/`](30-chat/README.md)         | research    | mode, model, completion, truncation                          |
-| [`40-database/`](40-database/README.md) | internality | generations, leases, probes, and the abandoned holder        |
-| [`50-feed/`](50-feed/README.md)         | transport   | bundle, attach, observe, and the rate limit                  |
+| [`00-Rings/`](00-Rings/README.md)       | authority   | the crates as concentric rings, and the ring that is missing |
+| [`10-RunTime/`](10-RunTime/README.md)   | leases      | claim, admit, land, refuse - and the late arrival            |
+| [`20-Browser/`](20-Browser/README.md)   | effects     | attach versus launch, and the dead-but-open socket           |
+| [`30-Chat/`](30-Chat/README.md)         | research    | mode, model, completion, truncation                          |
+| [`40-Database/`](40-Database/README.md) | internality | generations, leases, probes, and the abandoned holder        |
+| [`50-Feed/`](50-Feed/README.md)         | transport   | bundle, attach, observe, and the rate limit                  |
 
-The set was checked by `Crate/Agentic/Test/Legend.rs` - frontmatter with a theme, at least one class
+The set was checked by `Crate/Agito/Test/Legend.rs` - frontmatter with a theme, at least one class
 annotation, a rendered sibling over 1000 bytes, and no prose legend anywhere - and that check is
 deleted with the rest of the suites. It never proved a diagram was right, only that it rendered and
 that its terms were typed; nothing proves even that now.

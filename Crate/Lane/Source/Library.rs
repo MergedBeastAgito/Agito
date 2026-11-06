@@ -1,4 +1,4 @@
-//! `agentic.lane.decide`: a template corpus as data, and the round trip that
+//! `agito.lane.decide`: a template corpus as data, and the round trip that
 //! turns one state into one typed answer.
 //!
 //! A decision model answers a *shape*, not a sentence: a `state` it may read
@@ -16,10 +16,10 @@
 //! - [`Fn::Load::Load`] reads the directory and validates it against itself: a
 //!   lane naming a field the observation neither reads nor derives, or a
 //!   template that does not exist, is a corpus that cannot answer and is refused
-//!   at load rather than mid-run. Its failure is [`Struct::CorpusError::CorpusError`],
+//!   at load rather than mid-run. Its failure is [`Struct::Corpus::Error::CorpusError`],
 //!   which names the path or the id that was wrong, and which narrows to the
 //!   port's own [`Struct::Error::Error`] with `?`;
-//! - [`Fn::Select::Select`] picks the lane and, inside it, the template - by a
+//! - [`Fn::Resolve::Resolve`] picks the lane and, inside it, the template - by a
 //!   predicate over the state, never by guessing which question is current;
 //! - [`Fn::Compose::Compose`] builds `{model, state, questions}` from the
 //!   selection, sending only the fields the lane names and asking the model the
@@ -68,13 +68,13 @@
 //! this crate. A caller's rules ([`Struct::When::When`]) are Rust values, and
 //! exist for the honest condition a corpus cannot see: "not moving for three
 //! ticks" is a counter the caller keeps, and a JSON comparison can only say "not
-//! moving now". [`Fn::Select::Select`] takes the caller's list when it names
+//! moving now". [`Fn::Resolve::Resolve`] takes the caller's list when it names
 //! anything at all, and the corpus's own conditions when it is empty.
 //!
 //! # No network in the crate
 //!
 //! [`Struct::Port::Poster`] is this crate's own trait - a request in, a reply
-//! body out, bounded by the caller's [`AgenticRuntime::Call`] - and the crate
+//! body out, bounded by the caller's [`RunTime::Call`] - and the crate
 //! never implements it. The credentials, the transport and the status codes are
 //! an adapter's business, which is what lets a test answer from a captured
 //! fixture and lets a caller swap curl for anything else without touching the
@@ -110,15 +110,14 @@ pub use crate::{
 		Load::{Load, Read},
 		Model::{Bare, Models, Price, Route},
 		Parse::Parse,
-		Select::{Choose, Select},
-		SelectLane::SelectLane,
+		Resolve::{Choose, Resolve},
+		Lane::Select::Select,
 	},
 	Struct::{
 		Answer::{Answer, Answered, Usage},
 		Budget::Budget,
 		Context::Context,
-		Corpus::Corpus,
-		CorpusError::CorpusError,
+		Corpus::{Corpus, Error::CorpusError},
 		Decider::{Create, Decider, Options},
 		Decode::DecodeError,
 		Error::{Code, Error},
@@ -129,7 +128,7 @@ pub use crate::{
 		Question::Question,
 		Request::Request,
 		Rule::{Rule, Rules},
-		SelectError::SelectError,
+		Select::Error::SelectError,
 		State::State,
 		Template::Template,
 		When::When,

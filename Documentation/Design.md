@@ -4,9 +4,9 @@ What this workspace is for, and the decisions that shape it. Written after a res
 real inventory of the consuming repository, so the boundaries here are argued from that surface
 rather than from a taxonomy.
 
-Provenance convention: each section below opens with **Source:** naming the capture in
-`.hermes/research/` that states the claim, or **Decision: this repository** where no capture does.
-`Documentation/Research.md` indexes the captures.
+Provenance convention: each section below opens with **Source:** naming the capture that states the
+claim, or **Decision: this repository** where no capture does. `Documentation/Research.md` indexes
+the captures by id; the archive they lived in was removed, so the index is where a citation lands.
 
 ## The problem
 
@@ -22,7 +22,7 @@ capabilities out without lifting the product with them.
 
 ## The four layers
 
-**Source:** `.hermes/research/4ffde6d5.md` - the layer table, "the arrows point inward", "a
+**Source:** capture `4ffde6d5` - the layer table, "the arrows point inward", "a
 capability importing an adapter is a defect" and "ports are owned by their consumers, not by a
 central crate" are stated there, and §1 answers the Cargo consequence: no shared ports crate, two
 consumer-owned `Browse` traits. **Decision: this repository** - the reason given for the defect (a
@@ -50,20 +50,20 @@ still behave differently.
 
 ## The manifest
 
-**Source:** `.hermes/research/4ffde6d5.md` - the four state classes and their admission role, the
+**Source:** capture `4ffde6d5` - the four state classes and their admission role, the
 hashed `artefact` entry point and the cold/warm `cost` are stated there, and §3 answers how they
 survive into Rust: a checked-in `module.json`, serde validation in CI, read by a harness that never
 starts the application. **Decision: this repository** - the observation each class implies: a
-liveness probe for `holds-transport`, a freshness check for `holds-identity`, a reset proof for
-`holds-workspace`. The capture says what a harness must revalidate at admission, not which
+liveness probe for `HoldTransport`, a freshness check for `HoldIdentity`, a reset proof for
+`HoldWorkspace`. The capture says what a harness must revalidate at admission, not which
 observation proves it.
 
 Every package carries `module.json`. The field that does the most work is `state`:
 
-- `stateless` - nothing to check at admission.
-- `holds-transport` - a liveness probe, because an open socket can be dead.
-- `holds-identity` - a freshness check, because a token expires while pooled.
-- `holds-workspace` - a reset proof, because a dirty workspace answers wrongly.
+- `Stateless` - nothing to check at admission.
+- `HoldTransport` - a liveness probe, because an open socket can be dead.
+- `HoldIdentity` - a freshness check, because a token expires while pooled.
+- `HoldWorkspace` - a reset proof, because a dirty workspace answers wrongly.
 
 `artefact` carries a hashed entry point, so a harness loads a built file and never builds at launch.
 `cost` carries cold and warm figures, so a pre-warm planner has something to budget against rather
@@ -86,7 +86,7 @@ starts returning wrong answers quickly.
 
 ## Why the packages are these five
 
-**Source:** `.hermes/research/4ffde6d5.md` - the five packages with their kinds, state classes and
+**Source:** capture `4ffde6d5` - the five packages with their kinds, state classes and
 errors, and §1's decision that all five stay separate crates rather than becoming modules of one.
 **Decision: this repository** - the build order, and each reason for building that package when it
 is built. The capture says which crates exist, not which one to write first.
@@ -118,7 +118,7 @@ default unless somebody refuses it.
 
 ## The two failures this design expects
 
-**Source:** `.hermes/research/4ffde6d5.md` §2 for the ownership half -
+**Source:** capture `4ffde6d5` §2 for the ownership half -
 `Ownership::{Attached, Launched}`, attach and launch as separate operations, disposal of an attached
 session that must not terminate the browser, and a disconnected session that invalidates warm
 readiness. **Decision: this repository** - the five-surface inventory, the global warm browser

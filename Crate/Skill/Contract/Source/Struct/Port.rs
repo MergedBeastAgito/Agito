@@ -1,4 +1,4 @@
-//! The port `agentic.skill.validate` promises.
+//! The port `agito.skill.validate` promises.
 //!
 //! The port states more than data shapes, so the semantics two adapters would
 //! otherwise disagree about are fixed here rather than left to an
@@ -24,7 +24,7 @@
 //! caller on an async runtime should drive these from a blocking context rather
 //! than assume the box makes the read asynchronous.
 
-use AgenticRuntime::FutureBox;
+use ::RunTime::FutureBox;
 
 use crate::Struct::Skill::{Finding, Skill};
 

@@ -8,7 +8,7 @@
 
 use std::time::{Duration, Instant};
 
-use AgenticRuntime::{Clock, FutureBox, Pace};
+use ::RunTime::{Clock, FutureBox, Pace};
 
 /// The clock and the wait, on tokio.
 #[derive(Debug, Default)]

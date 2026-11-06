@@ -14,7 +14,7 @@
 //!
 //! The one thing it must not do is leak an adapter downwards: no crate below
 //! this one depends on another's concrete type, and the only crate that names
-//! `chromiumoxide` is `agentic-browser-cdp`.
+//! `chromiumoxide` is `agito-browser-cdp`.
 
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
@@ -29,7 +29,7 @@ pub use crate::{
 		Discover::Discover,
 		Note::{Note, ThreadOf},
 		Run::{Drive, Run},
-		VerifyModule::{Declared, Readiness, VerifyModule},
+		Module::Verify::{Declared, Readiness, Verify},
 	},
 	Struct::{
 		Binary::{

@@ -246,7 +246,7 @@ const fn Declares(Declared:&str, Name:&str) -> bool {
 /// parameters.
 ///
 /// ```ignore
-/// let Expression = script!("Expressions/ReadMode"; Mode = &Selectors.Mode);
+/// let Expression = script!("Expression/ReadMode"; Mode = &Selectors.Mode);
 /// ```
 ///
 /// The path is the script's path under `Source/Script/`, without the

@@ -1,5 +1,5 @@
 [package]
-name = "agentic-design-verification"
+name = "agito-design-verification"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ publish.workspace = true
 description = "Measure a built page and judge the measurements against invariants the caller supplies. Holds no design of its own."
 
 [lib]
-name = "AgenticDesignVerification"
+name = "Verification"
 path = "Source/Library.rs"
 
 [dependencies]
-agentic-runtime = { workspace = true }
+agito-runtime = { workspace = true }
 serde_json = { workspace = true }
 
 [lints.rust]

@@ -17,7 +17,7 @@ use std::{
 };
 
 /// Poll `Work` until it produces a value.
-pub fn BlockOn<Work:Future>(Work:Work) -> Work::Output {
+pub fn Block<Work:Future>(Work:Work) -> Work::Output {
 	let mut Work = pin!(Work);
 	let Waker = Waker::noop();
 	let mut Context = Context::from_waker(Waker);

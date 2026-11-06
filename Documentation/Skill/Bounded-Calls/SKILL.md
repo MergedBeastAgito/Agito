@@ -6,7 +6,7 @@ license: MIT
 platforms: [macos, linux]
 metadata:
     hermes:
-        tags: [rust, agentic, call, deadline, budget, cdp]
+        tags: [rust, agito, call, deadline, budget, cdp]
 ---
 
 # Bounded Calls

@@ -1,4 +1,4 @@
-//! `agentic.verify.design` over a transport the composition root supplies.
+//! `agito.verify.design` over a transport the composition root supplies.
 //!
 //! Two verbs, and only the first touches a page:
 //!
@@ -19,7 +19,7 @@
 
 use std::sync::Arc;
 
-use AgenticRuntime::{Bound, Call, Expired, FutureBox, Pace};
+use ::RunTime::{Bound, Call, Expired, FutureBox, Pace};
 
 use crate::{
 	Fn::{Judge::Check, Measure::Reconcile},

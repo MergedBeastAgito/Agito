@@ -1,4 +1,4 @@
-//! The catalog: the six tables of the agentic model, as data.
+//! The catalog: the six tables of the agito model, as data.
 //!
 //! A SpacetimeDB module compiles its tables into the published module, so a row
 //! in a table-definition table cannot create one, and no reducer can execute
@@ -50,7 +50,7 @@ pub static Tables:[Table; 6] = [
 				Name:"state",
 				Type:ColumnType::Text,
 				Key:None,
-				Note:"stateless | holds-transport | holds-identity | holds-workspace",
+				Note:"Stateless | HoldTransport | HoldIdentity | HoldWorkspace",
 			},
 			Column {
 				Name:"declaredAt",

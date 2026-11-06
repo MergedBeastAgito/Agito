@@ -23,7 +23,7 @@ pub mod Struct;
 pub use crate::{
 	Fn::{
 		Measure::MeasurementExpression,
-		VerifySkillPage::{Outcome, VerifySkillPage},
+		Skill::Page::Verify::{Outcome, Verify},
 	},
 	Struct::Binding::{Measure::Measure, Page::Page},
 };

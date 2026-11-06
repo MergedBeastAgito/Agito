@@ -7,11 +7,11 @@
 
 use std::{sync::Arc, time::Duration};
 
-use AgenticBrowserCDP::{OpenOptions, Ownership};
-use AgenticChatDriver::{Chat, Mode, Question};
-use AgenticDesignVerification::Verify;
-use AgenticRuntime::{BlockOn, Call, Never};
-use AgenticSkillContract::{Create as CreateContract, SkillContract};
+use ::CDP::{OpenOptions, Ownership};
+use ::Driver::{Chat, Mode, Question};
+use ::Verification::Verify;
+use ::RunTime::{Block, Call, Never};
+use ::Contract::{Create as CreateContract, SkillContract};
 use serde_json::json;
 
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
 		Composition::{Browser, Chat as ChatOver, ChatSpec, Design, Headless},
 		Discover,
 		Resolve,
-		VerifyModule::{ReadinessJSON, VerbsOf, VerifyModule},
+		Module::Verify::{ReadinessJSON, VerbOf},
 	},
 	Struct::{
 		Binary::{Command::Verb, Shape::Shape},
@@ -29,13 +29,13 @@ use crate::{
 };
 
 /// The variable that names a skill corpus when no root is given.
-const SkillVariable:&str = "AGENTIC_SKILL_PATH";
+const SkillVariable:&str = "AGITO_SKILL_PATH";
 
 /// The corpus beside this crate: the repository keeps it two levels up.
 const SkillRelative:&str = "../../Documentation/Skill";
 
 /// Where an installed tree keeps the corpus the release ships.
-const SkillAbsolute:&str = "/usr/local/share/agentic/skills";
+const SkillAbsolute:&str = "/usr/local/share/agito/skills";
 
 /// Run one verb, answering the text to print or the reason it could not be run.
 pub async fn Run(Command:Verb) -> Result<String, String> {
@@ -68,13 +68,13 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 		},
 		Verb::Verify { Module, Adapter } => {
 			let Roots = Discover::Roots(&Adapter);
-			let Readiness = VerifyModule(&Module, &Roots)?;
+			let Readiness = crate::Fn::Module::Verify::Verify(&Module, &Roots)?;
 			let Text = serde_json::to_string_pretty(&ReadinessJSON(&Readiness)).unwrap_or_else(|_| "{}".to_string());
 			if Readiness.Ready { Ok(Text) } else { Err(Text) }
 		},
 		Verb::Skills { Root, JSON } => {
 			// The argument when there is one, and the three-tier default when
-			// there is not: beside this crate, then `AGENTIC_SKILL_PATH`, then
+			// there is not: beside this crate, then `AGITO_SKILL_PATH`, then
 			// the installed location. The resolved path is what the summary
 			// and the JSON report, so a caller can see which corpus was read.
 			let Root = match Root {
@@ -167,9 +167,9 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 						.map_err(|Why| format!("the selector file {} could not be read: {Why}", File.display()))?;
 					let Parsed:serde_json::Value = serde_json::from_str(&Text)
 						.map_err(|Why| format!("the selector file {} is not JSON: {Why}", File.display()))?;
-					AgenticChatDriver::Struct::Selectors::Merged(&Parsed)
+					Driver::Struct::Selectors::Merged(&Parsed)
 				},
-				None => AgenticChatDriver::DefaultSelectors(),
+				None => Driver::DefaultSelectors(),
 			};
 			// The file is a statement about the product; the flag is a
 			// statement about this call. The call wins, because a
@@ -221,7 +221,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			// read here and this decides when it has seen enough.
 			// `--observe` writes each one to stderr, so stdout
 			// stays the answer a caller is parsing.
-			let mut Seen = |Observation:&AgenticChatDriver::Observation| {
+			let mut Seen = |Observation:&Driver::Observation| {
 				if Observe {
 					eprintln!(
 						"{}",
@@ -235,7 +235,7 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 						.unwrap_or_else(|_| "{}".to_string())
 					);
 				}
-				AgenticChatDriver::Control::Continue
+				Driver::Control::Continue
 			};
 			let Answer = Driver
 				.Observe(Question { Text, Mode:Mode::Search, Model }, Call, &mut Seen)
@@ -309,7 +309,7 @@ fn Declared(JSON:&str) -> String {
 	let Ok(Parsed) = serde_json::from_str::<serde_json::Value>(JSON) else {
 		return "?".to_string();
 	};
-	match VerbsOf(&Parsed) {
+	match VerbOf(&Parsed) {
 		Ok(Names) => Verbs(&Names.iter().map(String::as_str).collect::<Vec<_>>()),
 		Err(_) => "?".to_string(),
 	}
@@ -322,7 +322,7 @@ fn Declared(JSON:&str) -> String {
 /// the keys a pair read adds and by nothing else: a second literal would let a
 /// fact be added to one shape and forgotten in the other, and the two would
 /// then describe different calls.
-fn Envelope(Answer:&AgenticChatDriver::Answer, Reading:&str) -> serde_json::Value {
+fn Envelope(Answer:&Driver::Answer, Reading:&str) -> serde_json::Value {
 	json!({
 		// The page's own URL, not the one this call was given: with a bind
 		// they are different, and the one that answered is the one a caller
@@ -349,11 +349,11 @@ fn Envelope(Answer:&AgenticChatDriver::Answer, Reading:&str) -> serde_json::Valu
 /// The composition root is the one place a wall clock is read: a capability is
 /// handed a deadline, never a clock of its own.
 fn Budget(Milliseconds:u64) -> Call {
-	Call::Within(Duration::from_millis(Milliseconds), &AgenticBrowserCDP::Tokio, Arc::new(Never))
+	Call::Within(Duration::from_millis(Milliseconds), &CDP::Tokio, Arc::new(Never))
 }
 
 /// Drive a future to completion, for the two verbs that are pure.
 ///
 /// A caller that already has an executor should `await` instead; this exists so
 /// a test can call a verb without starting a runtime.
-pub fn Drive<Work:std::future::Future>(Work:Work) -> Work::Output { BlockOn(Work) }
+pub fn Drive<Work:std::future::Future>(Work:Work) -> Work::Output { Block(Work) }

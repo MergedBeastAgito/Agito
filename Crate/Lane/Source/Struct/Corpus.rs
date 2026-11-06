@@ -53,6 +53,8 @@ use serde_json::Value;
 
 use crate::Struct::{Lane::Lane, Observation::Observation, Template::Template};
 
+pub mod Error;
+
 /// One corpus, as it was read.
 ///
 /// Every field states its own key rather than relying on a container
@@ -115,7 +117,7 @@ impl Corpus {
 	///
 	/// Built on demand rather than stored, so a corpus cannot hold two answers
 	/// to "which fields exist" - the descriptors above are the only copy.
-	pub fn Observation(&self) -> Observation { Observation::OfEntries(&self.Fields, &self.Derived) }
+	pub fn Observation(&self) -> Observation { Observation::OfRead(&self.Fields, &self.Derived) }
 
 	/// Every lane, sorted by name. This is a stable order for printing, not a
 	/// priority: [`Corpus::Ordered`] is the order the corpus declared.

@@ -7,6 +7,6 @@
 //! provider that answers a number where a label was asked for must not be able
 //! to make `ask` fail outside the vocabulary the manifest declares.
 
-pub mod Expressions;
+pub mod Expression;
 pub mod Note;
 pub mod Read;

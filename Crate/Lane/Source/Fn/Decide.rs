@@ -1,7 +1,7 @@
 //! The whole pipeline in one call: a corpus and a state in, a typed answer out.
 //!
 //! Four steps, each stated once somewhere else and joined here rather than
-//! repeated: [`SelectLane`] picks the lane the corpus's own conditions name,
+//! repeated: [`Select`] picks the lane the corpus's own conditions name,
 //! [`Choose`] picks the template inside that lane, [`Compose`] builds
 //! `{model, state, questions}`, and [`Ask`] posts it through the caller's
 //! [`Poster`] and decodes the reply into [`Answer`]. An entry point that
@@ -59,10 +59,10 @@
 //! cancelled, so an abandoned operation does not become a request somebody pays
 //! for.
 
-use AgenticRuntime::Call;
+use ::RunTime::Call;
 
 use crate::{
-	Fn::{Ask::Ask, Compose::Compose, Select::Choose, SelectLane::SelectLane},
+	Fn::{Ask::Ask, Compose::Compose, Resolve::Choose, Lane::Select::Select},
 	Struct::{
 		Answer::Answer,
 		Context::Context,
@@ -101,7 +101,7 @@ pub async fn Decide<P:Poster + ?Sized>(Poster:&P, Corpus:&Corpus, State:&State, 
 /// The template inside the lane is chosen by the lane's own order
 /// ([`Rules::default`] holds no rules), because a corpus lists its templates in
 /// preference. A caller that wants to override that per call has
-/// [`crate::Fn::Select::Select`], which takes the caller's rules.
+/// [`crate::Fn::Resolve::Resolve`], which takes the caller's rules.
 pub async fn DecideOn<P:Poster + ?Sized>(
 	Poster:&P,
 	Corpus:&Corpus,
@@ -109,7 +109,7 @@ pub async fn DecideOn<P:Poster + ?Sized>(
 	State:&State,
 	Call:Call,
 ) -> Result<Answer, Error> {
-	let Lane = SelectLane(Corpus, Context)?;
+	let Lane = Select(Corpus, Context)?;
 	let Template = Choose(Corpus, Lane, State, &Rules::default())?;
 	let Selected = Selection { Lane:Lane.clone(), Template:Template.clone() };
 	let Request = Compose(&Selected, State)?;

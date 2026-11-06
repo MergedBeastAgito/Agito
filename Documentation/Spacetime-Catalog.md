@@ -1,13 +1,13 @@
 # SpacetimeDB Catalog
 
-The agentic database model as rules and data: capabilities, generations, leases with a fence,
+The agito database model as rules and data: capabilities, generations, leases with a fence,
 probes, beliefs and trace. It lives here rather than in the consuming repository because none of it
 needs SpacetimeDB to be true, and a module that imported the server SDK to hold it could not be
 tested without a published database.
 
 This is an adoption note. It says what the catalog is, which invariant each rule enforces, and
 exactly what TimeLine takes to adopt it in one step. The statement of the model is
-`Crate/SpacetimeCatalog/`; this document is the prose that says what the crate states, and it
+`Crate/Spacetime/Catalog/`; this document is the prose that says what the crate states, and it
 records where the two disagreed when the port was made.
 
 ## What the port changed in this document
@@ -47,7 +47,7 @@ allowed to wrap.
   and types.
 
 The seam is the point. `spacetimedb` is not a dependency of this crate - it has no dependency at
-all, which `cargo tree -p agentic-spacetime-catalog` answers in one line - and adding one to test
+all, which `cargo tree -p agito-spacetime-catalog` answers in one line - and adding one to test
 rules would be backwards: the rules are what must be true of the module, so they have to be
 checkable before a module exists.
 
@@ -165,7 +165,7 @@ Proved by: `an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_reco
 `an_effect_from_a_superseded_fence_is_refused_without_an_ambiguity`,
 `an_effect_whose_lease_was_released_while_it_ran_is_refused_and_recorded_ambiguous`, and
 `an_effect_presented_while_its_lease_is_live_is_recorded_not_quarantined` - which is the transcript
-`Crate/Runtime/Test/Runtime.rs` runs against the local stand-in, and the two must answer the same.
+`Crate/RunTime/Test/Runtime.rs` runs against the local stand-in, and the two must answer the same.
 
 ## Adopting it in TimeLine, in one step
 
@@ -256,12 +256,12 @@ unchanged, and the tests that prove them travel with them.
 
 ## What proved it
 
-`Crate/SpacetimeCatalog/` is the executable statement, and its suite carried the TypeScript
+`Crate/Spacetime/Catalog/` is the executable statement, and its suite carried the TypeScript
 package's cases rather than a summary of them. The suite is deleted with the rest of the
 verification layer; the list below is the record of what it held.
 
 ```
-cargo test -p agentic-spacetime-catalog     # deleted
+cargo test -p agito-spacetime-catalog     # deleted
 ```
 
 Thirty-four cases, in four files:
@@ -284,18 +284,18 @@ What each invariant was proved by is named in its section above. Three further g
 one of them still runs:
 
 - `cargo test --workspace` counted these cases with the rest of the tree, and
-  `Crate/Agentic/Test/Composition.rs` held the manifest to the crate's code vocabulary - both
+  `Crate/Agito/Test/Composition.rs` held the manifest to the crate's code vocabulary - both
   deleted.
-- `agentic verify --module @agentic/spacetime-catalog` reports ready: the manifest's
+- `agito verify --module @agito/spacetime-catalog` reports ready: the manifest's
   `provides.errors` is `admission-refused`, `lease-held` and `budget-exhausted`, which is exactly
   `Code` in `Source/Struct/Code.rs`. This one is a command, not a test, and it still runs.
-- `Crate/Agentic/Test/Boundaries.rs` kept the arrow - the crate is a capability, it imports nothing,
+- `Crate/Agito/Test/Boundaries.rs` kept the arrow - the crate is a capability, it imports nothing,
   and only the composition root imports it - and is deleted;
-  `cargo tree -p agentic-spacetime-catalog --depth 1` shows the same graph.
+  `cargo tree -p agito-spacetime-catalog --depth 1` shows the same graph.
 
 The mirror with the runtime is the one correspondence the old suite wrote down.
-`Crate/Runtime/Source/Struct/StandIn.rs` maps `record`'s checks column for column - the latest
+`Crate/RunTime/Source/Struct/StandIn.rs` maps `record`'s checks column for column - the latest
 generation, the lease row, the fence, the holder, the released and quarantined states, the expiry -
-and `Crate/Runtime/Test/Runtime.rs` runs the same transcript as `Test/Destination.rs`. Two
+and `Crate/RunTime/Test/Runtime.rs` runs the same transcript as `Test/Destination.rs`. Two
 implementations, one answer; if they ever disagree, one of them is wrong and the other is a second
 authority.

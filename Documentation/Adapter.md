@@ -5,14 +5,14 @@ to say before the workspace will believe it.
 
 ## The gap it closes
 
-Agentic ships capabilities and one concrete substrate. A third party with a different substrate -
+Agito ships capabilities and one concrete substrate. A third party with a different substrate -
 another protocol, another device, a game port - could copy the browser crate's plumbing and be
-consumed by path, and that is what happened first: a driver that required `agentic.browse`, provided
+consumed by path, and that is what happened first: a driver that required `agito.browse`, provided
 a port of its own, kept its JavaScript in `Source/Script/`, and had nowhere to say so. Nothing
 outside the workspace could state "I provide this port" and be believed, because the manifest table
 is compiled in and `Crate/*` is what it describes.
 
-`Crate/Adapter` (`agentic-adapter`) is that missing statement. It holds one trait, one check, and a
+`Crate/Adapter` (`agito-adapter`) is that missing statement. It holds one trait, one check, and a
 stand-in; it holds no behaviour.
 
 ---
@@ -41,14 +41,14 @@ pub trait Adapter: Send + Sync {
   universal request type every adapter shares would be the ports crate this workspace's design
   refuses: the first substrate with a shape of its own would force an edit on every other adapter.
 - **The error is the adapter's own.** `Error` carries a `Code` - the word the adapter's own manifest
-  declares - plus a `Message` and what was observed. Agentic does not enumerate the failures of a
+  declares - plus a `Message` and what was observed. Agito does not enumerate the failures of a
   substrate it has never seen, which is why `Crate/Adapter`'s own manifest names no errors.
 
 ---
 
 ## The facade carries the port
 
-A third-party adapter depends on `agentic-sdk` - the workspace's facade - and on nothing else, so
+A third-party adapter depends on `agito-sdk` - the workspace's facade - and on nothing else, so
 the port has to be reachable from there or a crate outside the tree cannot implement it. The facade
 re-exports `Adapter`, `Serves` and `StandIn` at its root, and the adapter's own `Error` at
 `Port::Adapter::Error`, because the root's `Error` is the browse port's - a consumer matches on that
@@ -57,13 +57,13 @@ one first:
 ```rust
 use std::sync::Arc;
 
-use agentic_sdk::{Adapter, Serves, StandIn};
+use agito_sdk::{Adapter, Serves, StandIn};
 
-let Held:Arc<dyn Adapter> = Arc::new(StandIn::New("agentic.nfsu.drive"));
-assert!(Serves(&*Held, "agentic.nfsu.drive").is_ok());
+let Held:Arc<dyn Adapter> = Arc::new(StandIn::New("agito.nfsu.drive"));
+assert!(Serves(&*Held, "agito.nfsu.drive").is_ok());
 ```
 
-`agentic-adapter` declares `kind: "capability"` and not `"adapter"`, and that is what makes the edge
+`agito-adapter` declares `kind: "capability"` and not `"adapter"`, and that is what makes the edge
 legal: the boundary rule lets a facade import any port and lets an adapter name a capability's port
 shapes, while an adapter naming another adapter is the edge it forbids. The facade is also the one
 thing a crate _inside_ the workspace must not name - it exists for the consumer outside the tree,
@@ -86,32 +86,32 @@ The composition root constructs the adapter once, holds it as `Arc<dyn Adapter>`
 the same shape the browser port already has. With no registry there is nobody to ask "who serves
 this port", and that is the point: the root constructed the value, so it already knows. What it
 cannot know from the value alone is whether the value agrees with the manifest a harness read, and
-that is what `AgenticAdapter::Serves(&dyn Adapter, Port)` answers - at the one place both halves are
+that is what `Adapter::Serves(&dyn Adapter, Port)` answers - at the one place both halves are
 in hand.
 
 ---
 
 ## The manifest kind
 
-`kind: "adapter"` is the whole new vocabulary. Everything else is the manifest this workspace
+`Kind: "Adapter"` is the whole new vocabulary. Everything else is the manifest this workspace
 already reads:
 
 ```json
 {
-	"name": "@someone/thing",
-	"kind": "adapter",
-	"version": "0.1.0",
-	"provides": { "port": "agentic.thing.drive", "errors": ["timeout"] },
-	"requires": { "ports": ["agentic.browse"] },
-	"artefact": { "entry": "Target/release/thing", "hash": null, "runtime": "rust>=1.88" },
-	"state": "holds-transport",
-	"cost": { "coldMs": 40, "warmMs": 3, "network": false },
-	"verify": "cargo run --release"
+	"Name": "@someone/thing",
+	"Kind": "Adapter",
+	"Version": "0.1.0",
+	"Provide": { "Port": "agito.thing.drive", "Error": ["timeout"] },
+	"Require": { "Port": ["agito.browse"] },
+	"Artefact": { "Entry": "Target/release/thing", "Hash": null, "RunTime": "rust>=1.88" },
+	"State": "HoldTransport",
+	"Cost": { "ColdMs": 40, "WarmMs": 3, "Network": false },
+	"Verify": "cargo run --release"
 }
 ```
 
-The reader accepts the six kinds the boundary rule knows - `runtime`, `capability`, `adapter`,
-`workflow`, `composition`, `facade` - and refuses anything else by name, listing the vocabulary
+The reader accepts the six kinds the vocabulary knows - `RunTime`, `Capability`, `Adapter`,
+`Workflow`, `Composition`, `Facade` - and refuses anything else by name, listing the vocabulary
 rather than only the offending word. A file that names no module, no port, or an unknown kind is
 refused where it is read, because a listing that shows a module the verifier cannot reason about is
 worse than a listing that says why it would not.
@@ -120,17 +120,17 @@ worse than a listing that says why it would not.
 
 ## How a module is found
 
-Nothing is compiled into Agentic, and nothing is registered. Two verbs read a third-party
+Nothing is compiled into Agito, and nothing is registered. Two verbs read a third-party
 `module.json`:
 
-- `agentic manifests --adapter <dir>` lists every module under the given roots after the ones the
+- `agito manifests --adapter <dir>` lists every module under the given roots after the ones the
   workspace ships, with the `module.json` each was read from in the fifth column.
-- `agentic verify --module <name> --adapter <dir>` reports readiness for one of them. The command
+- `agito verify --module <name> --adapter <dir>` reports readiness for one of them. The command
   line is the same one the workspace's own modules use.
 
-`--adapter` is repeatable, and `AGENTIC_ADAPTER_PATH` - a path list, split the way `PATH` is -
+`--adapter` is repeatable, and `AGITO_ADAPTER_PATH` - a path list, split the way `PATH` is -
 supplies the roots when the flag is absent. That is what lets a consumer run
-`agentic verify --module @someone/thing` with no flag at all.
+`agito verify --module @someone/thing` with no flag at all.
 
 A root is either a crate directory (it has a `module.json`) or a directory of crate directories. Two
 levels and no deeper: a tool that walks further than it was told is a tool whose listing changes
@@ -164,14 +164,14 @@ must not be. So the foreign report checks what is knowable:
 `errors.code` is `null` in that report rather than a copy of the manifest's own list, because a copy
 would read as agreement. What the report cannot answer, `Serves` can, at the composition root.
 
-`agentic verify` never constructs an adapter. A command that did would run a third party's code to
+`agito verify` never constructs an adapter. A command that did would run a third party's code to
 decide whether it is well formed.
 
 ---
 
 ## What is deliberately not here
 
-- **No dynamic loading.** Agentic has no `dlopen`, no plugin directory and no symbol lookup: a
+- **No dynamic loading.** Agito has no `dlopen`, no plugin directory and no symbol lookup: a
   third-party adapter is a Cargo dependency of its own consumer, not of this workspace.
 - **No registry, and therefore no discovery of running adapters.** The manifest listing is a
   statement about files, not about processes.
@@ -193,12 +193,12 @@ code makes, and because a reader deserves to know which ones nothing checks now.
 | A foreign implementation satisfies the trait                                 | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
 | A consumer outside the tree reaches the port through the facade alone        | `Crate/SDK/Test/Facade.rs`, `Fixture/SDK/` (both gone) |
 | The port a value reports matches the manifest that named it                  | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
-| An adapter under a root is listed with its port and its directory            | `Crate/Agentic/Test/Composition.rs` (deleted)          |
-| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agentic/Test/Composition.rs` (deleted)          |
-| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agentic/Test/Composition.rs` (deleted)          |
-| A stale root is skipped and the listing survives                             | `Crate/Agentic/Test/Composition.rs` (deleted)          |
-| `adapter` is a kind the boundary rule knows                                  | `Crate/Agentic/Test/Boundaries.rs` (deleted)           |
+| An adapter under a root is listed with its port and its directory            | `Crate/Agito/Test/Composition.rs` (deleted)          |
+| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agito/Test/Composition.rs` (deleted)          |
+| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agito/Test/Composition.rs` (deleted)          |
+| A stale root is skipped and the listing survives                             | `Crate/Agito/Test/Composition.rs` (deleted)          |
+| `adapter` is a kind the boundary rule knows                                  | `Crate/Agito/Test/Boundaries.rs` (deleted)           |
 
-`agentic manifests --adapter <root>` and `agentic verify --module <name> --adapter <root>` still
+`agito manifests --adapter <root>` and `agito verify --module <name> --adapter <root>` still
 answer the four middle claims at run time: a root that is stale is skipped with a warning, a
 duplicate name is refused, an unknown kind is refused, and a foreign module reports `code: null`.

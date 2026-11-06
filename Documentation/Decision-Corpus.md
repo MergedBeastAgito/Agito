@@ -1,7 +1,7 @@
-# A decision corpus for Agentic
+# A decision corpus for Agito
 
 **Status:** proposal, and its gate is gone. Nothing here is a decision until accepted; no record,
-directory or board exists. The proposal put the check in `Crate/Agentic/Test/Corpus.rs` under
+directory or board exists. The proposal put the check in `Crate/Agito/Test/Corpus.rs` under
 `cargo test --workspace`, and both the test target and `cargo test` are deleted - so if this is ever
 accepted, the enforcement half has to be re-decided rather than resumed.
 
@@ -44,7 +44,7 @@ whenever. All five start `proposed`, so the corpus opens with zero `settled` rec
 finding, not a gap.
 
 **Rejected as a sixth: port ownership.** `Design.md` argues it and
-`Crate/Agentic/Test/Boundaries.rs` enforces it; a record would be its third statement.
+`Crate/Agito/Test/Boundaries.rs` enforces it; a record would be its third statement.
 
 ---
 
@@ -54,8 +54,8 @@ finding, not a gap.
 title: The fence an effect carries
 date: 2026-11-04
 status: proposed
-owner: Crate/Runtime
-applies_to: [Crate/Runtime, Documentation/Observability.md]
+owner: Crate/RunTime
+applies_to: [Crate/RunTime, Documentation/Observability.md]
 enforced_by:
 supersedes: []
 superseded_by:
@@ -113,7 +113,7 @@ trustworthy, so a record that restates one is refused as duplication.
 **No board.** A board triages work; a record states a decision. The records that block work are
 already cards, and `status` is not work state - conflating the two is how TimeLine's board and its
 corpus came to need a sync whose disagreement is a bug. `Scope.md` rules the direction out for a
-stronger reason than this proposal has: Agentic "does not grow a copy of the site, the archive or
+stronger reason than this proposal has: Agito "does not grow a copy of the site, the archive or
 the RFC board". No triage need is named here that the existing board cannot serve, so
 `rfc_board.py`'s model is neither copied nor adapted.
 
@@ -126,7 +126,7 @@ Every one of those targets is deleted, so this section states a design that has 
 
 `Script/Feed.mjs` is the discipline the brief names, and it was deleted with the Node toolchain,
 which is the lesson `README.md` states: "a gate that lives in the toolchain being deleted is a gate
-that leaves with it". Its successor in discipline is `Crate/Agentic/Test/Legend.rs`, which is
+that leaves with it". Its successor in discipline is `Crate/Agito/Test/Legend.rs`, which is
 `Script/Legend.mjs` in Rust, a test rather than a script "because the gate it replaces was a command
 somebody had to remember". The corpus gate takes that shape: no Node, no Python, no new toolchain,
 one command that already runs.

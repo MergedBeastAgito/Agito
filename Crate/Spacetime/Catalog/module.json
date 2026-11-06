@@ -1,22 +1,26 @@
 {
-	"name": "@agentic/spacetime-catalog",
-	"kind": "capability",
-	"version": "0.1.3",
-	"provides": {
-		"port": "agentic.catalog.rules",
-		"errors": ["admission-refused", "lease-held", "budget-exhausted"]
+	"Name": "@agito/spacetime-catalog",
+	"Kind": "Capability",
+	"Version": "0.1.3",
+	"Provide": {
+		"Port": "agito.catalog.rules",
+		"Error": [
+			"admission-refused",
+			"lease-held",
+			"budget-exhausted"
+		]
 	},
-	"requires": {},
-	"artefact": {
-		"entry": "Target/debug/libAgenticSpacetimeCatalog.rlib",
-		"hash": null,
-		"runtime": "rust>=1.88"
+	"Require": {},
+	"Artefact": {
+		"Entry": "Target/debug/libCatalog.rlib",
+		"Hash": null,
+		"RunTime": "rust>=1.88"
 	},
-	"state": "stateless",
-	"cost": {
-		"coldMs": 5,
-		"warmMs": 1,
-		"network": false
+	"State": "Stateless",
+	"Cost": {
+		"ColdMs": 5,
+		"WarmMs": 1,
+		"Network": false
 	},
-	"verify": "agentic verify --module @agentic/spacetime-catalog"
+	"Verify": "agito verify --module @agito/spacetime-catalog"
 }

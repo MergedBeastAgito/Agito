@@ -6,6 +6,6 @@ pub mod Authority;
 pub mod Call;
 pub mod Error;
 pub mod Port;
-pub mod Runtime;
+pub mod RunTime;
 pub mod StandIn;
 pub(crate) mod State;

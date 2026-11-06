@@ -31,7 +31,7 @@
   </defs>
   <rect width="951" height="837.75" fill="#FFFFFF" />
   <g class="l9-title">
-    <text x="16" y="22.5" text-anchor="start" dominant-baseline="central" font-family="'IBM Plex Serif', Georgia, serif" font-size="19" font-weight="600" letter-spacing="0" fill="#111111" style="text-transform: none">Runtime - the lease lifecycle as it exists today</text>
+    <text x="16" y="22.5" text-anchor="start" dominant-baseline="central" font-family="'IBM Plex Serif', Georgia, serif" font-size="19" font-weight="600" letter-spacing="0" fill="#111111" style="text-transform: none">RunTime - the lease lifecycle as it exists today</text>
     <line x1="0" y1="45" x2="951" y2="45" stroke="#0A2555" stroke-width="0.75" />
   </g>
   <g class="l9-content" transform="translate(0, 57.75)">

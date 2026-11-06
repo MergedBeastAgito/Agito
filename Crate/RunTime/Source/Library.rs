@@ -1,4 +1,4 @@
-//! `agentic.runtime`: execution policy and resource ownership.
+//! `agito.runtime`: execution policy and resource ownership.
 //!
 //! The runtime is a policy engine, not a scheduler of capabilities. It is
 //! handed one generation and the capabilities registered against it, and
@@ -12,7 +12,7 @@
 //! would be a second authority however correct its fencing. So the crate is
 //! split:
 //!
-//! - [`Struct::Runtime::Runner`] is a **thin effect runner**. It holds one
+//! - [`Struct::RunTime::Runner`] is a **thin effect runner**. It holds one
 //!   generation, one registration list and one
 //!   [`Struct::Authority::Authority`], and it keeps no lease state at all.
 //!   `WithLease` asks the authority to admit an effect, runs the work, and
@@ -59,7 +59,7 @@ pub mod Struct;
 
 pub use crate::{
 	Fn::{
-		BlockOn::BlockOn,
+		Block::Block,
 		Bound::Bound,
 		Race::{Either, Race},
 		Script::{AssertParameters, Escape, FillDeclared, Unfilled},
@@ -79,13 +79,13 @@ pub use crate::{
 			Registration,
 			Request,
 			Resolution,
-			Runtime,
+			RunTime,
 			Seal,
 			StateClass,
 			States,
 			Ticket,
 		},
-		Runtime::{Create, Options, Runner},
+		RunTime::{Create, Options, Runner},
 		StandIn::StandIn,
 	},
 };

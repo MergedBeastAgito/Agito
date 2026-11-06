@@ -1,6 +1,6 @@
 // Compiling a crate's `Source/Script/**/*.ts` into the JavaScript it sends.
 //
-// Included by a crate's `build.rs` - `Crate/ChatDriver/build.rs` and
+// Included by a crate's `build.rs` - `Crate/Chat/Driver/build.rs` and
 // `Crate/Workflow/build.rs` are each three lines around it - so the rule for
 // what a script may contain and how it is turned into bytes is written once.
 // The comments are `//` rather than `//!` because an `include!`d file cannot
@@ -441,7 +441,7 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 		});
 
 		// The output keeps the source's relative path, minus the extension, so
-		// `Source/Script/Expressions/ReadAnswers.ts` is
+		// `Source/Script/Expression/ReadAnswers.ts` is
 		// `script!("Expressions/ReadAnswers")`.
 		let Relative = File.strip_prefix(&Source).unwrap_or(&File).with_extension("");
 		let JavaScript = Out.join(&Relative).with_extension("js");

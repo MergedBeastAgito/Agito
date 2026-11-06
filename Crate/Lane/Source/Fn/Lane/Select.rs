@@ -1,6 +1,6 @@
 //! Choosing the one lane a context belongs to, from the corpus's own conditions.
 //!
-//! [`crate::Fn::Select::Select`] takes its rules from the caller, which is what a
+//! [`crate::Fn::Resolve::Resolve`] takes its rules from the caller, which is what a
 //! caller wants when the honest condition needs something a corpus cannot hold -
 //! "not moving for three ticks" is a counter, not an observation. This verb is
 //! the other half: a lane states its own `select` in the corpus, so selection is
@@ -24,7 +24,7 @@
 //! }
 //! ```
 //!
-//! The next call to [`SelectLane`] sees it: no match arm, no registration, no
+//! The next call to [`Select`] sees it: no match arm, no registration, no
 //! rebuild of this crate. The condition's vocabulary is the closed set in
 //! [`crate::Struct::Predicate::Predicate`], so the cost of that freedom is
 //! bounded - a corpus can only say things this crate already knows how to answer.
@@ -58,10 +58,10 @@
 //! list. Nothing here reads the clock, the filesystem or a global: a recorded
 //! context replays to the same selection.
 
-use crate::Struct::{Context::Context, Corpus::Corpus, Lane::Lane, Predicate::Predicate, SelectError::SelectError};
+use crate::Struct::{Context::Context, Corpus::Corpus, Lane::Lane, Predicate::Predicate, Select::Error::SelectError};
 
 /// The one lane this context belongs to, or why there is not one.
-pub fn SelectLane<'a>(Corpus:&'a Corpus, Context:&Context) -> Result<&'a Lane, SelectError> {
+pub fn Select<'a>(Corpus:&'a Corpus, Context:&Context) -> Result<&'a Lane, SelectError> {
 	let mut Holding:Vec<&'a Lane> = Vec::new();
 	let mut Catch:Vec<&'a Lane> = Vec::new();
 	for Lane in Corpus.Lanes() {

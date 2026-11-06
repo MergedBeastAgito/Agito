@@ -19,7 +19,7 @@ use std::{
 	time::Duration,
 };
 
-use AgenticRuntime::{Bound, Call, Expired, FutureBox, Never, Pace};
+use ::RunTime::{Bound, Call, Expired, FutureBox, Never, Pace};
 use serde_json::Value;
 
 use crate::{

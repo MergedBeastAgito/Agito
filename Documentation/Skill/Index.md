@@ -36,7 +36,7 @@ The skills this repository ships, and the contract that keeps them loadable.
 ## The contract
 
 Each skill is a directory holding `SKILL.md` and, when it has supporting files,
-`Reference/Index.md`. `agentic skills Documentation/Skill` checks three rules and reports rather
+`Reference/Index.md`. `agito skills Documentation/Skill` checks three rules and reports rather
 than returns early:
 
 - **parsable** - the frontmatter block is closed, states a non-empty `description`, and its `name`
@@ -47,8 +47,8 @@ than returns early:
 A finding is a rule, a skill and a sentence. An empty finding list is a valid corpus.
 
 ```sh
-Target/debug/agentic skills Documentation/Skill
-Target/debug/agentic skills Documentation/Skill --json
+Target/debug/agito skills Documentation/Skill
+Target/debug/agito skills Documentation/Skill --json
 ```
 
 The digest the command prints is over each skill's name, description and reference file list - not

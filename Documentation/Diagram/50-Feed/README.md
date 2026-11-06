@@ -5,9 +5,9 @@ agent; they are how the agent reads a distant model.
 
 ## Page 1 - the feed
 
-![Collected, batched, attached, confirmed, prompted, watching and settled, with the refusals](lifecycle.svg)
+![Collected, batched, attached, confirmed, prompted, watching and settled, with the refusals](Lifecycle.svg)
 
-[`lifecycle.mmd`](lifecycle.mmd) · [`lifecycle.svg`](lifecycle.svg)
+[`Lifecycle.mmd`](Lifecycle.mmd) · [`Lifecycle.svg`](Lifecycle.svg)
 
 The gate that matters: `Confirmed` is reached only when the page itself shows the file name. A
 successful `setFileInputFiles` call is not evidence that the product accepted the file.
@@ -16,12 +16,12 @@ successful `setFileInputFiles` call is not evidence that the product accepted th
 
 ## Page 2 - why the batches must be deterministic
 
-![One tree, two runs, and the byte comparison that decides whether a batch can be reviewed](determinism.svg)
+![One tree, two runs, and the byte comparison that decides whether a batch can be reviewed](Determinism.svg)
 
-[`determinism.mmd`](determinism.mmd) · [`determinism.svg`](determinism.svg)
+[`Determinism.mmd`](Determinism.mmd) · [`Determinism.svg`](Determinism.svg)
 
 `Script/Feed.mjs` used to assert exactly this, and it was deleted with the Node toolchain: the
-bundler is local tooling under `.hermes/`, so nothing in the tree holds its determinism now. A feed
+bundler went with the archive that held it, so nothing in the tree holds its determinism now. A feed
 whose batches differ between runs cannot be reviewed - only re-read - and
 `Documentation/Open-Questions.md` records the gate as owed.
 
@@ -29,9 +29,9 @@ whose batches differ between runs cannot be reviewed - only re-read - and
 
 ## Page 3 - the exclusion bug, as a state
 
-![Walking, excluded, included, and a file refused for its size](exclusion.svg)
+![Walking, excluded, included, and a file refused for its size](Exclusion.svg)
 
-[`exclusion.mmd`](exclusion.mmd) · [`exclusion.svg`](exclusion.svg)
+[`Exclusion.mmd`](Exclusion.mmd) · [`Exclusion.svg`](Exclusion.svg)
 
 The first version compared case-sensitively, so `Target/` walked past an exclude of `target` and
 three files of build scratch were attached as a batch. On a case-sensitive volume those are
@@ -41,9 +41,9 @@ different directories, and the fix belongs in the walker, not in the prompt.
 
 ## Page 4 - missing states
 
-![Rate limited falling back to a context-only prompt](missing.svg)
+![Rate limited falling back to a context-only prompt](Missing.svg)
 
-[`missing.mmd`](missing.mmd) · [`missing.svg`](missing.svg)
+[`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
 `RateLimited` is real and unmodelled - it is drawn as an installable step. A weekly upload quota
 turns a feed into a text-only conversation, and the tool has no way to detect it other than by

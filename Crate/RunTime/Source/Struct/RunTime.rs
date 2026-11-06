@@ -39,7 +39,7 @@ use crate::Struct::{
 	Authority::{Admitted, Authority},
 	Call::{Clock, FutureBox},
 	Error::Error,
-	Port::{Admission, Binding, Budget, Lease, Registration, Request, Runtime, StateClass, Ticket},
+	Port::{Admission, Binding, Budget, Lease, Registration, Request, RunTime, StateClass, Ticket},
 };
 
 /// What the composition root hands the runner.
@@ -117,7 +117,7 @@ impl<A:Authority + Clone> Runner<A> {
 	pub fn Destination(&self) -> A { self.Authority.clone() }
 }
 
-impl<A:Authority> Runtime for Runner<A> {
+impl<A:Authority> RunTime for Runner<A> {
 	fn Admit<'a>(&'a self, Request:Request) -> FutureBox<'a, Admission> {
 		Box::pin(async move {
 			if Request.Generation != self.Generation {

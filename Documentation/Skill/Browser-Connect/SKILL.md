@@ -12,7 +12,7 @@ metadata:
 # Browser Connect
 
 Reach a browser this process did not start, and bind the tab a person is looking at. The Rust
-substrate is `agentic-browser-cdp`; the executable is `agentic browse`.
+substrate is `agito-browser-cdp`; the executable is `agito browse`.
 
 ---
 
@@ -54,7 +54,7 @@ non-page.
 ## Bind an existing tab
 
 ```sh
-Target/debug/agentic browse \
+Target/debug/agito browse \
   --url https://example.test/ \
   --attach ws://127.0.0.1:<debug-port>/devtools/browser/<uuid> \
   --bind <target-id> \
@@ -125,9 +125,9 @@ a correctness rule, not a courtesy.
 
 | Claim                                       | Test                                                                                                                             |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| A bind drives the page that is already open | `agentic browse --attach <ws> --bind <id> --expression 'location.href'` returns that tab's URL, and `/json/list` gains no target |
+| A bind drives the page that is already open | `agito browse --attach <ws> --bind <id> --expression 'location.href'` returns that tab's URL, and `/json/list` gains no target |
 | An attach without a bind opens a page       | the same command without `--bind` makes `/json/list` show one more `page` target                                                 |
-| A bind without an attach is refused         | `agentic browse --bind <id>` exits non-zero naming `--attach`                                                                    |
+| A bind without an attach is refused         | `agito browse --bind <id>` exits non-zero naming `--attach`                                                                    |
 | A wrong target id is reported, not guessed  | `--bind deadbeef` exits non-zero and lists the pages the browser holds                                                           |
 | Ownership is honoured on release            | after a bind, the bound tab is still in `/json/list`; after a launch, the browser is gone                                        |
 | The browser-level endpoint is the one used  | attaching with a per-tab `/json/list` websocket fails as `browser-unavailable`                                                   |

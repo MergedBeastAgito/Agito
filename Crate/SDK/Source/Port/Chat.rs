@@ -1,8 +1,8 @@
-//! `agentic.chat.ask`, from `agentic-chat-driver`: one question, one send, and
+//! `agito.chat.ask`, from `agito-chat-driver`: one question, one send, and
 //! the answer read once the page has stopped changing it.
 //!
 //! [`Page`] is this crate's own trait - opened, asked, released, and it stops
-//! there - and it is deliberately not `agentic.browse`'s [`crate::Browse`]. A
+//! there - and it is deliberately not `agito.browse`'s [`crate::Browse`]. A
 //! chat page and a measured page are asked different things, and collapsing the
 //! two into one universal request type is how a ports crate grows back.
 //!
@@ -17,7 +17,7 @@
 //! would be shipping a composition - the caller adapts its own session, which is
 //! four methods and no ambiguity about who owns the tab.
 
-pub use AgenticChatDriver::{
+pub use ::Driver::{
 	Answer,
 	Chat,
 	Code,

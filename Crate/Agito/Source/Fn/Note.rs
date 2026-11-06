@@ -1,6 +1,6 @@
 //! Assembling the note a `--format note` call prints.
 //!
-//! `agentic-chat-driver` renders a note from an answer and a `Meta`; this module
+//! `agito-chat-driver` renders a note from an answer and a `Meta`; this module
 //! is the composition root's half of that. The driver decides what the page's
 //! furniture is and how the document is laid out; this decides which facts the
 //! caller supplied, which ones the page supplied, and the two that neither can:
@@ -14,7 +14,7 @@
 //! a document about a conversation that did not happen, and it would look
 //! exactly like one that did.
 
-use AgenticChatDriver::{Answer, Build, Meta, Render};
+use ::Driver::{Answer, Build, Meta, Render};
 
 use crate::Struct::Note::Given;
 

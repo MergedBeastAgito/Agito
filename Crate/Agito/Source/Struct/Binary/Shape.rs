@@ -1,7 +1,7 @@
-//! What `agentic chat` prints, as opposed to how the page is read.
+//! What `agito chat` prints, as opposed to how the page is read.
 //!
 //! One call makes two decisions and they are not the same decision.
-//! `agentic-chat-driver`'s `Format` says how the answer's text is taken out of
+//! `agito-chat-driver`'s `Format` says how the answer's text is taken out of
 //! the page - `innerText`, the DOM serialised as Markdown, or both from one
 //! snapshot - and it is a field of the selector file because it is a fact about
 //! one product's markup. A shape says what the process writes: the answer as
@@ -27,7 +27,7 @@
 //! written: the three go to stdout as one document, and a caller that wants
 //! files redirects or splits them itself.
 
-use AgenticChatDriver::Format;
+use ::Driver::Format;
 
 /// What the answer is printed as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

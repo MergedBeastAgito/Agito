@@ -2,4 +2,4 @@
 //! four capabilities.
 
 pub mod Measure;
-pub mod VerifySkillPage;
+pub mod Skill;

@@ -1,4 +1,4 @@
-//! The port `agentic.chat.ask` promises, written the way its consumer asks for
+//! The port `agito.chat.ask` promises, written the way its consumer asks for
 //! it.
 //!
 //! `module.json` names four errors - `not-ready`, `wrong-mode`, `wrong-model`
@@ -26,7 +26,7 @@
 //!   passes are the same event to a consumer - the answer did not arrive - so
 //!   both are `not-ready`. `detail` says which one happened.
 
-use AgenticRuntime::{Call, FutureBox};
+use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 /// One step of the work an answer reports having done.

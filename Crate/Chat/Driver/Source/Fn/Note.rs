@@ -39,7 +39,7 @@
 //! A note is derived from an answer the port has already refused to call
 //! truncated, and every decision in this module has a total answer: a title
 //! falls back to the thread, a timestamp that is not a date states no date, and
-//! a line is either furniture or it is kept. So `agentic.chat.note` declares no
+//! a line is either furniture or it is kept. So `agito.chat.note` declares no
 //! errors - a code this module cannot produce would be a comment in a manifest
 //! rather than a claim about the code.
 

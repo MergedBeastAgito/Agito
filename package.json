@@ -1,5 +1,5 @@
 {
-	"name": "@agentic/workspace",
+	"name": "@agito/workspace",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Capabilities, adapters and the runtime that leases them.",

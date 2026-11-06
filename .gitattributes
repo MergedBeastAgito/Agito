@@ -17,10 +17,7 @@
 # rule is here so that the day one is added it is already correct.
 .githooks/* text eol=lf
 
-# The record stays in the repository but does not ship. `.hermes/` is tracked on
-# purpose - research corpus, review bundles and the tooling that produced them -
-# and `git archive` ignores `.gitignore`, so without this the source tarball in a
-# release carries the working record of how the release was made. `export-ignore`
-# is the one attribute that separates the two: tracked here, absent from the
-# archive.
+# The working archive is not in the tree any more, and `export-ignore` stays as the
+# rule for the day one returns: `git archive` ignores `.gitignore`, so a directory
+# kept beside the tree but out of the release needs an attribute to say so.
 .hermes export-ignore

@@ -11,17 +11,17 @@
 //! drops the guard, awaits this, and records the spend afterwards. Putting the
 //! meter in here would mean taking the lock on the caller's behalf and holding
 //! it through a network call, which is the one shape
-//! [`AgenticRuntime::FutureBox`] refuses.
+//! [`RunTime::FutureBox`] refuses.
 //!
 //! # A cancelled call is not posted
 //!
 //! The caller's signal is checked before the request leaves, so an operation
 //! somebody has already abandoned does not become a request somebody pays for.
-//! The poster is still handed the [`AgenticRuntime::Call`]: it owns the
+//! The poster is still handed the [`RunTime::Call`]: it owns the
 //! in-flight bound, and a poster that ignored it could turn a bounded call into
 //! an unbounded one.
 
-use AgenticRuntime::Call;
+use ::RunTime::Call;
 
 use crate::{
 	Fn::Parse::Parse,

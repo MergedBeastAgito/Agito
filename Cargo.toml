@@ -1,6 +1,22 @@
 [workspace]
 resolver = "3"
-members = ["Crate/*"]
+# Written out rather than globbed: `Crate/*` would stop at the five group folders
+# (`Crate/Browser`, `Crate/Chat`, …) and `Crate/*/*` would then reach the crates,
+# but a member list that names each crate is the one statement of what ships, and
+# a glob is a second one that changes when a directory is added.
+members = [
+	"Crate/Adapter",
+	"Crate/Agito",
+	"Crate/Browser/CDP",
+	"Crate/Chat/Driver",
+	"Crate/Design/Verification",
+	"Crate/Lane",
+	"Crate/RunTime",
+	"Crate/SDK",
+	"Crate/Skill/Contract",
+	"Crate/Spacetime/Catalog",
+	"Crate/Workflow",
+]
 
 [workspace.package]
 version = "0.1.3"
@@ -21,27 +37,27 @@ publish = false
 # workflow runs so the `.crate` files ship without a registry - refuses a path
 # dependency that names no version. Nothing here is published to crates.io;
 # `publish = false` above sees to that.
-agentic-runtime = { version = "0.1.3", path = "Crate/Runtime" }
-agentic-skill-contract = { version = "0.1.3", path = "Crate/SkillContract" }
-agentic-chat-driver = { version = "0.1.3", path = "Crate/ChatDriver" }
-agentic-browser-cdp = { version = "0.1.3", path = "Crate/BrowserCDP" }
-agentic-design-verification = { version = "0.1.3", path = "Crate/DesignVerification" }
-agentic-workflow = { version = "0.1.3", path = "Crate/Workflow" }
-agentic-spacetime-catalog = { version = "0.1.3", path = "Crate/SpacetimeCatalog" }
+agito-runtime = { version = "0.1.3", path = "Crate/RunTime" }
+agito-skill-contract = { version = "0.1.3", path = "Crate/Skill/Contract" }
+agito-chat-driver = { version = "0.1.3", path = "Crate/Chat/Driver" }
+agito-browser-cdp = { version = "0.1.3", path = "Crate/Browser/CDP" }
+agito-design-verification = { version = "0.1.3", path = "Crate/Design/Verification" }
+agito-workflow = { version = "0.1.3", path = "Crate/Workflow" }
+agito-spacetime-catalog = { version = "0.1.3", path = "Crate/Spacetime/Catalog" }
 # The port shape a substrate this workspace did not write implements. It depends
 # on the runtime and nothing else, and nothing in the tree depends on it except
 # a third party's adapter: that is what makes `kind: "adapter"` a claim about
 # somebody else's crate rather than about one of ours.
-agentic-adapter = { version = "0.1.3", path = "Crate/Adapter" }
+agito-adapter = { version = "0.1.3", path = "Crate/Adapter" }
 # The template corpus as data: a lane names the fields a question actually
 # reads, a template names the questions, and the round trip leaves through a
 # `Poster` this crate declares and never implements. No HTTP client, no
 # executor, no browser - which is what lets the suite answer from a fixture.
-agentic-lane = { version = "0.1.3", path = "Crate/Lane" }
+agito-lane = { version = "0.1.3", path = "Crate/Lane" }
 # The facade. It depends on the five crates a consumer would otherwise name, and
 # the composition root depends on it for the manifest table - so the arrow runs
 # from the root down through the facade to the ports, never the other way.
-agentic-sdk = { version = "0.1.3", path = "Crate/SDK" }
+agito-sdk = { version = "0.1.3", path = "Crate/SDK" }
 
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
