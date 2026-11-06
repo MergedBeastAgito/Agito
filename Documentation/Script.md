@@ -14,7 +14,7 @@ their `cargo add` resolved to on the same day.
 
 - **One file per expression**, `Source/Script/Expression/ReadAnswers.ts` and so on, and one for the
   workflow's `Source/Script/Measure.ts`. The path under `Source/Script/` is the path the macro
-  takes: `script!("Expressions/ReadAnswers")`.
+  takes: `script!("Expression/ReadAnswers")`.
 - **A second file only when the first is pinned.** `Expression/ReadBoth.ts` carries the same thread
   read as `Expression/ReadAnswers.ts` and adds the page's Markdown to what it returns, because the
   two single-format expressions are what a page already receives: an expression that gained a field
@@ -110,7 +110,7 @@ declare const __PARAM_Pattern__: RegExp | null;
   escaped JavaScript string literal, so a selector holding a quote, a backslash or a newline cannot
   end the string it sits in. Any other declared type is code - a function, a `RegExp`, an array
   literal - and is spliced as it stands.
-- **The names are checked at compile time.** `script!("Expressions/ReadAnswers"; Scroll = ...)` is
+- **The names are checked at compile time.** `script!("Expression/ReadAnswers"; Scroll = ...)` is
   compared against the script's own declarations in a `const` context: a missing parameter, an extra
   one, or the same one twice is a `cargo build` error pointing at the call site, not a
   `ReferenceError` in a page.

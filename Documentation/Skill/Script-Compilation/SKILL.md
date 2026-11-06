@@ -27,7 +27,7 @@ is never re-emitted.
 
 - **One file per expression.** `Crate/Chat/Driver/Source/Script/Expression/ReadAnswers.ts` and the
   ten beside it; `Crate/Workflow/Source/Script/Measure.ts`. The path under `Source/Script/` is the
-  path the macro takes, minus the extension: `script!("Expressions/ReadAnswers")`.
+  path the macro takes, minus the extension: `script!("Expression/ReadAnswers")`.
 - **A second file only when the first is pinned.** `Expression/ReadBoth.ts` reads the thread with
   the same code as `ReadAnswers.ts` and returns the page's Markdown beside the text, because the two
   single-format expressions are the bytes a page already receives and an expression that gained a
@@ -38,7 +38,7 @@ is never re-emitted.
   three lines around `include!("../../../Build/Script.rs")`, and each calls
   `CompileScripts("Source/Script", "Script")`. The rule for what a script may contain lives in
   `Build/Script.rs` and cannot drift between the two crates.
-- **Two artefacts per script.** `OUT_DIR/Script/Expressions/ReadAnswers.js` is the page's copy;
+- **Two artefacts per script.** `OUT_DIR/Script/Expression/ReadAnswers.js` is the page's copy;
   `.params` is the parameter contract, one `Name:kind` line each. A `.js` file whose bytes are
   unchanged is not rewritten, so a no-op edit leaves its mtime alone.
 - **The macro** is `RunTime::script!`, which expands to `include_str!` of the compiled file
@@ -125,7 +125,7 @@ expression a page already receives for a hazard no current engine has.
 
 ## A call site cannot forget a parameter
 
-`script!("Expressions/ReadSources"; Answer = &Selectors.Answer, Sources = &Selectors.Sources)` is
+`script!("Expression/ReadSources"; Answer = &Selectors.Answer, Sources = &Selectors.Sources)` is
 compared against the script's own declarations in a `const` context, so a missing argument, an extra
 one or the same one twice is a `cargo build` error at the call site rather than a `ReferenceError`
 in a page:

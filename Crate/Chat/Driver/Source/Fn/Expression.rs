@@ -90,7 +90,7 @@ pub fn TypeQuestion(Selectors:&Selectors, Text:&str) -> String {
 /// `mismatch`, and no click happens.
 pub fn PressSubmit(Selectors:&Selectors, Expected:&str) -> String {
 	script!(
-		"Expressions/PressSubmit";
+		"Expression/PressSubmit";
 		Composer = &Selectors.Composer,
 		Expected = Expected,
 		Submit = &Selectors.Submit,
@@ -143,7 +143,7 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 	match Format {
 		Format::Both => {
 			script!(
-				"Expressions/ReadBoth";
+				"Expression/ReadBoth";
 				Serialise = SerialiseScript,
 				Scroll = &Selectors.Scroll,
 				Answer = &Selectors.Answer,
@@ -167,7 +167,7 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 				"(Answer) => Serialise(Answer)"
 			};
 			script!(
-				"Expressions/ReadAnswers";
+				"Expression/ReadAnswers";
 				Serialise = Serialise,
 				Scroll = &Selectors.Scroll,
 				Answer = &Selectors.Answer,

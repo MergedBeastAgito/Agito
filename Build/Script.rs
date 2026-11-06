@@ -442,7 +442,7 @@ pub fn CompileScripts(Source:&str, Out:&str) {
 
 		// The output keeps the source's relative path, minus the extension, so
 		// `Source/Script/Expression/ReadAnswers.ts` is
-		// `script!("Expressions/ReadAnswers")`.
+		// `script!("Expression/ReadAnswers")`.
 		let Relative = File.strip_prefix(&Source).unwrap_or(&File).with_extension("");
 		let JavaScript = Out.join(&Relative).with_extension("js");
 		let Parameters = Out.join(&Relative).with_extension("params");
