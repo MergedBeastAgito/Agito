@@ -2,13 +2,9 @@
 
 The expressions the driver and the workflow send to a page are TypeScript files under
 `Source/Script/`. A crate's `build.rs` compiles them into the JavaScript a page receives, and
-`script!` bakes the result into the binary. This document records which compiler was chosen, what it
-measured against the alternatives, and why the compilation erases type syntax instead of
-transpiling.
-
-**Source:** measured in this repository, on this machine, with the commands in
-[Commands](#commands). The compiler crates are `oxc_*` 0.157.0; the alternatives are the versions
-their `cargo add` resolved to on the same day.
+`script!` bakes the result into the binary. The compiler is OXC's parser, used for its spans; the
+compilation erases type syntax instead of transpiling, and both choices were measured against the
+alternatives.
 
 ## The shape
 
@@ -33,6 +29,10 @@ their `cargo add` resolved to on the same day.
 ---
 
 ## The compiler: OXC's parser, used for its spans
+
+Measured in this repository, on this machine, with the commands in [Commands](#commands). The
+compiler crates are `oxc_*` 0.157.0; the alternatives are the versions their `cargo add` resolved to
+on the same day.
 
 - **OXC, parser only** - `oxc_parser` with `oxc_ast`, `oxc_ast_visit`, `oxc_span`, `oxc_allocator`.
   199 packages, **18.9 s** to build cold (37.6 s of CPU), **120 µs** per file warm, 1,565 bytes out.
@@ -64,18 +64,17 @@ determinism did not discriminate between them. The discriminator was the bytes t
 
 The cold times are from an empty `target/` with `RUSTC_WRAPPER=` empty, so a warm `sccache` does not
 flatter them; the warm times are 1,000 in-process iterations over the same 1,898-byte source. What a
-developer pays day to day is neither: the build script over all ten `Crate/Chat/Driver` scripts, the
-13,367-byte serializer included, runs in **about 10 ms**.
+developer pays day to day is neither: the build script over the driver's expressions, the
+13,399-byte serializer included, runs in **about 10 ms**.
 
 ---
 
 ## Why erasure, not a transpiler
 
 Every candidate above that generates code from an AST rewrites the whole file. That is what a
-transpiler is for, and it is the one thing this card could not allow: the compiled expression had to
-be the bytes a page already received, because those bytes are what the parity scenarios and the
-recorded baselines were taken against, and because "this diff is a change in what the page receives"
-is a property worth keeping.
+transpiler is for, and it is the one thing this compilation could not allow: the compiled expression
+had to be the bytes a page already received, because those bytes are what the page runs, and because
+"this diff is a change in what the page receives" is a property worth keeping.
 
 So the compilation is the smallest transformation that turns TypeScript into JavaScript: the file is
 parsed by a real TypeScript parser, the spans of the TypeScript-only syntax are found in the AST,
@@ -117,8 +116,8 @@ declare const __PARAM_Pattern__: RegExp | null;
   again, so a question whose text happens to contain `__PARAM_Seen__` cannot have another
   parameter's code spliced into the middle of its string.
 - **An unfilled marker stays.** A marker with no value is left in place and reported by
-  `RunTime::Unfilled`, which the tests use; a page receiving one throws
-  `ReferenceError: __PARAM_Scroll__ is not defined` rather than matching nothing.
+  `RunTime::Unfilled`; a page receiving one throws `ReferenceError: __PARAM_Scroll__ is not defined`
+  rather than matching nothing.
 - **Escaping is held to `serde_json`.** `Escape` produces exactly what the JSON encoder these
   expressions were built with produced, byte for byte, for every control character and every
   non-ASCII character - the one exception being `U+2028` and `U+2029`, which JSON leaves raw and
@@ -132,7 +131,7 @@ The output is a pure function of the source: no timestamps, no absolute paths, n
 `HashMap`. A file whose compiled bytes are unchanged is not rewritten, so a rebuild after a no-op
 edit leaves the artefact's mtime alone and nothing downstream rebuilds. Verified by touching every
 script, rebuilding, and comparing the hashes and the mtimes of every compiled artefact of the
-driver: ten expressions, each with its JavaScript and its parameter list, with identical hashes and
+driver: every expression, each with its JavaScript and its parameter list, with identical hashes and
 identical mtimes.
 
 ---
@@ -143,22 +142,22 @@ identical mtimes.
   declaration a type checker would hold a call site to, and nothing in the build is that checker.
   What the build buys is that the expression is _parsed_ - a syntax error, an unsupported construct,
   or a marker/declaration disagreement fails the build - not that its types are consistent.
-- **A `tsc` pass is not a gate, and is not currently meaningful.** Run over all the scripts as one
-  program, `tsc --noEmit --target es2022 --lib es2022,dom` reports 61 diagnostics, in three groups
-  that are all artefacts of how the files relate rather than defects in an expression: the same
+- **A `tsc` pass reports 61 diagnostics.** Run over all the scripts as one program,
+  `tsc --noEmit --target es2022 --lib es2022,dom` reports 61 diagnostics, in three groups that are
+  all artefacts of how the files relate rather than defects in an expression: the same
   `__PARAM_Name__` declared in several files is a global redeclaration (each script is its own page
   evaluation, not a module), the bodies are unannotated JavaScript so `--noImplicitAny` fires, and
   `querySelector` returns `Element` where the expression uses `HTMLElement` members such as
   `innerText` and `click`. Making that pass green means annotating every body and compiling each
-  script as its own program - a change to what the scripts are, not to how they are compiled. Until
-  then the declarations are documentation plus the build's parameter list, and the syntax check is
-  the guarantee.
+  script as its own program - a change to what the scripts are, not to how they are compiled. The
+  declarations are documentation plus the build's parameter list, and the syntax check is the
+  guarantee.
 
 ---
 
 ## Commands
 
-The gates, from the workspace root:
+From the workspace root:
 
 ```sh
 # Build with no node_modules present and no network, from a clean Target/.
@@ -174,10 +173,6 @@ cargo build -p agito-chat-driver   # error: Source/Script/Expression/Broken.ts:3
 # A call site that disagrees with a script's declarations fails to compile, at the call site.
 #   error[E0080]: evaluation panicked: script parameters: a declared parameter is missing
 #   --> Crate/Chat/Driver/Source/Fn/Expression.rs:148:2
-
-# The build itself: every script under Source/Script/ is erased and compiled, and a
-# malformed one stops the build with its position named.
-cargo build --workspace --offline
 ```
 
 The measurements above were taken with spike crates in the session scratch directory, each built
@@ -187,8 +182,6 @@ from an empty `target/`, with the package count read from `cargo tree | wc -l`:
 RUSTC_WRAPPER= /usr/bin/time -p cargo build   # cold, sccache defeated
 ```
 
-The byte-identity fixture that used to hold the _before_ side - the expressions dumped from the
-pre-card `Expressions.rs`, so a reformatting compiler would fail rather than pass - is deleted with
-the rest of the verification layer. What still enforces the same rule is structural: the erasure
-removes exactly the bytes of the type-syntax spans and emits every other byte, so a compiler that
-re-indented or re-quoted could not be written without changing the walker.
+The byte-identity rule is structural rather than fixture-held: the erasure removes exactly the bytes
+of the type-syntax spans and emits every other byte, so a compiler that re-indented or re-quoted
+could not be written without changing the walker.

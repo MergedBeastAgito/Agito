@@ -5,29 +5,9 @@ beliefs and trace. It lives here rather than in the consuming repository because
 SpacetimeDB to be true, and a module that imported the server SDK to hold it could not be tested
 without a published database.
 
-This is an adoption note. It says what the catalog is, which invariant each rule enforces, and
-exactly what TimeLine takes to adopt it in one step. The statement of the model is
-`Crate/Spacetime/Catalog/`; this document is the prose that says what the crate states, and it
-records where the two disagreed when the port was made.
-
-## What the port changed in this document
-
-The rules below were stated here first and in a TypeScript package second, and that package was
-deleted with the rest of the layer. Porting it into a crate found four things this document had
-wrong, and they are recorded rather than quietly corrected:
-
-- **The rule list named five.** It said `bind`, `claim`, `renew`, `probe` and `recordTrace`, and
-  that this was "all of both files". The source had seven: `record` and `resolve` were missing, with
-  the argument types `Effect` and `Resolve`. They are the handover rule, and they are in the crate.
-- **The invariant list named four.** The source documents five, and the missing one is handover -
-  the invariant the destination exists for. Restored below.
-- **The file names were the deleted package's.** They now name the crate's modules.
-- **The case count was 25.** `Tables.test.ts`, `Reducers.test.ts` and `Destination.test.ts` hold 7,
-  18 and 5 tests: 30, not 25.
-
-Nothing in the rules themselves was changed by the port. Where the crate answers differently it is
-said so in place, and there is one such place: a `ttl` the clock cannot reach is refused rather than
-allowed to wrap.
+What the catalog is, which invariant each rule enforces, and what TimeLine takes to adopt it in one
+step. The statement of the model is `Crate/Spacetime/Catalog/`; this document is the prose that says
+what the crate states.
 
 ## What this crate is
 
@@ -36,15 +16,14 @@ allowed to wrap.
   `table(...)` declarations from this, and a reader diffs two versions of it to see what a
   generation changed.
 - **`Source/Struct/Context.rs` is the seam** - the whole of what a rule is given: who is calling,
-  what time it is, and a way to read, insert, update and delete one row by key. Five members, and no
+  what time it is, and a way to read, insert, update and delete one row by key. Six members, and no
   more, because everything else on a module's `ctx` is a way to escape the rules rather than to
-  state them.
+  state them. A context over a map is the whole instrument a rule needs: it records every write,
+  refuses to rewrite a table the catalog marks append-only, and checks every row against the
+  catalog's columns and types.
 - **`Source/Fn/` is the behaviour** - `bind`, `claim`, `renew`, `record`, `resolve`, `probe` and
   `recordTrace` as pure functions over `Context`. Each answers a result rather than throwing, so a
   refusal is a value a caller handles and a test asserts.
-- **`Test/Fake.rs` is the instrument** - an in-memory context that records every write, refuses to
-  rewrite a table the catalog marks append-only, and checks every row against the catalog's columns
-  and types.
 
 The seam is the point. `spacetimedb` is not a dependency of this crate - it has no dependency at
 all, which `cargo tree -p agito-spacetime-catalog` answers in one line - and adding one to test
@@ -89,29 +68,20 @@ A bind names its predecessor and that predecessor must still be the latest, so t
 parent are a compare-and-swap rather than a fork: in a serialised database the second sees the first
 one's successor and is refused.
 
-Proved by: `bind_appends_the_first_generation_at_the_senders_time_and_writes_exactly_one_row`,
-`bind_refuses_a_manifest_that_names_a_capability_the_catalog_does_not_declare_and_writes_nothing`,
-`bind_appends_a_successor_and_leaves_the_previous_generation_untouched`,
-`bind_refuses_a_predecessor_that_is_already_superseded_or_that_was_never_bound`, and
-`a_claim_or_a_probe_under_a_superseded_generation_is_refused_and_writes_nothing`.
-
 ### Fence - a late worker cannot write
 
 `claim` increments the fence. `renew`, `record` and `probe` refuse a fence that is not the lease's
 current one, and refuse without writing, so a worker whose lease expired cannot write as though it
-still held it.
+still held it. The holder is `ctx.sender`, so a lease is renewed only by the sender that holds it.
 
 Expiry is a comparison, not a stored transition: a row that says `held` but whose deadline has
 passed is expired, because no timer has to have run for that to be true. An expired lease is
 re-claimed, which increments the fence - renewal extends a lease and never resurrects one. The row
 is never deleted, so the fence never restarts at one.
 
-Proved by: `the_fence_a_claim_past_expiry_increments_it_and_the_first_fence_can_no_longer_renew`,
-`a_claim_while_a_lease_is_live_is_lease_held_and_writes_nothing`,
-`an_expired_lease_cannot_be_renewed_back_to_life`,
-`a_lease_is_renewed_only_by_the_sender_that_holds_it`,
-`renew_extends_a_live_lease_at_the_senders_time`, and
-`a_probe_carrying_a_stale_fence_is_refused_and_writes_nothing`.
+A `ttl` is refused rather than allowed to wrap: `claim` and `renew` refuse one that is not positive,
+and a deadline the clock cannot reach - `now + ttl` past the top of the integer - is
+`admission-refused`, not a lease that expires in the past.
 
 ### Disclosure - one row, to one audience, at one version
 
@@ -126,21 +96,11 @@ a one-use allowance - the database serialises them and the loser finds the winne
 The audience is `ctx.sender`, never an argument: a caller-supplied audience would be a
 caller-supplied identity, and the recipient of a reveal is not something the caller names.
 
-Proved by:
-`a_probe_writes_exactly_one_row_carrying_the_audience_and_the_property_version_not_the_private_value`,
-`a_second_probe_by_the_same_audience_at_the_same_property_version_is_budget_exhausted_and_writes_nothing`,
-`the_allowance_is_per_audience_so_another_holder_gets_its_own_observation`, and the catalog cases
-`the_probe_table_has_no_column_that_could_hold_the_private_value` and
-`no_table_in_the_catalog_describes_a_column_named_for_a_secret`.
-
 ### Time - one clock, and it is the context's
 
 Every timestamp a row carries is `ctx.now`. No function reads a wall clock, and the lags between
 times are differences the caller computes, because a reducer that read the system clock could not be
 replayed and a test could not decide what time it is.
-
-Proved by:
-`every_timestamp_a_row_carries_is_the_contexts_now_so_a_fake_clock_decides_the_whole_transcript`.
 
 ### Handover - a refusal is not an undo
 
@@ -158,14 +118,8 @@ never deleted, so the fence survives and the next claim advances past it.
 A refusal is ambiguous only when the record's identity matched the current epoch - generation, lease
 generation, fence and holder. A superseded fence is refused without an ambiguity, because the row no
 longer describes that epoch and the claim that superseded it is the accounting point for the effects
-it had in flight.
-
-Proved by: `an_effect_that_outlives_its_lease_is_refused_where_it_lands_and_recorded_ambiguous`,
-`a_caller_that_reproduces_the_rows_numbers_is_still_not_the_holder`,
-`an_effect_from_a_superseded_fence_is_refused_without_an_ambiguity`,
-`an_effect_whose_lease_was_released_while_it_ran_is_refused_and_recorded_ambiguous`, and
-`an_effect_presented_while_its_lease_is_live_is_recorded_not_quarantined` - which is the transcript
-`Crate/RunTime/Test/Runtime.rs` runs against the local stand-in, and the two must answer the same.
+it had in flight. The holder is the transport's sender rather than an argument, so a caller that
+reproduces every number in the row is still not the holder.
 
 ## Adopting it in TimeLine, in one step
 
@@ -180,10 +134,10 @@ seam.
    in `Source/Struct/Catalog.rs`, and a generator that reads them is one build step rather than a
    second statement of the tables.
 2. **Restate the seven rules in the module's language.** A module cannot link a Rust crate, so the
-   rules travel as source: `Source/Fn/` is what the restatement is checked against, case for case,
-   and `Test/Fake.rs` is the shape the module's own fake should have.
+   rules travel as source: `Source/Fn/` is what the restatement is compared against, case for case,
+   and `Context` is the shape the module's own fake has to satisfy.
 3. **Write the adapter that satisfies `Context`.** This is the only new code TimeLine writes, and it
-   is the five members below.
+   is the six members below.
 4. **Seed `capability` in `init`** from the package manifests TimeLine already has, so the first
    `bind` has something to check against.
 5. **Register the seven rules as reducers**, with their arguments as the `t.*` declarations the
@@ -235,7 +189,7 @@ be tested without a database, and would pin the rules to one server version.
 
 That is the whole of what stays behind in TimeLine: `Schema.ts`, the `Context` adapter, `init`, and
 the seven `spacetimedb.reducer(...)` registrations. The rules, the catalog and the interface travel
-unchanged, and the tests that prove them travel with them.
+unchanged.
 
 ## What is deliberately absent
 
@@ -254,47 +208,16 @@ unchanged, and the tests that prove them travel with them.
   secret the rules are never given is not merely filtered from a reader, it never enters the
   database.
 
-## What proved it
+## What holds it
 
-`Crate/Spacetime/Catalog/` is the executable statement, and its suite carried the TypeScript
-package's cases rather than a summary of them. The suite is deleted with the rest of the
-verification layer; the list below is the record of what it held.
+`Crate/Spacetime/Catalog/` is the executable statement of the model, and three checks answer for it.
 
-```
-cargo test -p agito-spacetime-catalog     # deleted
-```
-
-Thirty-four cases, in four files:
-
-- **`Test/Catalog.rs`** - the seven cases that read the catalog as data: the six tables, one primary
-  key per table, every column typed from the declared list, only `lease` and `belief` mutable, no
-  column on `probe` that could hold the private value, no column anywhere named for a credential,
-  and an undescribed table refused at the door.
-- **`Test/Rules.rs`** - eighteen cases carried from `Reducers.test.ts`, plus two the port added: a
-  claim at the end of the clock, which is refused rather than allowed to wrap, and `Latest` answered
-  against the rows the rules wrote. Every refusal is also an assertion that nothing was written.
-- **`Test/Destination.rs`** - the five cases carried from `Destination.test.ts`, which are the
-  handover rule: an effect refused where it lands is recorded ambiguous and its resource
-  quarantined, a caller that reproduces every number is still not the holder, a superseded fence is
-  refused without an ambiguity, a released lease is an ambiguity, and a live one is a record.
-- **`Source/Fn/JSON.rs`** - two cases proving the writer that renders `generation.capabilities` and
-  a trace's `payload` escapes what JSON requires, because the crate takes no serialiser.
-
-What each invariant was proved by is named in its section above. Three further gates held it, and
-one of them still runs:
-
-- `cargo test --workspace` counted these cases with the rest of the tree, and
-  `Crate/Agito/Test/Composition.rs` held the manifest to the crate's code vocabulary - both deleted.
-- `agito verify --module @agito/spacetime-catalog` reports ready: the manifest's `provides.errors`
-  is `admission-refused`, `lease-held` and `budget-exhausted`, which is exactly `Code` in
-  `Source/Struct/Code.rs`. This one is a command, not a test, and it still runs.
-- `Crate/Agito/Test/Boundaries.rs` kept the arrow - the crate is a capability, it imports nothing,
-  and only the composition root imports it - and is deleted;
-  `cargo tree -p agito-spacetime-catalog --depth 1` shows the same graph.
-
-The mirror with the runtime is the one correspondence the old suite wrote down.
-`Crate/RunTime/Source/Struct/StandIn.rs` maps `record`'s checks column for column - the latest
-generation, the lease row, the fence, the holder, the released and quarantined states, the expiry -
-and `Crate/RunTime/Test/Runtime.rs` runs the same transcript as `Test/Destination.rs`. Two
-implementations, one answer; if they ever disagree, one of them is wrong and the other is a second
-authority.
+- `agito verify --module @agito/spacetime-catalog` reports ready: the manifest's `Provide.Error` is
+  `admission-refused`, `lease-held` and `budget-exhausted`, which is exactly `Code` in
+  `Source/Struct/Code.rs`.
+- `cargo tree -p agito-spacetime-catalog --depth 1` shows the crate alone - it is a capability, it
+  imports nothing, and only the composition root imports it.
+- `Crate/RunTime/Source/Struct/StandIn.rs` maps `record`'s checks column for column - the latest
+  generation, the lease row, the fence, the holder, the released and quarantined states, the
+  expiry - so the runtime's local stand-in and this crate are two implementations of one answer. If
+  they ever disagree, one of them is wrong and the other is a second authority.

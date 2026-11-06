@@ -6,8 +6,8 @@ A tool that looks for `.agents/` finds this. The repository's own instructions a
 ## Where the procedures live
 
 `.agents/skills` is a symlink to `Documentation/Skill/`. The directory is the real one - every skill
-carries a `SKILL.md` and, when it has supporting files, a `Reference/Index.md`, and the files a skill
-archived sit beside it.
+carries a `SKILL.md` and, when it has supporting files, a `Reference/Index.md`, and the files a
+skill archived sit beside it.
 
 **The symlink is a convenience, and nothing depends on it.** Git stores it as a link, so a checkout
 on macOS or Linux gets a working directory there. A checkout with `core.symlinks=false` - the
@@ -21,8 +21,8 @@ cat .agents/skills        # ../Documentation/Skill
 If that is what you find, read the path and go there, or use `Documentation/Skill/` directly. The
 skills are the same files either way; only the short path is missing.
 
-Nothing is duplicated here. A second copy of a skill is a second answer to the same question, and the
-copy that goes stale is always the one nobody is reading.
+Nothing is duplicated here. A second copy of a skill is a second answer to the same question, and
+the copy that goes stale is always the one nobody is reading.
 
 ## The rule
 

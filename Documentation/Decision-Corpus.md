@@ -1,26 +1,21 @@
 # A decision corpus for Agito
 
-**Status:** proposal, and its gate is gone. Nothing here is a decision until accepted; no record,
-directory or board exists. The proposal put the check in `Crate/Agito/Test/Corpus.rs` under
-`cargo test --workspace`, and both the test target and `cargo test` are deleted - so if this is ever
-accepted, the enforcement half has to be re-decided rather than resumed.
+**Status:** no record, no `Documentation/Decision/` directory and no board exists. What follows
+states what the corpus is: five records, the fields each carries, and the gate that holds them.
 
 ---
 
-## 1. Whether, and at what size
+## 1. Five records
 
-**Recommendation: yes - five records, and no sixth until a failure owes one.**
-
-The price is one test about the size of the diagram check that used to exist (277 lines with its own
-cases, no new dependency), five records of roughly forty lines, and one standing obligation:
-`status` must stay true, which no gate fully checks.
+Five records, and no sixth until a failure owes one. The price is one test, five records of roughly
+forty lines, and one standing obligation: `status` must stay true, which no gate fully checks.
 
 The need: `Documentation/Review.md` found this tree to be "a second architecture that agrees with
 the first only in vocabulary" - the CLI reaches browser operations without the lease engine,
 `WithLease` fences the caller and not the destination, and the database-as-authority design has no
 implementation. Prose did not fail there. Prose has no owner and no path, so nothing was ever asked
-to disagree with it. A record with `owner`, `applies_to` and `status: proposed` would have said,
-inside the tree, that the design was described and not built.
+to disagree with it. A record with `owner`, `applies_to` and `status: proposed` says, inside the
+tree, that the design was described and not built.
 
 Five, not TimeLine's 76: that corpus is a publication surface, read by people outside the
 repository. This one is read by whoever changes the tree. The size that follows is _one record per
@@ -39,12 +34,12 @@ questions actually owe:
   target is an error rather than index 0 (`Open-Questions.md` Q9/Q10).
 
 Two edges hold among the five, and they are the first real content of `depends`: the fence depends
-on one authority and on what a generation is - which is also the writing order. The other two can go
-whenever. All five start `proposed`, so the corpus opens with zero `settled` records: that is the
-finding, not a gap.
+on one authority and on what a generation is - which is also the writing order. The other two are
+independent of both. All five start `proposed`, so the corpus opens with zero `settled` records:
+that is the finding, not a gap.
 
-**Rejected as a sixth: port ownership.** `Design.md` argues it and `Crate/Agito/Test/Boundaries.rs`
-enforces it; a record would be its third statement.
+**Rejected as a sixth: port ownership.** `Design.md` argues it; a record would be its second
+statement.
 
 ---
 
@@ -74,10 +69,10 @@ depends: []
 - **`superseded_by`** - the title that replaced this one; set if and only if `status: superseded`.
 - **`depends`** - titles that must hold for this record to make sense.
 
-**`category`: out.** A closed set invented before a sixth record exists is invented for consistency,
-which is the failure the brief names. `applies_to` already answers the only question a category
-answers - which crate this binds - and TimeLine's categories sort a board's columns, a surface this
-corpus does not have.
+**`category`: out.** A closed set invented before a sixth record exists is invented for consistency
+rather than for a decision. `applies_to` already answers the only question a category answers -
+which crate this binds - and TimeLine's categories sort a board's columns, a surface this corpus
+does not have.
 
 **A reversal-cost axis: out.** It is a judgement the author fills in for a scheduler to read, and
 there is no scheduler. What carries the same information mechanically is `depends`: a decision
@@ -102,9 +97,8 @@ trustworthy, so a record that restates one is refused as duplication.
   crosses that split, which the document does not.
 - **`Reflection.md`** - stays. It names a generation id and a conformance run scoped to it; the
   generation record defines the term.
-- **`Scope.md`** - stays, and owes one correction on acceptance: its parity row says this workspace
-  has no "decision corpus with a contract", which becomes false the moment the first record lands.
-  This run may not edit it, so that is the first follow-up.
+- **`Scope.md`** - stays. Its parity row says this workspace has no "decision corpus with a
+  contract", which stops being true when the first record lands.
 
 ---
 
@@ -113,23 +107,20 @@ trustworthy, so a record that restates one is refused as duplication.
 **No board.** A board triages work; a record states a decision. The records that block work are
 already cards, and `status` is not work state - conflating the two is how TimeLine's board and its
 corpus came to need a sync whose disagreement is a bug. `Scope.md` rules the direction out for a
-stronger reason than this proposal has: Agito "does not grow a copy of the site, the archive or the
-RFC board". No triage need is named here that the existing board cannot serve, so `rfc_board.py`'s
-model is neither copied nor adapted.
+stronger reason: Agito "does not grow a copy of the site, the archive or the RFC board". No triage
+need is named here that the existing board cannot serve, so `rfc_board.py`'s model is neither copied
+nor adapted.
 
 ---
 
 ## 5. The gate
 
-**`cargo test --workspace`**, running a `Corpus` test target beside the four others the tree had.
-Every one of those targets is deleted, so this section states a design that has no host.
+A `Corpus` test target under `cargo test --workspace`. The tree has no test target, so the checks
+below are a specification rather than something a command runs.
 
-`Script/Feed.mjs` is the discipline the brief names, and it was deleted with the Node toolchain,
-which is the lesson `README.md` states: "a gate that lives in the toolchain being deleted is a gate
-that leaves with it". Its successor in discipline is `Crate/Agito/Test/Legend.rs`, which is
-`Script/Legend.mjs` in Rust, a test rather than a script "because the gate it replaces was a command
-somebody had to remember". The corpus gate takes that shape: no Node, no Python, no new toolchain,
-one command that already runs.
+The discipline is the one `README.md` states: "a gate that lives in the toolchain being deleted is a
+gate that leaves with it". So the corpus gate is no Node, no Python, no new toolchain - one command
+rather than a script somebody has to remember.
 
 It rejects a record that:
 
@@ -145,10 +136,10 @@ It rejects a record that:
 - is `settled` without an `enforced_by` whose test file exists and declares that function, or
   carries `enforced_by` while `proposed`.
 
-Exit behaviour is `Legend.rs`'s: collect `Problems`, then `assert!(Problems.is_empty(), "…")`, so a
-malformed record fails the test binary with a non-zero exit and one line per problem, sorted by
-file. An empty directory passes, deliberately: the gate must be addable before the first record
-exists, or adding it would force writing one.
+Exit behaviour: collect `Problems`, then `assert!(Problems.is_empty(), "…")`, so a malformed record
+fails the test binary with a non-zero exit and one line per problem, sorted by file. An empty
+directory passes, deliberately: the gate has to be addable before the first record exists, or adding
+it would force writing one.
 
 What it cannot check: that a `settled` record's test enforces its claim, that a record is not a
 paraphrase of a document, and that a deleted record was meant to go. Those are review, and the diff.

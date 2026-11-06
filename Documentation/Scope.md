@@ -1,12 +1,14 @@
 # Scope, and the parity with TimeLine
 
-Agito is not TimeLine's toolkit. It is a local agent and swarm: it gathers links, browses,
-researches, and organises that work in SpacetimeDB. TimeLine is a product - an archive, a site, a
-decision corpus and the tooling that maintains them.
+Agito is not TimeLine's toolkit. It drives a browser and the chat products in it from Rust: one
+binary browses, asks a question and reads the answer back, measures what a page rendered, and
+validates a corpus of skill documents, and the same work is a workspace a product embeds through one
+crate. TimeLine is a product - an archive, a site, a decision corpus and the tooling that maintains
+them.
 
-They share a vocabulary (capabilities, ports, leases, evidence) and one direction of travel:
-**research done here can be fed into the DELO project as findings.** Nothing travels the other way,
-and nothing here is required for TimeLine to build.
+They share a vocabulary - capabilities, ports, leases, evidence - and one interface: a research
+finding from Agito becomes a card in the DELO project. Nothing travels the other way, and nothing
+here is required for TimeLine to build.
 
 ## What Agito is
 
@@ -46,16 +48,16 @@ and nothing here is required for TimeLine to build.
 | Skill validation                  | yes - generic corpus rules                                         | yes - its own 13 skills and their contract   |
 | Persistence                       | SpacetimeDB, as the scheduler and the record                       | files plus SpacetimeDB for the live view     |
 
-## The one direction of travel
+## The interface between them
 
 A research finding from Agito becomes a card in the DELO board, and the card is written in
 TimeLine's terms: a file, a claim, a command that settles it. That is the whole interface. Agito
 does not import TimeLine's code, does not read its database, and is not a dependency of its build.
 
-## What this rules out
+## The boundary
 
-- Agito does not grow a copy of the site, the archive or the RFC board.
-- TimeLine does not grow a copy of the runtime, the chat driver or the research corpus.
+- Agito carries no site, no archive and no RFC board.
+- TimeLine carries no copy of the runtime, the chat driver or the research corpus.
 - A capability that both need - measurement, skill validation - lives in Agito as the engine and in
   TimeLine as the site's own expectations, which is why the two versions of `design-verification`
   are not duplicates.

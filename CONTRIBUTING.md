@@ -1,102 +1,117 @@
-# Contributing
+# Contributing Guidelines
 
-Welcome. Before you start, read the [Code of Conduct](CODE_OF_CONDUCT.md) - the pledge, the
-standards, the enforcement ladder and the address to report to all live there, and there is one copy
-of them on purpose. By participating in this community you agree to abide by it. This file says the
-rest: how work arrives, what a change has to pass, and how things are spelled.
+Welcome to our community! We are committed to creating a welcoming and inclusive environment for all
+contributors. Before you get started, please read and adhere to the following code of conduct. By
+participating in our community, you agree to abide by these guidelines.
 
----
+## Our Pledge
 
-## How work arrives
+We, as members, contributors, and leaders, pledge to make participation in our community a
+harassment-free experience for everyone, regardless of age, body size, visible or invisible
+disability, ethnicity, sex characteristics, gender identity and expression, level of experience,
+education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or
+sexual identity and orientation. We pledge to act and interact in ways that contribute to an open,
+welcoming, diverse, inclusive, and healthy community.
 
-An issue first, then a card. An issue states the defect or the decision in the words of whoever
-found it, with the command or the reading that shows it; a card is the unit of work - one owner, one
-deliverable, and a body that says how the result will be checked. Work that starts without an issue
-is fine. Work that ends without one leaves the next person nothing to read.
+## Our Standards
 
-This repository has no RFC corpus. A decision that changes the design is a paragraph in
-`Documentation/`, with the claim it rests on named as a source or marked as a decision. The existing
-documents show the shape, and a document that changes its mind says so rather than rewriting the
-earlier position: `Documentation/Observability.md` and `Documentation/Review.md` are both
-corrections of an earlier pass, and both record the pass they correct.
+Examples of behavior that contributes to a positive environment for our community include:
 
----
+- Demonstrating empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility and apologizing to those affected by our mistakes, and learning from the
+  experience
+- Focusing on what is best not just for us as individuals, but for the overall community
 
-## The build
+Examples of unacceptable behavior include:
 
-A change is ready when these pass, and none of them needs the network:
+- The use of sexualized language or imagery, and sexual attention or advances of any kind
+- Trolling, insulting, or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or email address, without their
+  explicit permission
+- Other conduct which could reasonably be considered inappropriate in a professional setting
 
-```
-cargo build --workspace --release
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all -- --check
-cargo run -q -p agito -- manifests
-```
+## Enforcement Responsibilities
 
-There is no separate test step: what a change is held to is that it compiles, that clippy is silent,
-that the formatting matches `rustfmt.toml`, and that the module table still prints. No workflow step
-asserts anything a build did not produce. A new crate needs a `module.json` before it needs anything
-else, because that table is what `agito manifests` and `agito verify` read.
+Community leaders are responsible for clarifying and enforcing our standards of acceptable behavior
+and will take appropriate and fair corrective action in response to any behavior that they deem
+inappropriate, threatening, offensive, or harmful. Community leaders have the right and
+responsibility to remove, edit, or reject comments, commits, code, wiki edits, issues, and other
+contributions that are not aligned with this Code of Conduct, and will communicate reasons for
+moderation decisions when appropriate.
 
----
+## Scope
 
-## Naming
+This Code of Conduct applies within all community spaces, and also applies when an individual is
+officially representing the community in public spaces. Examples of representing our community
+include using an official e-mail address, posting via an official social media account, or acting as
+an appointed representative at an online or offline event.
 
-One convention, everywhere in the tree: folders, files, identifiers and prose.
+## Enforcement
 
-| Kind       | Rule                                                             | Example                                                 |
-| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
-| Folder     | PascalCase when it names a role; lowercase where a tool fixes it | `Crate/Browser/CDP/Source`; `module.json`, `Cargo.toml` |
-| File       | PascalCase, one concept per file                                 | `Port.rs`, `Library.rs`, `Scope.md`                     |
-| Acronym    | fully uppercase, in names and prose                              | `CLI`, `URL`, `API`, `JSON`, `CDP`                      |
-| Identifier | PascalCase for types and values; camelCase for locals            | `CDPClient`, `cdpValue`                                 |
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community
+leaders responsible for enforcement at Community@PlayForm.Cloud. All complaints will be reviewed and
+investigated promptly and fairly. All community leaders are obligated to respect the privacy and
+security of the reporter of any incident.
 
-A compound takes the acronym whole: `CdpClient` is `CDPClient`, and a leaf keeps it - `CDP`,
-`CDPSession`.
+## Enforcement Guidelines
 
-`Documentation/Style.md` is the whole rule, including the parts this table is too short to carry: a
-verb names the leaf of a `Fn/` path, a folder names one role in the singular, a serialized key is
-PascalCase and singular (`Provide`, not `Provides`), and a crate directory whose name would carry
-two concepts is two directories - `Crate/Chat/Driver`, whose library is `Driver`.
+Community leaders will follow these Community Impact Guidelines in determining the consequences for
+any action they deem in violation of this Code of Conduct:
 
-Two kinds of name sit outside the rule because something else already fixes their spelling: the
-ecosystem's root files (`module.json`, `Cargo.toml`, `Cargo.lock`) and wire-format field names such
-as `webSocketDebuggerUrl`. A third is narrower than it looks: a script under `Source/Script/` is
-TypeScript that the crate's `build.rs` compiles, and its path is the argument the `script!` macro
-takes - `script!("Expression/ReadAnswers")` - so the file and the macro call carry the same
-PascalCase name.
+### 1. Correction
 
-The tree has one shape: `Crate/<Name>/{Cargo.toml, module.json, Source/}`, or
-`Crate/<Group>/<Name>/…` where the crate's name would otherwise carry two concepts. It is strict
-because a module path is a file path: `Crate/<Name>/Source/Library.rs` is the library root, `Fn/`
-holds operations, `Struct/` holds data and contracts, and every module name matches its file.
+**Community Impact**: Use of inappropriate language or other behavior deemed unprofessional or
+unwelcome in the community.
 
-A rename is mechanical: `git mv` the path, then follow every import, the `module.json` that names
-the package, and the paths quoted in `Documentation/` and `README.md`. A half-renamed tree does not
-pass the gate, which is the check.
+**Consequence**: A private, written warning from community leaders, providing clarity around the
+nature of the violation and an explanation of why the behavior was inappropriate. A public apology
+may be requested.
 
-A link is a name too: a link to a submodule names that submodule's repository -
-`https://github.com/MergedBeastAgito/NFSU2-Use` - and never a path inside the parent, because GitHub
-has no folder there to open.
+### 2. Warning
 
----
+**Community Impact**: A violation through a single incident or series of actions.
+
+**Consequence**: A warning with consequences for continued behavior. No interaction with the people
+involved, including unsolicited interaction with those enforcing the Code of Conduct, for a
+specified period of time. This includes avoiding interactions in community spaces as well as
+external channels like social media. Violating these terms may lead to a temporary or permanent ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including sustained inappropriate
+behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public communication with the
+community for a specified period of time. No public or private interaction with the people involved,
+including unsolicited interaction with those enforcing the Code of Conduct, is allowed during this
+period. Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community standards, including
+sustained inappropriate behavior, harassment of an individual, or aggression toward or disparagement
+of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within the community.
 
 ## Attribution
 
-This document follows the structure of the one in the sibling TimeLine repository, and both adapt
-the [`Contributor Covenant`][homepage], version 2.1, available at
-[`https://www.contributor-covenant.org/version/2/1/code_of_conduct.html`][v2.1]. Community Impact
+This Code of Conduct is adapted from the [`Contributor Covenant`][homepage], version 2.1, available
+at [`HTTPS://www.contributor-covenant.org/version/2/1/code_of_conduct.html`][v2.1]. Community Impact
 Guidelines were inspired by [Mozilla's code of conduct enforcement ladder][Mozilla CoC].
 
 For answers to common questions about this code of conduct, see the FAQ at
-[`https://www.contributor-covenant.org/faq`][FAQ]. Translations are available at
-[`https://www.contributor-covenant.org/translations`][translations].
+[`HTTPS://www.contributor-covenant.org/faq`][FAQ]. Translations are available at
+[`HTTPS://www.contributor-covenant.org/translations`][translations].
 
-[homepage]: https://www.contributor-covenant.org
-[v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
-[Mozilla CoC]: https://github.com/mozilla/diversity
-[FAQ]: https://www.contributor-covenant.org/faq
-[translations]: https://www.contributor-covenant.org/translations
+[homepage]: HTTPS://www.contributor-covenant.org
+[v2.1]: HTTPS://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[Mozilla CoC]: HTTPS://github.com/mozilla/diversity
+[FAQ]: HTTPS://www.contributor-covenant.org/faq
+[translations]: HTTPS://www.contributor-covenant.org/translations
 
 Thank you for being part of our community and helping us create a safe and respectful environment
 for everyone!

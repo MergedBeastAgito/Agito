@@ -79,20 +79,20 @@ happens _around_ the process, if it is wanted at all.
 
 ## The dashboard
 
-One surface, exported from inside the binary, able to attach to any deployment:
+No verb in `Crate/Agito` exports a dashboard. The surface is a decision this note records, and it is
+one over the same tables the workers write to:
 
-- **Transport**: a subscription over the same database the workers write to. Not a second API,
-  because a second API is a second truth.
+- **Transport**: a subscription over the same database the workers write to, which is what lets one
+  surface attach to any deployment. Not a second API, because a second API is a second truth.
 - **Identity**: the panel connects as a client with its own identity and a role that grants read on
   the operational tables and no write. The role is data, so it can be revoked without a redeploy.
-- **Federation**, in ascending order of effort: one shared control database for every enrolled
-  binary; several panel connections each labelled with its environment; or a designed replication
-  layer. SpacetimeDB's inter-database communication is outbox-based - a message row delivered as a
-  reducer call - which is evidence for that pattern, not proof of global transactions across
-  databases.
-- **Staleness is visible.** A disconnected panel or a worker whose heartbeat has expired must render
-  as unknown, never as healthy-because-of-its-last-row. The cheapest way to guarantee that is a
-  heartbeat table plus a view that computes freshness from the database's own clock.
+- **Federation**: three shapes, cheapest first - one shared control database for every enrolled
+  binary; several panel connections each labelled with its environment; a replication layer.
+  SpacetimeDB's inter-database communication is outbox-based - a message row delivered as a reducer
+  call - which is evidence for that pattern, not proof of global transactions across databases.
+- **Staleness is visible.** A disconnected panel or a worker whose heartbeat has expired renders as
+  unknown, never as healthy-because-of-its-last-row. A heartbeat table plus a view that computes
+  freshness from the database's own clock is what makes that cheap.
 
 ## What this rules out
 

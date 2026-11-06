@@ -71,16 +71,16 @@ Conflating them is how a rewrite gets described as a refactor.
 ## What the runtime reports
 
 The `RunTime` port carries `Reflect`, which returns a `Binding`: the generation the runner was
-constructed with, and the registrations it will admit, sorted by name. The runner holds one
-generation and one registration list and derives every answer from that binding, so the manifest it
-reports is the manifest it enforces. `Reflect` reads the runner's own fields and does not read the
-mutable store.
+constructed with, and the registrations it admits, sorted by name. The runner holds one generation
+and one registration list and derives every answer from that binding, so the manifest it reports is
+the manifest it enforces. `Reflect` reads the runner's own fields and does not read the mutable
+store.
 
 Three further items are recorded and not built: a conformance run scoped to a generation, whose
-result is recorded with that ID; a transition table in the runtime package listing each state-changing
-operation beside the invariant it preserves; and a refusal of a mutation that would change
-interpreter semantics unless the caller states which policy changed. No source file in the workspace
-mentions conformance, and no transition table exists.
+result is recorded with that ID; a transition table in the runtime package listing each
+state-changing operation beside the invariant it preserves; and a refusal of a mutation that would
+change interpreter semantics unless the caller states which policy changed. No source file in the
+workspace mentions conformance, and no transition table exists.
 
 Bisimulation is used where it belongs - comparing executions across two implementations of the same
 port, or across two interpreter versions. Congruence is the obligation when claiming those

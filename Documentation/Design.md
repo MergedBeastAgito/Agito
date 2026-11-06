@@ -40,8 +40,9 @@ Eleven crates, one role each:
 - **The root** - `agito`, the wiring, the manifest table and the binary.
 
 The order the crates were written in is not the order they matter in. The substrate came first
-because every capability needs it; the runtime came after the capabilities exposed the lifecycle they
-actually need, because a runtime designed before that is a harness built around imagined commonality.
+because every capability needs it; the runtime came after the capabilities exposed the lifecycle
+they actually need, because a runtime designed before that is a harness built around imagined
+commonality.
 
 ## The manifest
 
@@ -70,8 +71,8 @@ starts returning wrong answers quickly.
 ## The boundary
 
 Domain policy and write authority stay with the consuming product: the workspace ships no store, no
-model, no command, no vote, no ingest and no board synchronisation. A generic name is not a port, and
-a crate called `model` or `context` becomes foundational by default unless somebody refuses it.
+model, no command, no vote, no ingest and no board synchronisation. A generic name is not a port,
+and a crate called `model` or `context` becomes foundational by default unless somebody refuses it.
 
 ## The two failures the boundary guards against
 
@@ -82,9 +83,9 @@ couple an isolated audit to interactive state, which is why a session carries it
 disposal closes only a browser it launched.
 
 **Source-relative assumptions surviving extraction.** Bundling into `Target/` does not make
-`Reference/`, routes, tokens, configuration or sibling paths portable. A path is resolved relative to
-the crate, then from an environment variable, then from one installed location, in that order - so a
-tree that moves still answers, and a tracked file names no machine.
+`Reference/`, routes, tokens, configuration or sibling paths portable. A path is resolved relative
+to the crate, then from an environment variable, then from one installed location, in that order -
+so a tree that moves still answers, and a tracked file names no machine.
 
 ## The signal to watch
 

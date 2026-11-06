@@ -6,10 +6,10 @@ to say before the workspace will believe it.
 ## The gap it closes
 
 Agito ships capabilities and one concrete substrate. A third party with a different substrate -
-another protocol, another device, a game port - could copy the browser crate's plumbing and be
-consumed by path, and that is what happened first: a driver that required `agito.browse`, provided a
-port of its own, kept its JavaScript in `Source/Script/`, and had nowhere to say so. Nothing outside
-the workspace could state "I provide this port" and be believed, because the manifest table is
+another protocol, another device, a game port - can copy the browser crate's plumbing and be
+consumed by path, which is what the NFSU2 driver does: it requires `agito.browse`, provides a port
+of its own, and keeps its JavaScript in `Source/Script/`. What it cannot do is say so. Nothing
+outside the workspace can state "I provide this port" and be believed, because the manifest table is
 compiled in and `Crate/*` is what it describes.
 
 `Crate/Adapter` (`agito-adapter`) is that missing statement. It holds one trait, one check, and a
@@ -32,8 +32,8 @@ pub trait Adapter: Send + Sync {
 
 - **Every method takes `&self`.** A trait method without a receiver cannot be called on
   `dyn Adapter`, so a trait shaped that way is not object-safe and cannot be held as
-  `Arc<dyn Adapter>` - which is the only reason the trait exists. The first draft of this contract
-  had `fn Port() -> &'static str` and was wrong for exactly that reason.
+  `Arc<dyn Adapter>` - which is the only reason the trait exists. A first draft of this contract had
+  `fn Port() -> &'static str` and was wrong for exactly that reason.
 - **`Dispose` never fails.** An adapter that owns a session, a socket or a device has to be able to
   let go of it, and a release that can fail is a release a caller skips. The browser crate states
   the same rule for disposal.
@@ -63,16 +63,15 @@ let Held:Arc<dyn Adapter> = Arc::new(StandIn::New("agito.nfsu.drive"));
 assert!(Serves(&*Held, "agito.nfsu.drive").is_ok());
 ```
 
-`agito-adapter` declares `kind: "capability"` and not `"adapter"`, and that is what makes the edge
+`agito-adapter` declares `Kind: "Capability"` and not `"Adapter"`, and that is what makes the edge
 legal: the boundary rule lets a facade import any port and lets an adapter name a capability's port
 shapes, while an adapter naming another adapter is the edge it forbids. The facade is also the one
 thing a crate _inside_ the workspace must not name - it exists for the consumer outside the tree,
 and a third-party adapter is exactly that consumer.
 
-The claim was one dependency, one trait object, one `Serves` call and no substrate behind it, made
-by a crate outside the workspace; the fixture crate that made it, and the facade test that held the
-facade's dependency line to six ports, are both deleted. What is left is `cargo tree`: the facade's
-dependency list is the six ports, and the adapter is one of them.
+The claim is one dependency, one trait object, one `Serves` call and no substrate behind it, made by
+a crate outside the workspace. `cargo tree` is what answers it: the facade's dependency list is the
+six ports, and the adapter is one of them.
 
 ---
 
@@ -124,7 +123,7 @@ Nothing is compiled into Agito, and nothing is registered. Two verbs read a thir
 `module.json`:
 
 - `agito manifests --adapter <dir>` lists every module under the given roots after the ones the
-  workspace ships, with the `module.json` each was read from in the fifth column.
+  workspace ships, with the `module.json` each was read from in the last column.
 - `agito verify --module <name> --adapter <dir>` reports readiness for one of them. The command line
   is the same one the workspace's own modules use.
 
@@ -155,13 +154,13 @@ here to compare against, and a readiness report that pretended otherwise would b
 must not be. So the foreign report checks what is knowable:
 
 - the kind is one the reader accepts, and the state one of the four classes;
-- `provides.errors` is a list of distinct, non-empty words;
-- `artefact.entry` is named;
-- every port in `requires.ports` is a port this workspace or another module under the same roots
+- `Provide.Error` is a list of distinct, non-empty words;
+- `Artefact.Entry` is named;
+- every port in `Require.Port` is a port this workspace or another module under the same roots
   provides - an adapter that requires something nobody offers is not ready, however well formed its
   file is.
 
-`errors.code` is `null` in that report rather than a copy of the manifest's own list, because a copy
+`Error.Code` is `null` in that report rather than a copy of the manifest's own list, because a copy
 would read as agreement. What the report cannot answer, `Serves` can, at the composition root.
 
 `agito verify` never constructs an adapter. A command that did would run a third party's code to
@@ -182,23 +181,10 @@ decide whether it is well formed.
 
 ---
 
-## Claims, and what is left of them
+## What answers for it
 
-These were checked by suites that no longer exist. They are kept because each is still a claim the
-code makes, and because a reader deserves to know which ones nothing checks now.
-
-| Claim                                                                        | Where it was checked                                   |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------ |
-| The trait is object-safe and usable as `Arc<dyn Adapter>`                    | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
-| A foreign implementation satisfies the trait                                 | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
-| A consumer outside the tree reaches the port through the facade alone        | `Crate/SDK/Test/Facade.rs`, `Fixture/SDK/` (both gone) |
-| The port a value reports matches the manifest that named it                  | `Crate/Adapter/Test/Adapter.rs` (deleted)              |
-| An adapter under a root is listed with its port and its directory            | `Crate/Agito/Test/Composition.rs` (deleted)            |
-| An adapter under a root verifies ready, with `code: null`                    | `Crate/Agito/Test/Composition.rs` (deleted)            |
-| An unknown kind, a duplicate name and an unsatisfied requirement are refused | `Crate/Agito/Test/Composition.rs` (deleted)            |
-| A stale root is skipped and the listing survives                             | `Crate/Agito/Test/Composition.rs` (deleted)            |
-| `adapter` is a kind the boundary rule knows                                  | `Crate/Agito/Test/Boundaries.rs` (deleted)             |
-
-`agito manifests --adapter <root>` and `agito verify --module <name> --adapter <root>` still answer
-the four middle claims at run time: a root that is stale is skipped with a warning, a duplicate name
-is refused, an unknown kind is refused, and a foreign module reports `code: null`.
+`agito manifests --adapter <root>` and `agito verify --module <name> --adapter <root>` answer at run
+time what a file can be held to: a root that is stale is skipped with a warning, a duplicate name is
+refused, an unknown kind is refused, and a foreign module reports `Error.Code: null`. The trait's
+object safety is the compiler's answer rather than a test's: `Arc<dyn Adapter>` is a type the
+composition root holds, so a method without a receiver would not compile.

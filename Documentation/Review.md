@@ -48,11 +48,12 @@ unsettled external effects.
 ## The destination check
 
 The second claim is answered where the write lands rather than in the wrapper. `WithLease` admits an
-effect and hands the work a `Ticket` carrying the lease's fence and its generation; the work presents
-that ticket to `Destination::Present`, which re-reads the record when the effect lands and refuses a
-stale fence, a stale generation, a released lease or an expired record. A refusal after the effect
-ran is recorded as `Ambiguous` against the resource and the resource is quarantined until a resolver
-states whether the external action landed, because rejecting a result does not undo an effect.
+effect and hands the work a `Ticket` carrying the lease's fence and its generation; the work
+presents that ticket to `Destination::Present`, which re-reads the record when the effect lands and
+refuses a stale fence, a stale generation, a released lease or an expired record. A refusal after
+the effect ran is recorded as `Ambiguous` against the resource and the resource is quarantined until
+a resolver states whether the external action landed, because rejecting a result does not undo an
+effect.
 
 `Crate/RunTime/Source/Struct/StandIn.rs` is the local double for that destination and mirrors the
 reducer row for row. It is not the authority in production: the runner holds an `Authority` and
