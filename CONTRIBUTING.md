@@ -33,12 +33,10 @@ cargo fmt --all -- --check
 cargo run -q -p agito -- manifests
 ```
 
-There is no test suite. The per-crate suites, the parity corpus under `Scenario/`, the
-out-of-workspace fixture crate and the path audit were deleted with the rest of the verification
-layer, and no workflow step asserts anything a build did not produce. What a change is held to is
-that it compiles, that clippy is silent, that the formatting matches `rustfmt.toml`, and that the
-module table still prints - a new crate needs a `module.json` before it needs anything else, because
-that table is what `agito manifests` and `agito verify` read.
+There is no separate test step: what a change is held to is that it compiles, that clippy is silent,
+that the formatting matches `rustfmt.toml`, and that the module table still prints. No workflow step
+asserts anything a build did not produce. A new crate needs a `module.json` before it needs anything
+else, because that table is what `agito manifests` and `agito verify` read.
 
 ---
 

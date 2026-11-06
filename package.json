@@ -2,7 +2,7 @@
 	"name": "@agito/workspace",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Capabilities, adapters and the runtime that leases them.",
+	"description": "Drives a browser and the chat products in it: browse, ask, measure, validate.",
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"scripts": {

@@ -1,24 +1,23 @@
-# Rust workspace
+# Crates
 
-Every crate here is a statement of the port shapes and the failure classification this workspace
-settled on, and now the only statement of them. The TypeScript packages they were ported from were
-deleted once the page expressions were compiled at build time and every scenario was answered here -
-`Documentation/Parity.md` records what the comparison established while it existed, and what
-replaced it.
+Eleven crates, one binary and one facade. Each carries a `module.json` beside its `Cargo.toml`
+stating the port it provides, the ports it requires and the state class that decides what may be
+reused; `agito manifests` prints that table from the binary.
 
-The layout follows the house style of `github.com/PlayForm/Run`: one directory per crate under
-`Crate/`, `Source/Library.rs` as the library root, `Fn/` for operations and `Struct/` for data and
-contracts, PascalCase module names, and one `Target/` at the workspace root.
+The layout is one convention throughout: one directory per crate under `Crate/`, `Source/Library.rs`
+as the library root, `Fn/` for operations and `Struct/` for data and contracts, PascalCase module
+names, and one `Target/` at the workspace root. A crate whose name would carry two concepts is two
+directories - `Crate/Chat/Driver`, whose library is `Driver`.
 
 `Source/Script/` is where the TypeScript lives that the driver and the workflow send to a page: one
 file per expression, compiled by the crate's `build.rs` into the JavaScript a page receives and
 baked in by `script!`. A file's `declare const __PARAM_Name__: T;` lines are both the parameter
 types and the list the build holds a call site to - a parameter declared `string` is escaped into a
 JavaScript string literal, any other declared type is spliced as code - so an editor, a linter and a
-compiler see the expression that a `format!` used to hide, and the compiled bytes are the bytes the
-page was already being sent. `Build/Script.rs` is the one statement of how a script is compiled;
-both `Crate/Chat/Driver` and `Crate/Workflow` include it from their `build.rs`.
-`Documentation/Script.md` records the compiler choice and the measurements behind it.
+compiler see the expression that a `format!` would otherwise hide, and the compiled bytes are the
+bytes the page receives. `Build/Script.rs` is the one statement of how a script is compiled; both
+`Crate/Chat/Driver` and `Crate/Workflow` include it from their `build.rs`. `Documentation/Script.md`
+records the compiler choice and the measurements behind it.
 
 The TypeScript parser is a **build-only** dependency (`[build-dependencies]` in those two crates,
 pinned exactly): nothing at run time links it, no `node_modules` is involved, and a build works
@@ -35,15 +34,14 @@ none. An optional `tokio` feature adds a `Pace` implementation and is off by def
 
 **`agito-adapter`** - `Crate/Adapter/`. The port a third-party substrate implements: `Adapter`
 (`Port`, `Call`, `Dispose`), `Serves`, and a scripted `StandIn` for a consumer's own tests. It ships
-no implementation - the workspace already has one substrate - and declares no error codes, because a
-code belongs to the adapter that reports it rather than to the shape it implements. Dependencies:
-`agito-runtime`, `serde_json`.
+no implementation and declares no error codes, because a code belongs to the adapter that reports it
+rather than to the shape it implements. Dependencies: `agito-runtime`, `serde_json`.
 
 **`agito-lane`** - `Crate/Lane/`, library `Lane`. `agito.lane.decide`: a template corpus as data -
 loaded, selected by predicate, composed into a decision-model request and read back as typed answers
 under a metered budget. The round trip leaves through a `Poster` the crate declares and never
-implements, so the suite answers from a fixture and the crate itself opens no socket. Dependencies:
-`agito-runtime`, `serde`, `serde_json`.
+implements, so the crate answers from whatever poster the caller supplies and opens no socket.
+Dependencies: `agito-runtime`, `serde`, `serde_json`.
 
 **`agito-spacetime-catalog`** - `Crate/Spacetime/Catalog/`, library `Catalog`. The database model as
 data and rules: six tables described as records, seven reducers over a five-member `Context`, and
@@ -118,21 +116,20 @@ resolves, and the arrow direction is the graph it prints.
 
 ---
 
-## Verification
+## The build
 
-```
+```sh
 cargo build --workspace --release                        # the tree, and the binary
-cargo run -p agito -- --help                           # the composition root's commands
-cargo run -p agito -- manifests                        # the module table
-cargo tree -p agito-chat-driver | grep -c tokio         # 0
-cargo tree -p agito-chat-driver | grep -c browser       # 0
+cargo run -p agito -- --help                             # the composition root's commands
+cargo run -p agito -- manifests                          # the module table
+cargo tree -p agito-chat-driver | grep -c tokio           # 0
+cargo tree -p agito-chat-driver | grep -c browser         # 0
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-There is no test suite. The per-crate suites, the parity corpus and the out-of-workspace fixture
-crate are deleted, and what is left to check is that the tree builds, that the dependency graph
-still shows no capability naming an adapter, and that the manifest table still prints.
+What a change is held to is that the tree builds, that the dependency graph still shows no
+capability naming an adapter, and that the manifest table still prints.
 
 `agito verify --module <name>` is the manifest check: it compares the errors a manifest names
 against the codes its crate's own type declares, so a manifest that has drifted from its code fails

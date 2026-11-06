@@ -1,7 +1,6 @@
 # Chat
 
-Asking a chat product a question, and the three preconditions that must be read before anything is
-sent.
+Asking a chat product a question, and the preconditions the driver reads before anything is sent.
 
 ## Page 1 - the ask
 
@@ -9,8 +8,8 @@ sent.
 
 [`Lifecycle.mmd`](Lifecycle.mmd) · [`Lifecycle.svg`](Lifecycle.svg)
 
-`Refused` is reached from four different places and means four different things. The manifest gives
-it four codes for that reason: `not-ready`, `wrong-mode`, `wrong-model`, `truncated`.
+`Refused` is reached from four different places and means four different things, which is why the
+manifest gives it four codes: `not-ready`, `wrong-mode`, `wrong-model`, `truncated`.
 
 ---
 
@@ -20,8 +19,8 @@ it four codes for that reason: `not-ready`, `wrong-mode`, `wrong-model`, `trunca
 
 [`Completion.mmd`](Completion.mmd) · [`Completion.svg`](Completion.svg)
 
-The three-read rule proves text stability, not that generation finished. That is the review's
-qualification, and it is why `truncated` is a separate outcome rather than a retry.
+The three-read rule proves text stability, not that generation finished. That is why `truncated` is
+a separate outcome rather than a retry.
 
 ---
 
@@ -37,12 +36,12 @@ transcript.
 
 ---
 
-## Page 4 - missing states
+## Page 4 - states the driver does not report
 
-![Queued and interrupted, the two states the product has and nobody reports](Missing.svg)
+![Queued and interrupted, the two states the product has and the driver does not report](Missing.svg)
 
 [`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
-`Queued` and `Interrupted` are real and unmodelled - they are drawn as installable steps. The first
-is why a fixed sleep looks necessary; the second is why "text stable for three reads" can settle on
-a truncated answer that nobody marked as truncated.
+`Queued` and `Interrupted` are drawn as installable steps because no field carries them. Both are
+real: the first is why a fixed sleep looks necessary; the second is why "text stable for three
+reads" can settle on a truncated answer that nobody marked as truncated.

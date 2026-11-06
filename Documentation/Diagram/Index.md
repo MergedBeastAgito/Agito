@@ -4,9 +4,9 @@ One folder per category. Each folder holds a page, the `.mmd` source of every di
 and the `.svg` rendered from that source - so the set reads without the CLI, and a change is made in
 a file that renders the same way twice.
 
-A page is a storyboard: pages separated by a rule, the first page what exists, the last page the
-states nobody has built. That is deliberate - a diagram that shows only what exists is a
-description, and the useful part of a diagram is the gap between it and the goal.
+A page is a storyboard: pages separated by a rule. The first page shows the states the code
+implements, and the last shows the states it does not, drawn as installable steps so both sit in one
+drawing.
 
 ## The convention
 
@@ -45,16 +45,15 @@ Shapes carry kind: `(["event"])`, `[("store")]`, `{"decision"}`, `["process"]`. 
 
 ## The folders
 
-| Folder                                  | Category    | What it draws                                                |
-| --------------------------------------- | ----------- | ------------------------------------------------------------ |
-| [`00-Rings/`](00-Rings/README.md)       | authority   | the crates as concentric rings, and the ring that is missing |
-| [`10-RunTime/`](10-RunTime/README.md)   | leases      | claim, admit, land, refuse - and the late arrival            |
-| [`20-Browser/`](20-Browser/README.md)   | effects     | attach versus launch, and the dead-but-open socket           |
-| [`30-Chat/`](30-Chat/README.md)         | research    | mode, model, completion, truncation                          |
-| [`40-Database/`](40-Database/README.md) | internality | generations, leases, probes, and the abandoned holder        |
-| [`50-Feed/`](50-Feed/README.md)         | transport   | bundle, attach, observe, and the rate limit                  |
+| Folder                                  | Category    | What it draws                                                      |
+| --------------------------------------- | ----------- | ------------------------------------------------------------------ |
+| [`00-Rings/`](00-Rings/README.md)       | authority   | the crates as concentric rings, and the ticket with no destination |
+| [`10-RunTime/`](10-RunTime/README.md)   | leases      | claim, admit, land, refuse - and the late arrival                  |
+| [`20-Browser/`](20-Browser/README.md)   | effects     | attach versus launch, and the dead-but-open socket                 |
+| [`30-Chat/`](30-Chat/README.md)         | research    | mode, model, completion, truncation                                |
+| [`40-Database/`](40-Database/README.md) | internality | generations, leases, probes, and the abandoned holder              |
+| [`50-Feed/`](50-Feed/README.md)         | transport   | bundle, attach, observe, and the rate limit                        |
 
-The set was checked by `Crate/Agito/Test/Legend.rs` - frontmatter with a theme, at least one class
-annotation, a rendered sibling over 1000 bytes, and no prose legend anywhere - and that check is
-deleted with the rest of the suites. It never proved a diagram was right, only that it rendered and
-that its terms were typed; nothing proves even that now.
+The legend is a convention rather than a check: nothing in the tree validates a diagram's
+frontmatter, its annotations or its rendered sibling. What the set holds is that every `.mmd` here
+has an `.svg` rendered from it, and that each page links both.

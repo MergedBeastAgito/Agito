@@ -44,23 +44,21 @@ sequenceDiagram
 
 This is the one diagram in the set that has no `.mmd`: it cannot be exported, because
 `line9 render --out` serves flowcharts only and a `sequenceDiagram` exits `9` without writing
-anything. The lanes are doing the work here - four participants, a private read and an
-audience-scoped write inside one transaction - and a flowchart would flatten who may see what into a
-chain of steps.
+anything. The lanes do the work here - four participants, a private read and an audience-scoped
+write inside one transaction - and a flowchart would flatten who may see what into a chain of steps.
 
-The review's point stands: a receipt is evidence that a probe happened, not a mechanism that
-prevented a leak. The leak is prevented by the private value never being selectable, and by the
-observation being tied to a property version so an old grant cannot silently authorise a future
-change.
+A receipt is evidence that a probe happened, not a mechanism that prevented a leak. The leak is
+prevented by the private value never being selectable, and by the observation being tied to a
+property version so an old grant cannot silently authorise a future change.
 
 ---
 
-## Page 4 - missing states
+## Page 4 - states the schema does not model
 
 ![Abandoned and quarantined, the states a dead holder leaves behind](Missing.svg)
 
 [`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
-`Abandoned` and `Quarantined` do not exist - they are drawn as installable steps. Expiry covers the
-clock; nothing covers the workspace a dead holder may have left dirty, which is the `HoldWorkspace`
-class the manifest names and the schema does not yet model.
+`Abandoned` and `Quarantined` are drawn as installable steps because no table carries them. Expiry
+covers the clock; nothing covers the workspace a dead holder may have left dirty, which is the
+`HoldWorkspace` class the manifest names.

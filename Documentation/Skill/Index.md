@@ -28,8 +28,8 @@ The skills this repository ships, and the contract that keeps them loadable.
   it.
 - `Script-Compilation/` - TypeScript in `Source/Script/`, compiled at build time and baked in by a
   macro: the `__PARAM_Name__` marker, and which parameters are data and which are code.
-- `Bench-Harness/` - what a harness would have to measure to grade this driver, the four decisions
-  each number changes, and the honest statement that no harness exists yet in this tree.
+- `Bench-Harness/` - what a harness has to measure to grade this driver, the four decisions each
+  number changes, and the fact that no harness exists in this tree.
 
 ---
 

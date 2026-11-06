@@ -1,7 +1,7 @@
 # Browser
 
-The CDP adapter's lifecycle: attach versus launch, and the two things that can be true of a session
-that is not alive.
+The CDP adapter's lifecycle: attach versus launch, and the failures a session that is not alive can
+report.
 
 ## Page 1 - attach or launch
 
@@ -9,8 +9,8 @@ that is not alive.
 
 [`Lifecycle.mmd`](Lifecycle.mmd) · [`Lifecycle.svg`](Lifecycle.svg)
 
-The distinction that must survive every refactor: `dispose` on a launched session may close the
-browser; on an attached session it must not, because somebody else owns it.
+The distinction that holds on every path: `dispose` on a launched session may close the browser; on
+an attached session it must not, because somebody else owns it.
 
 ---
 
@@ -20,30 +20,29 @@ browser; on an attached session it must not, because somebody else owns it.
 
 [`Failures.mmd`](Failures.mmd) · [`Failures.svg`](Failures.svg)
 
-`looks alive` is the state the adapter cannot currently name. An open socket is not a live browser,
-and a liveness probe is the only thing that distinguishes them - which is why the manifest gives
-this crate the `HoldTransport` state class and an admission check.
+`looks alive` is the state the adapter cannot name: an open socket is not a live browser. The
+liveness probe is what separates them, which is why the manifest gives this crate the
+`HoldTransport` state class and an admission check.
 
 ---
 
-## Page 3 - identity, which the review says is conflated
+## Page 3 - identity
 
 ![A URL and an endpoint reaching a session, and ownership deciding what dispose may do](Identity.svg)
 
 [`Identity.mmd`](Identity.mmd) · [`Identity.svg`](Identity.svg)
 
-Three things are called "the browser" here: an endpoint, a page, and a user. The review flagged the
-collision; the fix is that a `Target` carries its ownership, and that an endpoint is never treated
-as an identity.
+Three things are called "the browser" here: an endpoint, a page, and a user. A `Target` carries its
+ownership, and an endpoint is never treated as an identity.
 
 ---
 
-## Page 4 - missing states
+## Page 4 - states the adapter does not model
 
 ![Stalled and reclaimed, the two states of a session that is not alive](Missing.svg)
 
 [`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
-`Stalled` and `Reclaimed` do not exist - they are drawn as installable steps. Both are real: the
-first is the dead-but-open socket, the second is two debugger clients on one page - which is exactly
-what happens when a second tool attaches to a tab the extension already holds.
+`Stalled` and `Reclaimed` are drawn as installable steps because no state carries them. Both are
+real: the first is the dead-but-open socket, the second is two debugger clients on one page - which
+is what happens when a second tool attaches to a tab an extension already holds.
