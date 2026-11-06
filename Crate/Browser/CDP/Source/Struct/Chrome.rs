@@ -103,6 +103,17 @@ impl Chrome {
 	/// `navigation-failed` - the browser answered, and the page the caller
 	/// named is not in it.
 	async fn Bound(Key:&str, Pages:Vec<Page>) -> Result<Page, Error> {
+		// An empty key is not "the first page": every URL starts with it, so a
+		// caller that meant to name a tab and named nothing would be handed
+		// whichever tab happened to be listed first - and would then type into
+		// it. That is the one mistake this function exists to prevent, so it is
+		// refused by name rather than matched by accident.
+		if Key.trim().is_empty() {
+			return Err(Error::Navigation(
+				"no page was named to bind",
+				"the bind key is empty, and an empty key is a prefix of every page",
+			));
+		}
 		let mut Fallback = None;
 		let mut Seen = Vec::new();
 		for Page in Pages {
