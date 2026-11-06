@@ -204,9 +204,9 @@ A substrate this workspace did not write - another protocol, another device, a g
 `Adapter`: it states the port it provides, answers one request under the caller's deadline, and
 disposes without failing. It depends on the facade and on nothing else.
 
-The worked example is [`Use/NFSU2`](https://github.com/MergedBeastAgito/Use/tree/Current/NFSU2): a
-driver that holds the browser port and a decision model, and a wasm reader that reads the game's
-memory from inside the page.
+The worked example is [`Use/NFSU2`](https://github.com/MergedBeastAgito/NFSU2-Use): a driver that
+holds the browser port and a decision model, and a wasm reader that reads the game's memory from
+inside the page.
 
 ---
 
