@@ -1,5 +1,5 @@
 ---
-title: RunTime - the lease lifecycle as it exists today
+title: RunTime - the lease lifecycle
 line9:
   theme: boardroom
 ---
@@ -9,13 +9,15 @@ flowchart TD
   ADMITTED["Admitted<br>the effect was admitted"]:::host
   LANDED["Landed<br>the effect completed"]:::host
   EXPIRED["Expired<br>the clock passed expires_at"]:::host
+  HELD["Held<br>another holder owns the lease"]:::fail
   REFUSED["Refused<br>ticket stale at the destination"]:::fail
   RELEASED(["released"]):::host
   FREE ==>|"claim (resource, ttl)"| CLAIMED
   CLAIMED -.->|"renew(fence)"| CLAIMED
+  CLAIMED -.->|"claim while another holds it"| HELD
   CLAIMED ==>|"with_lease(lease, effect)"| ADMITTED
   ADMITTED ==>|"the effect completes"| LANDED
-  ADMITTED -.->|"ticket stale at the destination"| REFUSED
+  LANDED -.->|"ticket stale at the destination"| REFUSED
   CLAIMED -.->|"the clock passes expires_at"| EXPIRED
   LANDED -->|"release"| RELEASED
   REFUSED -->|"release"| RELEASED

@@ -4,13 +4,14 @@ The lease and effect lifecycle: the states the crate moves, and the ones it does
 
 ## Page 1 - the lease
 
-![Free, claimed, admitted, landed, expired and refused, with release closing the loop](Lifecycle.svg)
+![Free, claimed, admitted, landed, expired, held and refused, with release closing the loop](Lifecycle.svg)
 
 [`Lifecycle.mmd`](Lifecycle.mmd) · [`Lifecycle.svg`](Lifecycle.svg)
 
-`Refused` is a state the port carries: a claim refused while another holder owns the lease, reported
-as a result rather than a panic. Whether a _destination_ has a matching state is one of the
-questions `Documentation/Open-Questions.md` records.
+`Held` is the port's `lease-held`: a claim refused because another holder owns the resource,
+reported as a result rather than a panic. `Refused` is `admission-refused`, and the ticket a
+destination rejects because it is stale is the counterexample page 2 draws. Whether a _destination_
+has a matching state is one of the questions `Documentation/Open-Questions.md` records.
 
 ---
 
