@@ -69,8 +69,7 @@ before it types, so a caller never has to know the editor was dirty.
 same turn correlation. `both` is those two from one read, and `note` is a document built from the
 Markdown one.
 
-- **`text`** is `innerText`, trimmed. It is the default because every recorded baseline was read
-  with it.
+- **`text`** is `innerText`, trimmed. It is the default.
 - **`markdown`** is the answer's DOM serialised by the page. Tables keep their columns, `pre > code`
   becomes a fenced block with its language, a formula is its TeX from
   `annotation[encoding="application/x-tex"]` instead of hundreds of positioned glyphs, lists keep
@@ -163,8 +162,8 @@ A model that _is_ identified and differs from `--model` is still refused as `wro
 nothing was typed. `--model` absent means no model is demanded at all; the page's own label is
 reported.
 
-One consequence worth stating: `--model` can no longer be satisfied by a value that changes when the
-number of drafts changes, because a count is never read as a model.
+`--model` cannot be satisfied by a value that changes when the number of drafts changes, because a
+count is never read as a model.
 
 ---
 
@@ -174,15 +173,15 @@ A contenteditable editor keeps its own document model. Writing `innerText` chang
 leaves the send control disabled, because no edit happened - the symptom is
 `not-ready: the send control is disabled after the question was typed`.
 
-Three things follow, and each one was a defect before it was a rule.
+Three rules follow.
 
 **A draft is emptied through the input domain, not through an editing command.**
 `execCommand("delete")` over a selected range answers `true` on an editor that keeps its own model
 and deletes nothing, so a "select all, delete, insert" sequence appends. Measured on the reference
 product: a composer holding 4,167 characters grew to 8,496 over two calls while every delete
-reported success. The clear is now a real select-all chord carrying the protocol's `selectAll`
-editing command, then a delete, then a read-back. A composer that will not empty is a named blocker
-_before_ the insert, never a `mismatch` after it.
+reported success. The clear is a real select-all chord carrying the protocol's `selectAll` editing
+command, then a delete, then a read-back. A composer that will not empty is a named blocker _before_
+the insert, never a `mismatch` after it.
 
 The command matters and the chord alone is not enough: a chord is something the page has to
 interpret, and a plain contenteditable or a `textarea` does not interpret it. Measured on a plain

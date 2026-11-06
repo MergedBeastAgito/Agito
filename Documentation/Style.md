@@ -38,6 +38,14 @@ carries the object and the leaf carries the name: `Crate/Chat/Driver` is library
 `Module`, `Selectors` (a collection), `Adapter` (repeatable). A parameter that needs a sentence is
 two parameters.
 
+**A link to a submodule names its own repository, never a path inside the parent.** `Use/NFSU2` is a
+repository, so the parent's URL with `tree/Current/NFSU2` appended to it is a 404 - GitHub has no
+folder there to open - while `https://github.com/MergedBeastAgito/NFSU2-Use` is the repository
+itself. A file inside the submodule is that repository's `blob` URL, not the parent's: the branch
+does not rescue the parent's path, because `tree/Current/…`, `tree/main/…` and `blob/Current/…` are
+one defect, and the map from a submodule path to its repository is the `.gitmodules` of the tree
+that holds it.
+
 ---
 
 ## The boundary

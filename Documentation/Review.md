@@ -45,16 +45,19 @@ And dropping the future decrements the in-flight count, while dropping a Rust fu
 the browser-side operation stopped. The count therefore measures unsettled local futures, not
 unsettled external effects.
 
-## The revision it proposes
+## The destination check
 
-Stop presenting arbitrary callback admission as fencing. An effect should carry its lease and
-generation identifiers and be **checked by the destination** - the reducer that records it - rather
-than trusted because a wrapper admitted it earlier. That is the same conclusion
-`Documentation/Reflection.md` reached for schema generations, applied to effects: the check belongs
-where the write lands.
+The second claim is answered where the write lands rather than in the wrapper. `WithLease` admits an
+effect and hands the work a `Ticket` carrying the lease's fence and its generation; the work presents
+that ticket to `Destination::Present`, which re-reads the record when the effect lands and refuses a
+stale fence, a stale generation, a released lease or an expired record. A refusal after the effect
+ran is recorded as `Ambiguous` against the resource and the resource is quarantined until a resolver
+states whether the external action landed, because rejecting a result does not undo an effect.
 
-## What this changes about the plan
+`Crate/RunTime/Source/Struct/StandIn.rs` is the local double for that destination and mirrors the
+reducer row for row. It is not the authority in production: the runner holds an `Authority` and
+never reads the count of unsettled futures, so a composition root with a database substitutes a
+reducer adapter for the stand-in.
 
-The port is not finished; it is a second architecture that agrees with the first only in vocabulary.
-The next card is not "more crates" but "one authority": admission, lease and generation checked at
-the point of effect, with a test that fails when the check is moved back into the caller.
+That is the same conclusion `Documentation/Reflection.md` reaches for schema generations, applied to
+effects: the check belongs where the write lands.

@@ -141,22 +141,14 @@ pass.
 
 ---
 
-## The bytes are held by construction, and the fixture is gone
+## The bytes are held by construction
 
-The compiled artefact must equal the bytes the page was already receiving. That used to be held by
-two byte-identity fixtures - a map of expression name to bytes for the chat driver, dumped from the
-pre-compilation `Expressions.rs`, and the same for the workflow's one measurement expression - and
-both are deleted with the rest of the verification layer.
-
-What holds the rule now is the walker itself. The erasure removes exactly the bytes of the
-type-syntax spans and emits every other byte, so a compiler that re-indented, re-quoted, appended a
-semicolon or dropped a comment cannot be written without changing that walk. The rule is structural
-rather than asserted: nothing compares the output to a recorded baseline any more, so a change to
-the walker is a change to what a page receives and nothing will say so.
-
-The fixture also covers the _set_ of expressions: the test asserts that the fixture and the driver
-build the same number of names, so an expression added without a baseline fails rather than going
-unheld.
+The compiled artefact must equal the bytes the page was already receiving. Nothing compares the
+output to a recorded baseline: the walker holds the rule. The erasure removes exactly the bytes of
+the type-syntax spans and emits every other byte, so a compiler that re-indented, re-quoted,
+appended a semicolon or dropped a comment cannot be written without changing that walk. The rule is
+structural rather than asserted, which is also its weakness: a change to the walker is a change to
+what a page receives, and nothing reports it.
 
 ---
 
@@ -197,13 +189,13 @@ and the determinism check.
 
 ## Claim → test
 
-| Claim                                          | How it was checked, or what is left                                                                                                                                                                        |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The compiled artefact is the old bytes         | the chat driver's suite (deleted); nothing compares the output to a baseline now                                                                                                                           |
-| The workflow's expression is held too          | the workflow's suite (deleted)                                                                                                                                                                             |
-| Every marker is filled, and the check bites    | the chat driver's suite (deleted); `AssertParameters` still refuses a call site that omits one                                                                                                             |
-| A malformed script names its position          | write `Crate/Chat/Driver/Source/Script/Expression/Broken.ts` holding an unclosed call, run `cargo build -p agito-chat-driver`, require `Source/Script/Expression/Broken.ts:<line>:<col>: Unexpected token` |
-| A call site cannot forget a parameter          | delete one argument from a `script!` call, run `cargo build -p agito-chat-driver`, require `E0080` naming that call site                                                                                   |
-| A rebuild that changes nothing touches nothing | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agito-chat-driver/*/out/Script/` before and after                                                                   |
-| Escaping matches the old encoder               | the runtime's suite (deleted); `Escape` is what a page receives, unasserted                                                                                                                                |
-| The build needs no node and no network         | `cargo build --workspace --offline` succeeds                                                                                                                                                               |
+| Claim                                                    | How it is checked                                                                                                                                                                                          |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The compiled artefact equals the bytes the page received | nothing compares the output to a baseline; the erasure walk is the only holder                                                                                                                             |
+| The workflow's expression is compiled by the same rule   | `Crate/Workflow/build.rs` calls the same `CompileScripts` over `Source/Script`                                                                                                                             |
+| Every marker is filled, and the check bites              | `AssertParameters` refuses a call site that omits one                                                                                                                                                      |
+| A malformed script names its position                    | write `Crate/Chat/Driver/Source/Script/Expression/Broken.ts` holding an unclosed call, run `cargo build -p agito-chat-driver`, require `Source/Script/Expression/Broken.ts:<line>:<col>: Unexpected token` |
+| A call site cannot forget a parameter                    | delete one argument from a `script!` call, run `cargo build -p agito-chat-driver`, require `E0080` naming that call site                                                                                   |
+| A rebuild that changes nothing touches nothing           | `touch` the `.ts` files, rebuild, and compare the mtime list under `Target/debug/build/agito-chat-driver/*/out/Script/` before and after                                                                   |
+| Escaping matches `serde_json` byte for byte              | `Escape` is what a page receives; unasserted                                                                                                                                                               |
+| The build needs no node and no network                   | `cargo build --workspace --offline` succeeds                                                                                                                                                               |

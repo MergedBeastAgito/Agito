@@ -5,41 +5,29 @@ The formal apparatus is worth using only up to a point; this note says where tha
 
 ## The property worth naming
 
-**Decision: this repository** - the term, the definition and the three things a safety claim may
-name. No capture uses "manifest-enforcement coherence". The observation-boundary half of the third
-item is the subject of capture `575cb198`, which argues what an observation must name and record; no
-section here draws on it yet.
-
 **Manifest-enforcement coherence:** the capability manifest a runtime reports is the manifest it
 actually enforces.
 
 Not "the manifest is correct" - correctness is a separate, unprovable-in-general claim. Coherence is
 checkable: read what the system says it is, then exercise the system and compare. Every safety claim
-in this workspace should name one of three things: a state invariant, an observation boundary, or an
-equivalence theorem. A claim that names none of them is prose.
+in this workspace names one of three things: a state invariant, an observation boundary, or an
+equivalence theorem. A claim that names none of them is prose. An observation boundary is the half
+of a claim that says what an observation must name and record.
 
 ## The trust boundary comes first
-
-**Decision: this repository** - the argument that a self-check has no independent basis, and the
-choice of the composition root plus the process that launches it as the party outside the mutation
-authority. **Source:** capture `4ffde6d5` §3 for the mechanism the section relies on: a source
-descriptor embedded in the crate and an external release descriptor binding it to the delivered
-bytes, so a manifest read from the mutable store is not the only copy that exists.
 
 If the mutation path can rewrite the reporter, the enforcer and the verifier, an internal self-check
 has no independent basis for detecting coordinated deception - it is checking the story against
 itself.
 
-So one component must sit **outside** the mutation authority, and something external must attest to
-its identity. In this system that is the composition root plus the process that launches it: the
-root holds the manifest it bound, and the runtime can only report what it was given. A manifest read
-from the mutable store alone is not evidence.
+So one component sits **outside** the mutation authority, and something external attests to its
+identity. In this system that is the composition root plus the process that launches it: the root
+holds the manifest it bound, and the runtime can only report what it was given. The mechanism is a
+source descriptor embedded in the crate and an external release descriptor binding it to the
+delivered bytes, so a manifest read from the mutable store is not the only copy that exists. A
+manifest read from the mutable store alone is not evidence.
 
 ## The obligation, reduced to induction
-
-**Decision: this repository** - the induction shape, the four-part mutation obligation
-(authorisation, validation, migration, publication) and the transition table as the cheap version
-that is still honest. No capture states any of them.
 
 Coherence is an invariant, so the proof shape is an induction over transitions:
 
@@ -52,14 +40,10 @@ generation: authorisation, validation, migration, publication. If any one of the
 new generation is coherent only by accident.
 
 Tests check instances of this; a general claim needs a proof or exhaustive checking of a finite
-model. The cheap version that is still honest: a transition table listing every state-changing
+model. The cheap version that is still honest is a transition table listing every state-changing
 operation beside the invariant it must preserve, and a conformance run per generation.
 
 ## Where the apparatus collapses
-
-**Decision: this repository** - the boundary at declarative records under a fixed interpreter, and
-the reduction to ordinary versioning. No capture discusses reflection; this is why `575cb198.md`
-cannot be read as the source of this section despite the name the brief gave it.
 
 If reflection only reads and replaces **declarative records under a fixed interpreter** - which is
 what this workspace is - then none of the higher-order machinery is needed. The requirement is
@@ -76,10 +60,6 @@ check is: demonstrate that every admitted record is interpreted by the same trus
 
 ## Where it stops being ordinary migration
 
-**Decision: this repository** - the three changes that defeat record validation (interpreter,
-authorisation semantics, the manifest language itself), and the "new policy approved versus old
-policy preserved" distinction.
-
 If an authorised update can change the **interpreter**, the **authorisation semantics**, or the
 **meaning of the manifest language**, record-shape validation is not enough. Then you need either a
 semantics-preservation or refinement obligation between interpreter versions, or an explicit
@@ -88,28 +68,23 @@ declaration that the policy changed.
 The distinction to enforce in every upgrade: _new policy approved_ versus _old policy preserved_.
 Conflating them is how a rewrite gets described as a refactor.
 
-## What gets built
+## What the runtime reports
 
-**Decision: this repository** - all four items. Nothing in the captures proposes a `reflect`
-operation, a generation-scoped conformance run, a transition table or the semantics-change refusal.
+The `RunTime` port carries `Reflect`, which returns a `Binding`: the generation the runner was
+constructed with, and the registrations it will admit, sorted by name. The runner holds one
+generation and one registration list and derives every answer from that binding, so the manifest it
+reports is the manifest it enforces. `Reflect` reads the runner's own fields and does not read the
+mutable store.
 
-1. A `reflect` operation that returns the enforced manifest **and its generation id**, answered from
-   the composition root rather than from the mutable store.
-2. A generation-scoped conformance run: the contract test suite executes against the generation, and
-   its result is recorded with that id.
-3. A transition table in the runtime package listing each state-changing operation beside the
-   invariant it preserves.
-4. A refusal: a mutation that would change interpreter semantics is rejected unless the caller
-   states which policy changed, so the audit trail records the difference between preservation and
-   replacement.
+Three further items are recorded and not built: a conformance run scoped to a generation, whose
+result is recorded with that ID; a transition table in the runtime package listing each state-changing
+operation beside the invariant it preserves; and a refusal of a mutation that would change
+interpreter semantics unless the caller states which policy changed. No source file in the workspace
+mentions conformance, and no transition table exists.
 
 Bisimulation is used where it belongs - comparing executions across two implementations of the same
 port, or across two interpreter versions. Congruence is the obligation when claiming those
 comparisons survive inspection and mutation contexts. Neither is needed to say "this generation
-enforces what it reports".
-
-**Source:** capture `4ffde6d5` §2 - the acceptance suite the capture requires before the TypeScript
-sidecar is removed (attach/launch, navigation races, evaluation timeout, disconnect, disposal,
-shared-browser ownership) is one such comparison, named concretely rather than gestured at.
-**Decision: this repository** - the bisimulation and congruence framing, and the claim that neither
-is needed for enforcement coherence.
+enforces what it reports". The browser acceptance cases - attach and launch, navigation races,
+evaluation timeout, disconnect, disposal, shared-browser ownership - are one such comparison, named
+concretely rather than gestured at.

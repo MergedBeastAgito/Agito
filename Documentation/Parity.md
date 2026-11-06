@@ -1,22 +1,17 @@
 # Parity
 
-What this file claimed, and what is left of the claim.
-
-There was a corpus under `Scenario/`: one file per capability plus two timing files, 82 cases, each
+A corpus under `Scenario/` held 82 cases: one file per capability plus two timing files, each
 stating a fixture, a sequence of steps, the expected result, the ordered effect list and the number
 of reports. Three parity suites answered them through scripted fakes, so `cargo test --workspace`
-was the whole of the scenario gate. The corpus, the suites and the gate are all deleted, and this
-file is the record of what they held.
+was the whole of the scenario gate.
 
-The narrow claim they made is worth stating because nothing makes it now. It was not that the crates
-are correct, and not that the files covered the whole of any implementation. It was that every case
-a file stated was executed, that every executed case named the unit test that proved it or said why
-it had none, and that a case's expected result, ordered effect list and report count were asserted
-as written. A mistake the suites encoded was a mistake they defended; nothing defends one now.
+The claim those suites made was narrow, and nothing in the tree makes it now. It was not that the
+crates are correct, and not that the files covered the whole of any implementation. It was that
+every case a file stated was executed, that every executed case named the unit test that proved it
+or said why it had none, and that a case's expected result, ordered effect list and report count
+were asserted as written. A mistake the suites encoded was a mistake they defended.
 
----
-
-## What the differential run established, while it existed
+## What the differential run established
 
 The run drove the TypeScript packages in process, asked cargo for the Rust half through
 `AGITO_PARITY_OUT`, and compared the two observation files. Its last recorded result:
@@ -32,22 +27,15 @@ The run drove the TypeScript packages in process, asked cargo for the Rust half 
   that no longer matched its generator, so a scenario could not quietly become a hand-written
   expectation with a generated file's name on it.
 
-**Why it was retired.** Once the TypeScript packages were deleted, the comparison had one side. The
-referee, the observation files and the claim of equality went with the tree they compared against.
-Keeping a differential run alive by keeping a second implementation is the cost that deletion
-existed to stop paying.
-
-**What that cost.** The comparison was an independent opinion: a behaviour that both implementations
+**What the comparison bought.** It was an independent opinion: a behaviour that both implementations
 got wrong agreed just as loudly as one they got right, but a behaviour one of them changed showed up
-as a difference. Nothing does that now.
+as a difference. That opinion costs a second implementation, and nothing in the tree pays that cost
+today.
 
----
+## What no case could prove
 
-## The cases that executed nothing
-
-Each was written into its file with the reason, and each parity suite skipped it by name rather than
-by accident. All of them are gone with the corpus; they are listed because each names a hole that is
-still a hole.
+Each of these was written into its file with the reason, and each parity suite skipped it by name
+rather than by accident. Each names a hole that is still a hole.
 
 - **`dispose-failing-release`** (browse). `Transport::Close` returns `()`, so a release cannot fail
   and there is no cause to report. A release that _hangs_ is reportable; a release that _rejects_ is
@@ -58,18 +46,16 @@ still a hole.
 - **`options-absent`** and **`question-absent`** (chat). Both were holes in the TypeScript port:
   `undefined` where an `OperationOptions` or a `Question` was declared. Rust has no `undefined` - a
   `Call` is a value the caller must construct, and `Question` is a struct with no absent value - so
-  there was nothing to prove.
-- **`answer-hangs`** and **`open-hangs`** (chat) executed but named no unit test, and said so in
-  `scenario-only`: the chat driver's suite had no page that hangs or never opens, and the parity
+  there is nothing to prove.
+- **`answer-hangs`** and **`open-hangs`** (chat). Both executed but named no unit test, and said so
+  in `scenario-only`: the chat driver's suite had no page that hangs or never opens, and the parity
   fake was the only place those rules were exercised. That gap is total now - nothing exercises
   them.
 
----
-
 ## Why the fixtures asserted what they asserted
 
-Three looseness decisions let two implementations agree, and they are kept here because each one is
-a statement about what the contract is rather than a tolerance that happened to pass.
+Three looseness decisions let two implementations agree. Each is a statement about what the contract
+is rather than a tolerance that happened to pass.
 
 - **A message is a substring, not a sentence.** The code and the observation are the contract; the
   sentence is the port's own wording, and pinning it would make a rewording look like a change in
@@ -80,11 +66,9 @@ a statement about what the contract is rather than a tolerance that happened to 
   directory, which differs between two temporary corpora by construction, so findings were compared
   by rule.
 
----
-
 ## Defects the comparison found
 
-Two were recorded while the corpus existed and are still in the tree.
+Two are still in the tree.
 
 - **Rust's open timeout loses the word "deadline".** The message says
   `the chat page could not be opened` and puts `the page never answered` in `detail`. A wording
@@ -94,13 +78,12 @@ Two were recorded while the corpus existed and are still in the tree.
   `caféNotes.md` the port answers no findings. The TypeScript `Names` disagreed - its boundary was
   ASCII - and that disagreement is why no case covered it. Every ASCII case agreed, so the fixture
   set never exercised the rule. With one implementation left this is an uncovered behaviour rather
-  than a divergence: **a decision is owed**, and it should state which answer is the contract.
+  than a divergence, and the tree has not decided which answer is the contract.
 
-A third is still open and is a real one:
-
-**The chat driver's poll pause is not cancellable.** In the settle loop, `Driver.rs` awaits
-`self.Pace.Sleep(Wait)` directly, where `Wait = Poll.min(Call.Remaining(..))`. The TypeScript driver
-raced the same wait against the caller's signal and resolved the moment the signal fired.
+**A third is still open: the chat driver's poll pause is not cancellable.** In the settle loop,
+`Driver.rs` awaits `self.Pace.Sleep(Wait)` directly, where `Wait = Poll.min(Call.Remaining(..))`.
+The TypeScript driver raced the same wait against the caller's signal and resolved the moment the
+signal fired.
 
 The two agreed in practice, because the loop re-reads on the next iteration and the next read starts
 with `Call.Cancelled()`. The difference is _when_ the caller hears about it. With the default
@@ -112,15 +95,11 @@ the guarantee is not local - it holds only because the _pace_ eventually resolve
 The fix is one combinator: `Race(self.Pace.Sleep(Wait), Call.Cancellation.Cancelled())`, the shape
 `Bound` already uses for the read itself. It is not applied here because it changes the port.
 
----
-
-## The five mutations, as a record
+## The five mutations
 
 `mutate.mjs`, the mutation harness, applied five deliberate defects to the real source of both
 implementations, ran both suites, and insisted each rejected every one - a green suite proves the
-assertions ran, not that they bite. The harness was a Node script and went with the toolchain; the
-suites it ran are gone too, so this list is history rather than a procedure anyone can follow in
-this tree today.
+assertions ran, not that they bite.
 
 | Mutation                   | What it breaks                                          | File                                            | The test that had to fail                                                  |
 | -------------------------- | ------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |

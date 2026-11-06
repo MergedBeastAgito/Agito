@@ -1,31 +1,27 @@
 # Research
 
-The three captures this workspace came out of were removed with the `.hermes/` archive. They were
-evidence, not documentation: the reasoning, the confidence labels and the experiments in the order
-they were produced, never edited. What is left is the index that made them usable - one row per
-thread, what it settled, what it left open, and which `Documentation/` file consumed it - and the
-capture ids below are the provenance handles every `Source:` line in `Documentation/` still names.
+Three research threads precede this workspace, one per capture. The index gives one row per thread -
+what it settled, what it left open, and which `Documentation/` file consumes it - and the sections
+below carry each thread's findings in the order they were produced.
 
-**The rule:** every claim in `Documentation/` carries a `Source:` line naming a capture, or a
-`Decision: this repository` line saying no capture makes it. One hop from statement to origin. A
-claim with neither is unfinished, not merely undocumented. The hop now ends here rather than in a
-file: the `:NN` anchors below and in the documents that cite them are the positions the claims were
-taken from, kept so a re-captured thread can be re-anchored against the same reading.
+**The rule:** a claim that came from a thread names its capture in a `Source:` line; a claim this
+repository makes says `Decision: this repository`. One hop from statement to origin. The `:NN`
+anchors name positions in the capture, so a reader can tell which part of a thread a claim was taken
+from.
 
 ## Index
 
-| Capture    | Thread                                                              | Answered                                                                                                                                                                                                                | Left open                                                                                                                                                           | Consumed by                                                                                                                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `575cb198` | hidden properties, disclosure, and how a subscription leaks them    | the execution model that makes atomic disclosure possible; the formal frame (action-conditioned POMDP, epistemic logic as a separate question); a relational design and a reducer rule for revealing without publishing | five SpacetimeDB questions - rollback, cross-module concurrency, scheduled ordering, subscription guarantees, replication determinism - and three of its own checks | nothing yet - `Documentation/Open-Questions.md` Q1-Q8                                                                                                                                                                                                          |
-| `e9b61659` | an audit of `Maintain/Source/Transport` in the consuming repository | nine assumptions the CDP transport makes, each with file and line, its break, and whether the break is silent                                                                                                           | whether any inferred break occurs on a live page - nine experiments, none run                                                                                       | nothing yet - `Documentation/Open-Questions.md` Q9-Q17                                                                                                                                                                                                         |
-| `4ffde6d5` | the port of five TypeScript packages into a Cargo workspace         | crate boundaries, consumer-owned ports in Cargo terms, the CDP backend recommendation, manifest representation, the cancellation and budget traits                                                                      | the manifest field mapping and the CI check for the arrows - answered in the capture, still to be built here - plus parity and house-style verification             | `Documentation/Rust.md` throughout; `Documentation/Design.md` §The four layers, §The manifest, §Why the packages are these five, §The two failures; `Documentation/Reflection.md` §The trust boundary, and the bisimulation paragraph closing §What gets built |
+| Capture    | Thread                                                              | Answered                                                                                                                                                                                                                | Left open                                                                                                                                                           | Consumed by                                                                                                                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `575cb198` | hidden properties, disclosure, and how a subscription leaks them    | the execution model that makes atomic disclosure possible; the formal frame (action-conditioned POMDP, epistemic logic as a separate question); a relational design and a reducer rule for revealing without publishing | five SpacetimeDB questions - rollback, cross-module concurrency, scheduled ordering, subscription guarantees, replication determinism - and three of its own checks | nothing yet - `Documentation/Open-Questions.md` Q1-Q8                                                                                                                                                                                                                |
+| `e9b61659` | an audit of `Maintain/Source/Transport` in the consuming repository | nine assumptions the CDP transport makes, each with file and line, its break, and whether the break is silent                                                                                                           | whether any inferred break occurs on a live page - nine experiments, none run                                                                                       | nothing yet - `Documentation/Open-Questions.md` Q9-Q17                                                                                                                                                                                                               |
+| `4ffde6d5` | the port of five TypeScript packages into a Cargo workspace         | crate boundaries, consumer-owned ports in Cargo terms, the CDP backend recommendation, manifest representation, the cancellation and budget traits                                                                      | the manifest field mapping and the CI check for the arrows - answered in the capture, not in the tree - plus parity and house-style verification                    | `Documentation/Rust.md` throughout; `Documentation/Design.md` §The four layers, §The manifest, §The two failures the boundary guards against; `Documentation/Reflection.md` §The trust boundary comes first, and the bisimulation paragraph closing §What gets built |
 
-## What the captures are not
+## What the threads are not
 
-The brief for this pass described the first two captures as the design thread (adapter schema,
-ports-belong-to-consumers, five packages, homotopy/bisimulation, reflection) and the repository
-thread (verifier defects, workflow defects, RFC board, event collision, issue triage). Neither
-description matches its file.
+Two of the three carry descriptions that do not match their content: the design thread (adapter
+schema, ports-belong-to-consumers, five packages, homotopy/bisimulation, reflection) and the
+repository thread (verifier defects, workflow defects, RFC board, event collision, issue triage).
 
 - `575cb198.md` is a SpacetimeDB and hidden-information thread behind a first exchange on a chat-UI
   workflow. That exchange is the only place `adapter` appears; the hidden-properties half contains
@@ -34,30 +30,28 @@ description matches its file.
   contains no occurrence of `RFC`, `verifier`, `event collision` or `issue triage`.
 - `4ffde6d5.md` matches its description.
 
-The counts were `26` and `0` when the captures were still on disk. All 26 are `adapter` in the
-chat-UI exchange, where it means a framework adapter rather than a capability adapter; the half this
-file indexes contains none of the four words. Provenance that invents a consumer is worse than
-provenance that reports a gap, so the rows above say "nothing yet" where that is the truth, and the
-consequence for the design documents is in the next section.
+The occurrence counts were `26` and `0`. All 26 are `adapter` in the chat-UI exchange, where it
+means a framework adapter rather than a capability adapter; the hidden-properties half contains none
+of the four words. Provenance that invents a consumer is worse than provenance that reports a gap,
+so the rows above say "nothing yet" where that is the truth, and the consequence for the design
+documents is in the next section.
 
 ## The consequence for `Documentation/`
 
-`Documentation/Rust.md` is downstream of a capture and reads as one. `Documentation/Design.md` and
+`Documentation/Rust.md` is downstream of a thread and reads as one. `Documentation/Design.md` and
 `Documentation/Reflection.md` are this repository's own position: their claims are argued from the
-consuming repository's surface and from this workspace's constraints, and most of them are marked
-`Decision: this repository` for exactly that reason.
+consuming repository's surface and from this workspace's constraints.
 
-`e9b61659.md` is the only capture that looks at the consuming repository, and it looks at one
+`e9b61659.md` is the only thread that looks at the consuming repository, and it looks at one
 subsystem - the CDP transport. It is therefore evidence for the premise that the boundaries were
 argued from a real surface, not evidence for any particular boundary. The inventory numbers in
-`Documentation/Design.md` are measurements that no capture records.
+`Documentation/Design.md` are measurements that no thread records.
 
 `575cb198.md` is the odd one out: nothing in `Documentation/` consumes it. It answers a question
-this workspace has not asked yet - how an actor's knowledge of a capability's hidden properties is
+this workspace does not ask - how an actor's knowledge of a capability's hidden properties is
 disclosed, bounded and recorded - and its answer is a data model (private truth, audience-scoped
-immutable evidence, derived belief) rather than an architecture. It becomes load-bearing the moment
-`Documentation/Reflection.md` needs an observation boundary instead of a state invariant; until then
-it is indexed here and left alone.
+immutable evidence, derived belief) rather than an architecture. It matters only where an
+observation boundary replaces a state invariant; until then it is indexed here and left alone.
 
 ## Thread 1 - hidden properties and disclosure
 
@@ -174,7 +168,7 @@ the manifest fields map.
 
 **Left open:** nothing in the answer itself - it reaches all six questions, ending with the
 exceptions at `:807-828`; the manifest field mapping is `:697-764` and the arrows check is a
-concrete script at `:598-696`. What the capture cannot supply is verification: the house style is
+concrete script at `:598-696`. What the thread cannot supply is verification: the house style is
 taken from the request because the repository could not be retrieved (`:192-194`). Parity, the
 two-trait derivation, the `panic = "abort"` conflict and the library behaviours are
 `Documentation/Open-Questions.md` Q18-Q24.
@@ -182,8 +176,7 @@ two-trait derivation, the `panic = "abort"` conflict and the library behaviours 
 ## Capture integrity
 
 The captures were tracked, not ignored, so `git status` and `git log` reported an edit to them.
-These digests name the exact bytes every `:NN` anchor in this file was re-anchored against, and they
-stay as the record of that anchoring now that the files are gone:
+These digests name the exact bytes every `:NN` anchor in this file was re-anchored against:
 
 | Capture       | Lines | SHA-256                                                            |
 | ------------- | ----- | ------------------------------------------------------------------ |
@@ -191,5 +184,5 @@ stay as the record of that anchoring now that the files are gone:
 | `e9b61659.md` | 324   | `d62005e23f322affc24a7b04144670fbbf80bba80b94216b6be2ea29cd0f723d` |
 | `4ffde6d5.md` | 885   | `183a81fcf7532d005e5f03fb5dd1d15e399e8332d15b9e81eb36fdf4da3b406a` |
 
-A capture that has been tidied is no longer evidence. A capture that is gone cannot be re-read at
-all, which is why the sections above carry the findings rather than a pointer to them.
+A capture that has been tidied is no longer evidence, which is why the sections above carry the
+findings rather than a pointer to them.

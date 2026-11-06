@@ -28,9 +28,8 @@ present replaces it.
 }
 ```
 
-The merge is deliberate. A caller changing one selector should not have to restate the seven it is
-happy with, and an absent key must keep the default rather than become an empty selector that
-matches everything.
+The merge is deliberate. A caller changing one selector does not restate the seven it is happy with,
+and an absent key keeps its default rather than becoming an empty selector that matches everything.
 
 ---
 
@@ -69,7 +68,7 @@ report field, not a failure: the call proceeds and the result says so.
 
 A missing `busy` is not fatal the way a missing `answer` is: the driver reads "nothing says it is
 still working" and leaves the text rule in charge. That is a degraded mode, not a correct one, and
-the report should say so.
+the report says so.
 
 `agito chat --probe` is the check: it prints every control the `model` selector matched, what each
 one says, and which one was chosen.

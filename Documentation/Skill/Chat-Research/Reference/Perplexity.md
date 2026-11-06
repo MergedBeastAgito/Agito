@@ -105,10 +105,10 @@ renders more than one popup control and their order is state-dependent:
 | a page with no draft        | `GPT-6.1 Sol`                               |
 
 So on one build the first popup's label is a count and on another it is the model's own name. A
-driver that read the first match returned `1 draft` as the model, which no `--model` value could
-satisfy and which changed whenever the number of drafts changed.
+driver that reads the first match returns `1 draft` as the model, which no `--model` value satisfies
+and which changes whenever the number of drafts changes.
 
-What the driver does now: it reads every match, classifies each label - a count is `count`, a word
+What the driver does: it reads every match, classifies each label - a count is `count`, a word
 naming a control (`model`, `drafts`, `session`, `share`, …) is `names-a-control` - and takes the
 first one that is neither. A row with nothing left answers `unknown` and the call proceeds.
 `--probe` prints the whole inventory, which is what makes the next build's change diagnosable in one
@@ -151,7 +151,7 @@ nothing, so the obvious repair - select all, delete, insert - appends instead: a
 call refused with `not-ready: the composer does not hold the question`. The tab was wedged; nothing
 in the tool could recover it.
 
-Three rules follow, and all three are in the driver now:
+Three rules follow, and all three are in the driver:
 
 - empty the composer through the input domain - a select-all chord carrying the protocol's own
   `selectAll` command, then a delete - and read the editor back; a composer that will not empty is a

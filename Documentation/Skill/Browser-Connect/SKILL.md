@@ -46,8 +46,7 @@ curl -s http://127.0.0.1:<debug-port>/json/list | python3 -c 'import sys,json;[p
 ```
 
 The `id` from `/json/list` is the target id a bind takes. Filter `type == "page"`: a listing also
-carries extension pages, service workers and iframes, and a bind by URL prefix will happily match a
-non-page.
+carries extension pages, service workers and iframes, and a bind by URL prefix matches a non-page.
 
 ---
 

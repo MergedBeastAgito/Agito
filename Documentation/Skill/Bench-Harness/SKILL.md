@@ -17,19 +17,18 @@ thing under test is the driver, not the model behind the page. Get that wrong an
 unreadable: a rate-limited product looks like a worse driver, and a driver that confidently returns
 the previous answer looks correct.
 
-**No harness exists in this tree.** There is no task record, no trial, no run manifest, no evidence
+**This tree ships no harness.** There is no task record, no trial, no run manifest, no evidence
 store, no grader for driver correctness, no failure taxonomy and no bench verb - `agito --help`
-lists `manifests`, `verify`, `skills`, `browse`, `chat` and `design`, and nothing else. What exists
-is every ingredient the harness would be built from, and this skill names each one.
+lists `manifests`, `verify`, `skills`, `browse`, `chat` and `design`, and nothing else. Every
+ingredient a harness is built from exists here, and this skill names each one.
 
-It is not a test suite, and this tree no longer has one: the scenario suite that proved a stated
-case was answered correctly, against a scripted page and a clock the test owned, is deleted. Even
-while it existed it could not say whether the driver got better, because it never met a product,
-never cost anything and never flaked.
+It is not a test suite. A test suite proves a stated case was answered correctly against a scripted
+page and a clock the test owns, and it cannot say whether the driver got better, because it never
+meets a product, never costs anything and never flakes.
 
 ---
 
-## What exists, and what is owed
+## The ingredients
 
 - **An evidence stream, per read.** `Driver::Observe` pushes one `Observation` (`Count`, `Text`,
   `Busy`, `Fresh`, `Settled`) to a sink for every read it takes, and the sink answers
@@ -57,9 +56,9 @@ never cost anything and never flaked.
 - **Cost data, as a claim.** `module.json` carries `cost { coldMs, warmMs, network }` per crate
   (`browser-cdp` also names `processes: ["chromium"]`). These are the author's claims, not
   measurements; a harness that reports them must label them as declared.
-- **Owed:** task/trial/run records, an append-only evidence store, a grader for
-  submit/correlate/complete/ extract, the failure taxonomy, flake and cost per success, and a verb
-  that runs a plan.
+- **The rest of a harness.** Task, trial and run records, an append-only evidence store, a grader
+  for submit/correlate/complete/extract, the failure taxonomy, flake and cost per success, and a
+  verb that runs a plan.
 
 ---
 
@@ -137,9 +136,9 @@ evaluation. Relabelling failures as unsupported afterwards is how a score is man
 
 ## Two lanes: replay and live
 
-- **Controlled replay** feeds identical recorded observations into the driver. The scenario corpus
-  this lane would have replayed is deleted, so the fixtures have to be recorded again before a
-  harness has anything to feed; a harness adds nothing to replay except the records around it.
+- **Controlled replay** feeds identical recorded observations into the driver. No recorded
+  observations exist in this tree, so the fixtures are recorded before the lane has anything to
+  feed; a harness adds nothing to replay except the records around it.
 - **Live differential** runs matched tasks in separate equivalent sessions, randomising
   implementation order and interleaving pairs closely in time. It measures deployment reality and
   cannot control a changing service.
@@ -165,28 +164,12 @@ spend.
 
 ---
 
-## Build order
-
-1. Versioned task/trial/run records and an append-only evidence stream - the `--observe` line is the
-   first record's shape.
-2. An independent grader for submit, correlate, complete, extract, modelled on `Check`.
-3. A replay lane over recorded cases whose answer is known, so the grader is calibrated before it
-   scores anything.
-4. A live lane whose preflight is `agito verify --module <name>` plus the state's own check.
-5. A report: first-attempt success, failure causes, latency, flake, coverage, cost per success.
-
-**The first run exists to correct the harness, not to score anything.** Expect the metric set to
-change once real trials exist; a benchmark whose first report is quoted as a result has not been
-calibrated.
-
----
-
 ## What this skill does not claim
 
-- No numbers. Nothing here has been measured against a live product, and no result from this tree
-  should be quoted as one.
+- No numbers. Nothing here has been measured against a live product, and no figure from this tree is
+  a measurement.
 - Not a rubric for answer quality - that axis needs human labels or a deterministic predicate, and
-  neither exists here - and not a replacement for a test suite, of which this tree now has none.
+  neither exists here - and not a replacement for a test suite, of which this tree has none.
 
 ---
 
@@ -198,14 +181,14 @@ calibrated.
 
 ## Claim → test
 
-| Claim                                                 | How it was checked, or what is left                                                             |
+| Claim                                                 | How it is checked                                                                               |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Every read is available as evidence                   | the chat driver's suite (deleted); `--observe` still emits the line                             |
-| An observer can end the wait without failing the call | the chat driver's suite (deleted)                                                               |
-| Settlement is the page's signal plus three reads      | the chat driver's suite (deleted)                                                               |
-| The budget is the caller's, not the adapter's         | the chat driver's suite (deleted)                                                               |
-| The grader records a failure instead of throwing      | the design-verification suite (deleted)                                                         |
-| An absent element fails even when every reading holds | the design-verification suite (deleted)                                                         |
+| Every read is available as evidence                   | `--observe` emits one JSON line per read; unasserted in this tree                               |
+| An observer can end the wait without failing the call | `Control::Stop` ends the wait and returns the answer so far; unasserted in this tree            |
+| Settlement is the page's signal plus three reads      | `Settlement.rs` settles on the third consecutive agreement with `busy` clear; unasserted here   |
+| The budget is the caller's, not the adapter's         | `--timeout` is the whole call's budget and `Call` carries it; unasserted in this tree           |
+| The grader records a failure instead of throwing      | `Verification::Check` returns a `Verdict` with the failing row in `Absent`; unasserted here     |
+| An absent element fails even when every reading holds | `Verdict` carries `Absent` beside `Held`; unasserted in this tree                               |
 | Admission is a JSON a harness can read                | `Target/debug/agito verify --module @agito/chat-driver` prints `"ready": true` with its `state` |
-| The replay lane would have been the scenario suite    | deleted with the corpus; there is nothing to replay against                                     |
+| A replay lane needs recorded observations             | no recorded observation exists in this tree                                                     |
 | This tree ships no harness                            | `Target/debug/agito --help` lists no verb that records a trial or a run                         |

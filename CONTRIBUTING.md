@@ -75,6 +75,10 @@ A rename is mechanical: `git mv` the path, then follow every import, the `module
 the package, and the paths quoted in `Documentation/` and `README.md`. A half-renamed tree does not
 pass the gate, which is the check.
 
+A link is a name too: a link to a submodule names that submodule's repository -
+`https://github.com/MergedBeastAgito/NFSU2-Use` - and never a path inside the parent, because GitHub
+has no folder there to open.
+
 ---
 
 ## Attribution

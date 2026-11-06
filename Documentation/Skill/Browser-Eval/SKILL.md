@@ -70,7 +70,7 @@ the intent is to act, say so in the command you keep, because the next reader wi
 call was read-only.
 
 An expression that throws is `navigation-failed` with the exception in the detail, not a silent
-`null`. That is the useful direction: a broken selector in a probe should look broken.
+`null`. That is the useful direction: a broken selector in a probe looks broken.
 
 ---
 
