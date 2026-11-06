@@ -28,15 +28,20 @@ record of it was refused.
 
 ---
 
-## Page 3 - states the crate does not model
+## Page 3 - the states around an expired lease
 
-![Dispatched, ambiguous, reconciled and quarantined, none of which the crate models](Missing.svg)
+![Dispatched, ambiguous, reconciled and quarantined, of which two are modelled](Missing.svg)
 
 [`Missing.mmd`](Missing.mmd) · [`Missing.svg`](Missing.svg)
 
-`Dispatched`, `Ambiguous`, `Reconciled` and `Quarantined` are drawn as installable steps because no
-state carries them. They cover work already in flight when its authority ends, which `Refused` alone
-cannot: refusing a result says nothing about the effect that already happened.
+Two of the four are in the port. `Ambiguous` is the record of a refusal that arrived after the
+effect ran: it names the effect, the resource, the generation, the fence and the lease that admitted
+it (`Crate/RunTime/Source/Struct/Port.rs:425`). The resource it names stays quarantined until a
+resolver states which of the two outcomes it was (`Crate/RunTime/Source/Struct/StandIn.rs:281`).
+
+`Dispatched` and `Reconciled` are drawn as installable steps because no state carries them. They
+cover work already in flight when its authority ends, which `Refused` alone cannot: refusing a
+result says nothing about the effect that already happened.
 
 ---
 
@@ -46,5 +51,6 @@ cannot: refusing a result says nothing about the effect that already happened.
 
 [`Ownership.mmd`](Ownership.mmd) · [`Ownership.svg`](Ownership.svg)
 
-The left column is effects. The right column is internalities. `Dispatched` and `Ambiguous` belong
-on the right, which is why the crate cannot be the authority for them.
+The left column is effects. The right column is internalities. `Dispatched` belongs on the right,
+which is why the crate cannot be the authority for it; `Ambiguous` is the crate's own record that it
+cannot know which side an effect landed on.

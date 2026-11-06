@@ -28,13 +28,16 @@ boundary checkable: `cargo tree -p agito-chat-driver | grep -c browser` answers 
 
 ## Page 3 - the ticket with no destination
 
-![A ticket issued by the database, presented to a destination no crate holds](Missing-Ring.svg)
+![A ticket issued by the database, presented to a destination only a stand-in implements](Missing-Ring.svg)
 
 [`Missing-Ring.mmd`](Missing-Ring.mmd) · [`Missing-Ring.svg`](Missing-Ring.svg)
 
-`X` is drawn as an installable step because no crate holds it: the database issues a ticket and
-there is no destination to present it to. Without one, the runtime crate is a second authority over
-the same vocabulary - see `Documentation/Review.md`.
+`X` is drawn as an installable step because nothing records a landing. The port exists:
+`Destination::Present` takes a ticket and a name and answers with what was recorded
+(`Crate/RunTime/Source/Struct/Port.rs:470`), and its only implementation is the scripted stand-in
+the runtime ships for a consumer's own tests (`Crate/RunTime/Source/Struct/StandIn.rs:439`). Without
+a destination that writes to a database, the runtime crate is a second authority over the same
+vocabulary - see `Documentation/Review.md`.
 
 ---
 
