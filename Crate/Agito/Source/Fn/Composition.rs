@@ -8,7 +8,7 @@
 //! capability never sees it: it is handed a `Pace` through the driver and the
 //! verifier, which is what keeps their dependency lists free of an executor.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ::CDP::{Browse, Chrome, ChromeOptions, Create as CreateSession, Options, Report, Tokio};
 use ::Driver::{Create as CreateChat, Driver, Options as ChatOptions, Page as ChatPort, Selectors};
@@ -42,6 +42,13 @@ pub struct ChatSpec {
 	pub Bind:Option<String>,
 	/// How the page is read.
 	pub Selectors:Selectors,
+	/// How still the page must be before its observer calls it settled.
+	pub Quiet:Duration,
+	/// How long the page may say nothing before the wait is reported as a stall.
+	pub Stall:Duration,
+	/// Whether to read the thread until it stops changing even when the page
+	/// offers to say when it has settled.
+	pub Forced:bool,
 }
 
 /// A chat driver over a browser, with the workflow's page binding installed.
@@ -54,7 +61,13 @@ pub fn Chat(Browse:Arc<dyn Browse>, Spec:ChatSpec) -> Driver {
 		Some(Endpoint) => Page::Attached(Browse, Endpoint.clone(), Spec.Bind.clone()),
 		None => Page::Create(Browse),
 	};
-	let Options = ChatOptions { Selectors:Spec.Selectors, ..ChatOptions::New(Spec.URL) };
+	let Options = ChatOptions {
+		Selectors:Spec.Selectors,
+		Quiet:Spec.Quiet,
+		Stall:Spec.Stall,
+		Forced:Spec.Forced,
+		..ChatOptions::New(Spec.URL)
+	};
 	CreateChat(Arc::new(Page) as Arc<dyn ChatPort>, Options, Arc::new(Tokio))
 }
 

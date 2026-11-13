@@ -25,9 +25,9 @@
 //! compiler checks is the file the page runs.
 //!
 //! A value the caller supplies is a parameter the script declares:
-//! `declare const __PARAM_Scroll__: string;` at the top of the file is both the
-//! type a reader can see and the declaration the build reads, and `Scroll =
-//! &Selectors.Scroll` at the call site is checked against it at compile time.
+//! `declare const __PARAM_Answer__: string;` at the top of the file is both the
+//! type a reader can see and the declaration the build reads, and `Answer =
+//! &Selectors.Answer` at the call site is checked against it at compile time.
 //! A parameter declared `string` is escaped into a JavaScript string literal;
 //! anything else is code and is spliced as it stands. The compiled expression
 //! is byte for byte the JavaScript this module used to build with `format!`.
@@ -134,10 +134,10 @@ pub fn PressSubmit(Selectors:&Selectors) -> String {
 ///
 /// `Format` decides what one answer reads as, and it is a parameter rather than
 /// a second function because the rest of the read is identical either way: the
-/// same element, the same scroll, the same busy control, the same marks. Only
-/// the closure that turns an element into text changes, which is why the
-/// observation stream and the completion rule cannot tell the two apart - they
-/// compare text to text, not text to a format.
+/// same element, the same busy control, the same marks, the same report of
+/// whether the answer was on screen. Only the closure that turns an element into
+/// text changes, which is why the observation stream and the completion rule
+/// cannot tell the two apart - they compare text to text, not text to a format.
 ///
 /// [`Format::Both`] is the exception that proves the rule: it changes neither
 /// the closure nor the thread read, only the object the expression returns. The
@@ -167,7 +167,6 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 			script!(
 				"Expression/ReadBoth";
 				Serialise = SerialiseScript,
-				Scroll = &Selectors.Scroll,
 				Answer = &Selectors.Answer,
 				Busy = &Selectors.Busy,
 				Pattern = Pattern,
@@ -191,7 +190,6 @@ pub fn ReadAnswers(Selectors:&Selectors, Format:Format) -> String {
 			script!(
 				"Expression/ReadAnswers";
 				Serialise = Serialise,
-				Scroll = &Selectors.Scroll,
 				Answer = &Selectors.Answer,
 				Busy = &Selectors.Busy,
 				Pattern = Pattern,

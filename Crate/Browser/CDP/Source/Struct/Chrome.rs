@@ -362,7 +362,7 @@ impl Transport for ChromeTransport {
 		})
 	}
 
-	fn Bind<'a>(&'a self, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Error>> {
+	fn Bind<'a>(&'a self, Name:&'a str, _Call:Call) -> FutureBox<'a, Result<(), Error>> {
 		Box::pin(async move {
 			// The binding is the page's half and the listener is this
 			// session's half, and both are made here so that a re-arm replaces

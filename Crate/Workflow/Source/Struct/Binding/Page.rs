@@ -1,6 +1,6 @@
 //! The chat driver's `Page`, over the browser substrate.
 //!
-//! Three translations, and each one is a decision this layer owns:
+//! Four translations, and each one is a decision this layer owns:
 //!
 //! 1. **Ownership.** `Page` has no ownership because a chat driver must not
 //!    care whether the browser was launched or attached. This binding launches,
@@ -15,14 +15,20 @@
 //!    has four; the browser's code and message travel in the failure's
 //!    `message`, and its observation in `detail`, so the driver can map the
 //!    whole thing onto `not-ready` without losing which of the three happened.
+//! 4. **The silence.** A browser `timeout` on a binding wait is `Ok(None)` and
+//!    not a failure, because a page that said nothing inside the stall window is
+//!    alive: the driver reports a stall and keeps waiting, and only a page that
+//!    stopped answering is an error.
 
 use std::{
 	collections::HashMap,
 	sync::{Arc, Mutex, MutexGuard},
+	time::Duration,
 };
 
 use ::CDP::{
 	Browse as BrowserBrowse,
+	Code as BrowserCode,
 	Error as BrowserError,
 	Input as BrowserInput,
 	Modifiers as BrowserModifiers,
@@ -139,6 +145,44 @@ impl ChatPage for Page {
 			};
 			let Translated = Translate(Input);
 			self.Browse.Input(&Held, &Translated, Call).await.map_err(Classify)
+		})
+	}
+
+	/// The page's half of a signal: the substrate installs the binding, and a
+	/// substrate that cannot is a page the driver reads instead.
+	fn Bind<'a>(&'a self, Target:&'a Target, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Failure>> {
+		Box::pin(async move {
+			let Held = self.Lock().get(&Target.URL).cloned();
+			let Some(Held) = Held else {
+				return Err(Failure::Of("this binding holds no browser target for the page"));
+			};
+			self.Browse.Bind(&Held, Name, Call).await.map_err(Classify)
+		})
+	}
+
+	/// One wait for the page's call of a binding.
+	///
+	/// A budget that expired with nothing said is `Ok(None)` and not a failure:
+	/// the page is alive and quiet, which is a different fact from a page that
+	/// stopped answering, and the driver reports the first as a stall and keeps
+	/// waiting through it.
+	fn Signal<'a>(
+		&'a self,
+		Target:&'a Target,
+		Name:&'a str,
+		Budget:Duration,
+		Call:Call,
+	) -> FutureBox<'a, Result<Option<String>, Failure>> {
+		Box::pin(async move {
+			let Held = self.Lock().get(&Target.URL).cloned();
+			let Some(Held) = Held else {
+				return Err(Failure::Of("this binding holds no browser target for the page"));
+			};
+			match self.Browse.Signal(&Held, Name, Budget, Call).await {
+				Ok(Payload) => Ok(Some(Payload)),
+				Err(Why) if Why.Code() == BrowserCode::Timeout => Ok(None),
+				Err(Why) => Err(Classify(Why)),
+			}
 		})
 	}
 

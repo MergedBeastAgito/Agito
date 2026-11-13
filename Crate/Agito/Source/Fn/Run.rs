@@ -158,6 +158,9 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			Account,
 			Captured,
 			Observe,
+			Quiet,
+			Stall,
+			Poll,
 			Timeout,
 			Clear,
 			Probe,
@@ -201,7 +204,15 @@ pub async fn Run(Command:Verb) -> Result<String, String> {
 			let Given = Given { Thread, Title, Project, Account, Captured };
 			let Driver = ChatOver(
 				Browser(Headless()),
-				ChatSpec { URL:URL.clone(), Attach, Bind:Bind.clone(), Selectors },
+				ChatSpec {
+					URL:URL.clone(),
+					Attach,
+					Bind:Bind.clone(),
+					Selectors,
+					Quiet:Duration::from_millis(Quiet),
+					Stall:Duration::from_millis(Stall),
+					Forced:Poll,
+				},
 			);
 			let Call = Budget(Timeout);
 			// Two calls that act on the composer and ask nothing. Both run
@@ -397,7 +408,18 @@ fn Envelope(Answer:&Driver::Answer, Reading:&str) -> serde_json::Value {
 		"format": Reading,
 		"text": Answer.Text,
 		"model": Answer.Model,
-		"mode": Answer.Mode,
+		// How the answer was settled, and whether it was. `settled` is false
+		// only when an observer stopped the call early: a call that ran out of
+		// ceiling fails instead of returning partial text as an answer.
+		"mode": Answer.Settle.Name(),
+		"settled": Answer.Settled,
+		"stalled": Answer.Stalled,
+		// Whether the newest answer was on screen. Reported, never corrected:
+		// the driver does not scroll, focus or raise the tab it reads.
+		"offscreen": Answer.Offscreen,
+		// The composer's mode, which is a fact about the request rather than
+		// about how it was answered.
+		"composer_mode": Answer.Composer,
 		"trace": Answer.Trace.iter().map(|Step| json!({
 			"depth": Step.Depth,
 			"label": Step.Label,

@@ -120,7 +120,7 @@ that is the Markdown half.
 
 Five facts arrive as flags, because no answer's text can produce them:
 
-- `--thread` - absent, it is the identifier in the page's own URL (`…/search/<id>`, query string
+- `--thread` - absent, it is the identifier in the page's own URL (`.../search/<id>`, query string
   ignored). A URL that names none is refused before anything is typed, rather than filed under a
   guess.
 - `--title` - absent, the note is titled by its thread.
@@ -246,18 +246,39 @@ codes and the driver does not invent a fifth.
 
 ## Completion: the page's own signal, then stable text
 
-Text stability alone false-settles. A pause between tokens, a reasoning step and a slow code block
-all leave the text unchanged while the answer is demonstrably unfinished, and a driver that only
-counts stable reads returns a partial answer that looks whole.
+The page decides, and Agito listens. After the question is typed, one agent is installed under
+`window.__Agito` holding a `MutationObserver` over the answer container, a `ResizeObserver` over the
+document and an `IntersectionObserver` over the container. Nothing changing for `--quiet` ms means
+settled, and the agent says so by calling a CDP binding (`__AgitoSettle`) that the driver is already
+listening for. The result reports `"mode": "signal"`. There is no poll interval and no budget to
+guess.
 
-So `ReadAnswers` returns `{count, text, busy}` in one read, where `busy` is the page's own statement
-that it is still producing - a visible stop or cancel control. The rule is:
+Text stability alone false-settles, and so does one quiet window. A pause between tokens, a
+reasoning step and a slow code block all leave the text unchanged while the answer is demonstrably
+unfinished; measured on the reference product, a ten-item answer paused for longer than a quiet
+window three items in with no stop control on screen, and a driver that trusted the first window
+returned three items as a settled answer. So each quiet window buys one read, and the read is
+checked:
 
+- the text must be non-empty and its identifier must not have been in the thread before the
+  question;
 - a **busy** read resets the confirmations and confirms nothing;
-- otherwise three consecutive reads with no change settle the answer.
+- three consecutive quiet windows that read the same text settle the answer.
+
+The confirmation costs nothing while the page is writing, because mutations reset the quiet window;
+it only spends time at an ending.
 
 `busy` is read in the same expression as the text, not in a probe of its own: a separate read
 describes a different instant, and the two disagree exactly when it matters.
+
+**A page that cannot signal is read instead, and says so.** No binding, no observers, or `--poll`
+given: the driver reads the thread every `--poll` interval until three consecutive reads report no
+change, and the result reports `"mode": "polled"`. A missing signal is a degradation, never a
+failure.
+
+`--stall` is a detector and not a budget: a page that says nothing for that long is reported as
+`"stalled": true` and the wait continues. Only `--timeout` ends a call, and it ends it with
+`settled: false` in the failure rather than with partial text.
 
 **The new turn is identified by membership, not by position or count.** A long thread is
 virtualised, so the oldest turn unmounts as the newest arrives and the count stops growing while the
@@ -301,10 +322,12 @@ outside, and it is also not an error. The `--observe` flag prints one JSON line 
 which is how a stalled or flickering completion signal becomes visible instead of being averaged
 into a single result.
 
-**A read returns to the end of the thread first.** A virtualised thread does not mount what is
-off-screen, so a read taken with the page scrolled to the top measures whichever turns happen to be
-mounted - and an old answer is read as a new one. The page's own scroll control is pressed first,
-and scrolling the last answer into view is the fallback for a product that has none.
+**A read never touches the viewport.** No `scrollIntoView`, no press of the page's scroll-to-end
+control, no `Page.bringToFront`, no `Target.activateTarget`, no focus emulation. A person may be
+looking at the thread the driver is reading, and text is readable through the DOM whether or not it
+is on screen. Whether the newest answer is on screen is measured and reported as `"offscreen"` -
+never corrected. Measured: an answer 1078 px down a 745 px viewport was read with the thread's
+`scrollTop` and the window's `scrollY` unchanged at 0.
 
 ---
 
@@ -337,32 +360,35 @@ and what makes it compete with everything already there for the answer budget.
 
 ## Claim → test
 
-| Claim                                            | Test                                                                                                                                                                                                              |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A question is answered and read back             | `agito chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                   |
-| The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                                                                                         |
-| The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                                                                                  |
-| A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                                                                                             |
-| Typing produces a real edit                      | after a failed send, the composer holds the question text and the send control is enabled                                                                                                                         |
-| A settled answer is the answer, not the question | the returned `text` is not equal to `--question`                                                                                                                                                                  |
-| A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                                                                                     |
-| A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                                                                                   |
-| A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM                                                               |
-| A stale draft is replaced, not appended          | type question A by hand, then ask B: the answer is to B, and the editor's length after the send is B's, not A's plus B's                                                                                          |
-| A composer that cannot be emptied is a blocker   | point `composer` at a selector matching nothing: `--clear` exits non-zero naming the selector, and no question is typed                                                                                           |
-| A truncated insert is refused                    | a composer that keeps only a prefix of the question exits `not-ready` with both lengths and the first differing offset, and no turn is added                                                                      |
-| A multi-paragraph question sends first time      | a question with blank lines between its paragraphs is sent on the first attempt against an editor that renders a break with no separator                                                                          |
-| The model is never a count                       | `--probe` on a row whose first popup is a drafts control reports that candidate as `count` and the model as `unknown`                                                                                             |
-| An unidentified model proceeds                   | `--model 'anything'` on a row with no identifiable model answers, and the result says `"model": "unknown"`                                                                                                        |
-| An identified model still gates                  | `--model 'not-the-page-label'` against a row that names its model exits `wrong-model` and sends nothing                                                                                                           |
-| A long question is refused by name               | a question above `MaxQuestion` exits `not-ready` naming its length and the limit, before anything is typed                                                                                                        |
-| A settled answer equals the page's               | with the default `--format text`, compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                                                   |
-| A Markdown capture keeps the answer's structure  | `--format markdown` on a page holding a table, a fence, a formula and a nested list returns a pipe table with one line per row, a fence carrying the code's language, and `$…$` equal to the formula's annotation |
-| A citation is not a link                         | a numeric citation anchor inside the answer comes back as the number the page showed, not as `[1](https://…)`                                                                                                     |
-| The note is a file a reader opens                | `agito chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                   |
-| The note carries TeX where text carries glyphs   | on one settled answer, `--format note` transcribes `$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$` while the same element's `innerText` is one glyph per line                                                          |
-| A note with no thread is refused, not filed      | `--format note --url https://example.test/` exits non-zero naming `--thread`, and no question is typed                                                                                                            |
-| One read yields both renderings                  | `--format both` returns `text` and `markdown` from one call, and `--observe` prints the same reads - the same count and the same character counts - as `--format text` on the same page                           |
-| The two renderings agree on the answer           | the returned `text` and the note's transcript state the same prose word for word, and the one difference is the formula: glyphs in `text`, its TeX in `markdown`                                                  |
-| An identical re-ask never settles                | ask the same question twice in one thread: the second call exits `not-ready` with `the last read was nothing`                                                                                                     |
-| A shared tab survives losing its session         | a tab the browser extension also holds can fail an evaluation as `navigation-failed` with `Session with given id not found`; the same call run again succeeds                                                     |
+| Claim                                            | Test                                                                                                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A question is answered and read back             | `agito chat --attach <ws> --model '<label>' --question 'Reply with exactly: ok'` returns `text` containing `ok`                                                                                                     |
+| The mode is enforced, not assumed                | a page whose toggle reads `computer` and will not switch exits non-zero as `wrong-mode` and sends nothing                                                                                                           |
+| The model is compared before typing              | `--model 'not-the-page-label'` exits non-zero as `wrong-model` and sends nothing                                                                                                                                    |
+| A busy page does not settle                      | ask a long question and read at ~10 s: the process is still running while the stop control is visible                                                                                                               |
+| The page's own signal settles                    | a short question with `--observe` prints `"mode": "signal"` and one read per quiet window, ending `"settled": true`                                                                                                 |
+| A read leaves the viewport alone                 | scroll the thread to the top, ask, and compare the answer container's `scrollTop` and `window.scrollY` before and after: unchanged, with `"offscreen": true`                                                        |
+| A page that cannot signal still answers          | `--poll` on the same page returns `"mode": "polled"` and the same text                                                                                                                                              |
+| Typing produces a real edit                      | after a failed send, the composer holds the question text and the send control is enabled                                                                                                                           |
+| A settled answer is the answer, not the question | the returned `text` is not equal to `--question`                                                                                                                                                                    |
+| A bind writes into the tab, not a new one        | `/json/list` target count is unchanged across a `--bind` call                                                                                                                                                       |
+| A research loop keeps context                    | a follow-up in the same tab answers using the earlier turn without restating it                                                                                                                                     |
+| A virtualised thread still settles               | ask a sixth question in a thread long enough that the count has stopped growing: the call returns, and its text equals the newest answer in the DOM                                                                 |
+| A stale draft is replaced, not appended          | type question A by hand, then ask B: the answer is to B, and the editor's length after the send is B's, not A's plus B's                                                                                            |
+| A composer that cannot be emptied is a blocker   | point `composer` at a selector matching nothing: `--clear` exits non-zero naming the selector, and no question is typed                                                                                             |
+| A truncated insert is refused                    | a composer that keeps only a prefix of the question exits `not-ready` with both lengths and the first differing offset, and no turn is added                                                                        |
+| A multi-paragraph question sends first time      | a question with blank lines between its paragraphs is sent on the first attempt against an editor that renders a break with no separator                                                                            |
+| The model is never a count                       | `--probe` on a row whose first popup is a drafts control reports that candidate as `count` and the model as `unknown`                                                                                               |
+| An unidentified model proceeds                   | `--model 'anything'` on a row with no identifiable model answers, and the result says `"model": "unknown"`                                                                                                          |
+| An identified model still gates                  | `--model 'not-the-page-label'` against a row that names its model exits `wrong-model` and sends nothing                                                                                                             |
+| A long question is refused by name               | a question above `MaxQuestion` exits `not-ready` naming its length and the limit, before anything is typed                                                                                                          |
+| A settled answer equals the page's               | with the default `--format text`, compare the returned `text` with `.prose[data-renderer='lm']`'s last `innerText` after the call: they are equal, not a prefix                                                     |
+| A Markdown capture keeps the answer's structure  | `--format markdown` on a page holding a table, a fence, a formula and a nested list returns a pipe table with one line per row, a fence carrying the code's language, and `$...$` equal to the formula's annotation |
+| A citation is not a link                         | a numeric citation anchor inside the answer comes back as the number the page showed, not as `[1](https://...)`                                                                                                     |
+| The note is a file a reader opens                | `agito chat --format note` writes stdout whose first line is `---`, and whose frontmatter states all eleven facts - `title` through `characters` - in one order                                                     |
+| The note carries TeX where text carries glyphs   | on one settled answer, `--format note` transcribes `$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$` while the same element's `innerText` is one glyph per line                                                            |
+| A note with no thread is refused, not filed      | `--format note --url https://example.test/` exits non-zero naming `--thread`, and no question is typed                                                                                                              |
+| One read yields both renderings                  | `--format both` returns `text` and `markdown` from one call, and `--observe` prints the same reads - the same count and the same character counts - as `--format text` on the same page                             |
+| The two renderings agree on the answer           | the returned `text` and the note's transcript state the same prose word for word, and the one difference is the formula: glyphs in `text`, its TeX in `markdown`                                                    |
+| An identical re-ask never settles                | ask the same question twice in one thread: the second call exits `not-ready` with `the last read was nothing`                                                                                                       |
+| A shared tab survives losing its session         | a tab the browser extension also holds can fail an evaluation as `navigation-failed` with `Session with given id not found`; the same call run again succeeds                                                       |

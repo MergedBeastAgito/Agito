@@ -6,12 +6,12 @@
 //! fourth way is mapped onto one of the three at the boundary, so a consumer
 //! never has to guess.
 
+use std::time::Duration;
+
 use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
 use crate::Struct::Error::Error;
-
-use std::time::Duration;
 
 /// Who owns the page behind a target, and therefore who may close it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -95,6 +95,11 @@ the guarantee is not local - it holds only because the _pace_ eventually resolve
 The fix is one combinator: `Race(self.Pace.Sleep(Wait), Call.Cancellation.Cancelled())`, the shape
 `Bound` already uses for the read itself. It is not applied here because it changes the port.
 
+**Since then the settle loop stopped being the default path.** `Fn/Settle.rs::Polled` is what
+remains of it, reached by `--poll` or by a page that cannot signal, so the latency described above
+now applies to the fallback rather than to every call. The default path waits on the page's own
+signal, and that wait is bounded by `Bound` exactly as a read is.
+
 ## The five mutations
 
 `mutate.mjs`, the mutation harness, applied five deliberate defects to the real source of both

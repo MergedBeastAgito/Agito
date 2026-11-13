@@ -50,7 +50,7 @@ no `declare` lines comes out different from its source, something is re-printing
 declared in the script, where a reader and the build both see it:
 
 ```ts
-declare const __PARAM_Scroll__: string; // data: escaped on substitution
+declare const __PARAM_Answer__: string; // data: escaped on substitution
 declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
 ```
 
@@ -67,7 +67,7 @@ declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
 - **Substitution is one pass, left to right.** A value is written into the output and never scanned
   again, so a question whose text contains `__PARAM_Seen__` cannot have another parameter's code
   spliced into the middle of its string. An unfilled marker stays in the artefact, and a page
-  receiving one throws `ReferenceError: __PARAM_Scroll__ is not defined` rather than quietly
+  receiving one throws `ReferenceError: __PARAM_Answer__ is not defined` rather than quietly
   matching nothing.
 
 A call site cannot forget a parameter: `script!` compares its arguments against the script's

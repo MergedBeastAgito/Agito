@@ -22,6 +22,20 @@
 //! Time arrives as a [`RunTime::Call`] and a [`RunTime::Pace`],
 //! so a page that hangs is bounded by the thing that supplied the deadline
 //! rather than by a timer this crate reached for.
+//!
+//! # Who decides the answer is finished
+//!
+//! The page does. [`Fn::Page::Agent`] is a page-side observer installed after
+//! the question is typed: it watches the answer container and calls a CDP
+//! binding when nothing has changed for a quiet window, and [`Fn::Settle`]
+//! waits for that call and reads once. [`Struct::Settlement`] survives as the
+//! fallback for a page that cannot signal and as the check on the single read,
+//! not as a loop with a budget.
+//!
+//! Nothing in this crate scrolls, focuses or raises the page. A person may be
+//! looking at the thread it is reading, so an answer that is off screen is
+//! reported as `offscreen` and read through the DOM rather than brought into
+//! view.
 
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
@@ -76,5 +90,6 @@ pub use crate::{
 		},
 		Selectors::{DefaultSelectors, Selectors},
 		Settlement::{Confirmations, Settlement, StableReads},
+		Signal::{Binding, Settle},
 	},
 };

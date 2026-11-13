@@ -30,7 +30,7 @@
 //! # Why the failure is loud
 //!
 //! A marker no value replaces stays in the expression, and a page that receives
-//! `__PARAM_Scroll__` throws `ReferenceError: __PARAM_Scroll__ is not defined`;
+//! `__PARAM_Answer__` throws `ReferenceError: __PARAM_Answer__ is not defined`;
 //! a failure with a name, not a selector that quietly matches nothing.
 //! [`Unfilled`] is the same check without a page, and [`AssertParameters`]
 //! moves the parameter check to compile time: a call site that forgets a

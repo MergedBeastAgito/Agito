@@ -49,6 +49,12 @@ pub struct Answers {
 	/// unmount its turns, and a newest-by-position read then hands back an
 	/// answer that was already there.
 	pub Marks:Vec<String>,
+	/// Whether the newest answer was off screen when it was read.
+	///
+	/// Measured, never corrected: the read is a read, and the person's viewport
+	/// is theirs. `true` on a thread with no answer at all, which is the honest
+	/// reading of a container that is not there.
+	pub Offscreen:bool,
 }
 
 /// A value as text: as it is when it is text, rendered when it is not.
@@ -113,6 +119,7 @@ pub fn AsAnswers(Value:&Value) -> Option<Answers> {
 			.and_then(Value::as_array)
 			.map(|Marks| Marks.iter().map(|Mark| TextOf(Some(Mark))).collect())
 			.unwrap_or_default(),
+		Offscreen:Object.get("offscreen").and_then(Value::as_bool).unwrap_or(false),
 	})
 }
 

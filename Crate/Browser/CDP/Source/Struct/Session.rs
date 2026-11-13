@@ -287,14 +287,15 @@ impl Browse for Session {
 			match Bound(Work, &Call, self.Pace.as_ref()).await {
 				Ok(Ok(())) => Ok(()),
 				Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
-				Err(Expired::Timeout) => Err(Error::Timeout(
-					"binding exceeded its deadline",
-					"the browser never answered",
-				)),
-				Err(Expired::Cancelled) => Err(Error::Timeout(
-					"binding was cancelled by the caller",
-					"the signal fired while the binding was being registered",
-				)),
+				Err(Expired::Timeout) => {
+					Err(Error::Timeout("binding exceeded its deadline", "the browser never answered"))
+				},
+				Err(Expired::Cancelled) => {
+					Err(Error::Timeout(
+						"binding was cancelled by the caller",
+						"the signal fired while the binding was being registered",
+					))
+				},
 			}
 		})
 	}
@@ -339,14 +340,18 @@ impl Browse for Session {
 			match Bound(Work, &Bounded, self.Pace.as_ref()).await {
 				Ok(Ok(Payload)) => Ok(Payload),
 				Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
-				Err(Expired::Timeout) => Err(Error::Timeout(
-					format!("no signal arrived within {}ms", Budget.as_millis()),
-					"the page did not call the binding it was given",
-				)),
-				Err(Expired::Cancelled) => Err(Error::Timeout(
-					"the wait was cancelled by the caller",
-					"the signal fired while the page was being waited on",
-				)),
+				Err(Expired::Timeout) => {
+					Err(Error::Timeout(
+						format!("no signal arrived within {}ms", Budget.as_millis()),
+						"the page did not call the binding it was given",
+					))
+				},
+				Err(Expired::Cancelled) => {
+					Err(Error::Timeout(
+						"the wait was cancelled by the caller",
+						"the signal fired while the page was being waited on",
+					))
+				},
 			}
 		})
 	}

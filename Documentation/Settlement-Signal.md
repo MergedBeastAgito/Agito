@@ -45,17 +45,37 @@ once.
     	"turn": "<mark>",
     	"chars": 0,
     	"offscreen": false,
-    	"at": 0
+    	"at": 0,
+    	"generation": 1,
+    	"mutations": 0
     }
     ```
+
+    `generation` says which installation of the agent sent it, so a stale one from before a re-arm
+    can be told from the one listening now; `mutations` is how many changes it had counted. Neither
+    decides anything - they are what makes a run diagnosable when the page and the driver disagree.
 
     Nothing is polled: while the page works the socket is idle, so there is no interval to tune and
     no budget to exhaust.
 
-6. **Read once.** On `quiet`, Agito performs one read with the existing expression and the existing
-   selectors, and returns it. The three-read rule survives as a _check_ on that single read - the
-   text must be non-empty and its mark must not already be in the thread - but not as a waiting
-   loop.
+6. **Read once, and confirm.** On `quiet`, Agito performs one read with the existing expression and
+   the existing selectors. The three-read rule survives as a _check_ on that read rather than as a
+   waiting loop of its own: the text must be non-empty, its mark must not already have been in the
+   thread before the question, the page must not say it is still working, and the same text must
+   still be there at the next quiet window.
+
+    The confirmation is not decoration. Measured on the reference product, a ten-item answer paused
+    for longer than a 700 ms window three items in, with no stop control on screen, and a driver
+    that trusted the first quiet window returned three items as a settled answer. Each confirmation
+    is one more quiet signal - which costs nothing while the page is writing, because the mutations
+    reset the window - so the rule only spends time at an ending.
+
+    What remains is a limit of the page rather than of the rule. A browser throttles a background
+    tab, so its rendering can stand still for several seconds while the answer is still arriving;
+    measured with the same build, a ten-item answer came back with six. A tab a person is looking at
+    is not throttled, and the answer that closes the gap properly is the page's own completion
+    marker - `Selectors.Done` - which stays empty by default because a pattern that matches a
+    duration label makes every turn look finished from its first token.
 
 7. **Guards.** The page can be wrong, so three of them:
     - `--stall <ms>` (default 90 000) - no signal at all for that long is a stall, reported as
@@ -88,18 +108,27 @@ once.
 
 ## Where it lives
 
-| Piece                       | Home                                                                                |
-| --------------------------- | ----------------------------------------------------------------------------------- |
-| Binding + event stream      | `Crate/Browser/CDP` - `Session` exposes `Runtime.bindingCalled`                     |
-| Page-side agent (JS source) | `Crate/Chat/Driver/Source/Fn/Page/Agent.rs`, embedded per the Embedded-Source skill |
-| Payload type and parse      | `Crate/Chat/Driver/Source/Struct/Signal.rs`                                         |
-| Arm, wait, read once        | `Crate/Chat/Driver/Source/Fn/Settle.rs`                                             |
-| CLI                         | `--quiet <ms>`, `--stall <ms>`, `--poll` (force the old loop)                       |
-| Result                      | gains `"mode": "signal"                                                             | "polled"`, `"offscreen": bool`, `"stalled": bool` |
+| Piece                       | Home                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| Binding + event stream      | `Crate/Browser/CDP` - `Session` exposes `Runtime.bindingCalled`                                   |
+| Page-side agent (JS source) | `Crate/Chat/Driver/Source/Script/Agent/Arm.ts`, baked in by `Fn/Page/Agent.rs`                    |
+| Payload type and parse      | `Crate/Chat/Driver/Source/Struct/Signal.rs`                                                       |
+| Arm, wait, read once        | `Crate/Chat/Driver/Source/Fn/Settle.rs`                                                           |
+| CLI                         | `--quiet <ms>`, `--stall <ms>`, `--poll` (force the old loop)                                     |
+| Result                      | gains `"mode": "signal"` or `"polled"`, `"offscreen": bool`, `"stalled": bool`, `"settled": bool` |
+
+The agent is a TypeScript file rather than a Rust string for the reason every expression here is:
+the file a compiler parses is the file the page runs. `Fn/Page/Agent.rs` is the call site, not the
+source.
+
+`mode` in a result now says how the answer was settled, so the composer's mode - a fact about the
+request, and always `search` - moves to `composer_mode`. `settled` is `false` only when a caller's
+observer stopped the call before the page did; a call that runs out of ceiling fails instead, with
+`settled: false` in its detail.
 
 `StableReads` and `Settlement` stay - they are the fallback and the check - and the scroll selector
 stays in `Selectors` for sites whose own control is the only way to read a virtualised thread. It
-stops being the default path.
+stops being the default path, and no expression presses it: the viewport belongs to the person.
 
 ---
 

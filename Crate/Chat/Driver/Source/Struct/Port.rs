@@ -26,6 +26,8 @@
 //!   passes are the same event to a consumer - the answer did not arrive - so
 //!   both are `not-ready`. `detail` says which one happened.
 
+use std::time::Duration;
+
 use ::RunTime::{Call, FutureBox};
 use serde_json::Value;
 
@@ -118,7 +120,29 @@ pub struct Answer {
 	/// The model label the page showed when the question was sent.
 	pub Model:String,
 	/// The composer mode the page was in when the question was sent.
-	pub Mode:String,
+	///
+	/// A fact about the request, and a constant in practice: the port is
+	/// defined for search mode and refuses a question that asks for another.
+	/// It is called `Composer` rather than `Mode` because `mode` in a result is
+	/// how the answer was settled, which is a different question with a
+	/// different answer.
+	pub Composer:String,
+	/// How the driver decided the answer had stopped changing.
+	pub Settle:crate::Struct::Signal::Settle,
+	/// Whether the text is an answer that had stopped changing.
+	///
+	/// `false` only when a caller's observer stopped the call before the page
+	/// did - the answer so far comes back either way, and saying it had settled
+	/// would be a claim the page never made.
+	pub Settled:bool,
+	/// Whether the page went silent for `--stall` at least once during the call.
+	pub Stalled:bool,
+	/// Whether the newest answer was off screen when it was read.
+	///
+	/// A report, not a correction: the driver reads an answer through the DOM
+	/// whether or not the person can see it, and never scrolls their viewport
+	/// to it. `true` is the honest statement that it did not.
+	pub Offscreen:bool,
 }
 
 /// The handle a page is bound to.
@@ -362,6 +386,26 @@ pub trait Page: Send + Sync {
 	) -> FutureBox<'a, Result<Value, Failure>>;
 	/// Put one thing into the page's input domain, at whatever has focus.
 	fn Input<'a>(&'a self, Target:&'a Target, Input:&'a Input, Call:Call) -> FutureBox<'a, Result<(), Failure>>;
+	/// Register `Name` as a binding the page may call.
+	///
+	/// The page's half of a signal: the substrate installs a function under
+	/// this name, and every call of it arrives on the connection this page is
+	/// already held over. A page that cannot be given one fails here, and a
+	/// driver that reads the thread instead is degraded rather than broken.
+	fn Bind<'a>(&'a self, Target:&'a Target, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Failure>>;
+	/// Wait for the page's next call of a binding, bounded by `Budget`.
+	///
+	/// `Ok(None)` is the budget expiring with nothing said - a page that went
+	/// quiet without calling the binding - which a driver reports as a stall and
+	/// keeps waiting through. `Err` is a page that stopped answering, which is a
+	/// lost target rather than a slow answer.
+	fn Signal<'a>(
+		&'a self,
+		Target:&'a Target,
+		Name:&'a str,
+		Budget:Duration,
+		Call:Call,
+	) -> FutureBox<'a, Result<Option<String>, Failure>>;
 	/// Release everything the page holds. Never fails.
 	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()>;
 }

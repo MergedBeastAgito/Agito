@@ -16,7 +16,13 @@ pub struct Command {
 }
 
 /// One verb.
+///
+/// `Chat` is by far the largest variant, and it stays inline. This enum is built
+/// once from the process's arguments and matched once, so boxing a field would
+/// buy nothing at run time and would put a dereference at every read of it; the
+/// lint is about moving variants around in a hot path, which is not this.
 #[derive(Clone, Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Verb {
 	/// List the modules this workspace ships, with the port each provides, and
 	/// every third-party module the adapter roots declare.
@@ -156,6 +162,31 @@ pub enum Verb {
 		/// answer is being produced, instead of only the settled answer.
 		#[arg(long)]
 		Observe:bool,
+		/// How still the page must be, in milliseconds, before the observer
+		/// installed in it calls the answer settled.
+		///
+		/// The page's own timer, not a poll interval: it fires at the moment the
+		/// page actually stopped. Long enough that a pause between tokens is not
+		/// read as an ending, short enough that a finished answer is not waited
+		/// on.
+		#[arg(long, default_value_t = 700)]
+		Quiet:u64,
+		/// How long the page may say nothing at all, in milliseconds, before
+		/// the wait is reported as a stall.
+		///
+		/// A detector and not a budget: a stall is reported in the result and
+		/// the wait goes on. Only `--timeout` ends a call, and it ends it with
+		/// `settled: false` rather than with partial text.
+		#[arg(long, default_value_t = 90_000)]
+		Stall:u64,
+		/// Read the thread until its text stops changing even when the page
+		/// offers to say when it has settled.
+		///
+		/// The fallback path, asked for on a page that could signal: what a
+		/// caller comparing the two, or driving a build whose observer does not
+		/// work, needs. The result reports `"mode": "polled"` either way.
+		#[arg(long)]
+		Poll:bool,
 		/// The whole call's budget, in milliseconds.
 		#[arg(long, default_value_t = 120_000)]
 		Timeout:u64,

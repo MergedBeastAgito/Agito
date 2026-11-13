@@ -73,9 +73,7 @@ use crate::{
 			AsSteps,
 			Compare,
 			Describe,
-			DescribeText,
 			Fold,
-			Mark,
 			Normalise,
 			Opening,
 			TextOf,
@@ -100,12 +98,30 @@ use crate::{
 			Target,
 		},
 		Selectors::{DefaultSelectors, Selectors},
-		Settlement::Settlement,
 	},
 };
 
 /// How long between two reads of an answer while it is being written.
+///
+/// The fallback's interval, not the driver's: an answer settles when the page
+/// says it has stopped changing, and this is how often a page that cannot say so
+/// is read instead.
 pub const DefaultPoll:Duration = Duration::from_millis(250);
+
+/// How still the page must be before its agent calls it settled.
+///
+/// Long enough that a pause between tokens, a reasoning step and a slow code
+/// block are not mistaken for an ending, and short enough that the caller is not
+/// waiting on a page that has already finished. It is the only timing knob that
+/// belongs to the page rather than to the driver's patience.
+pub const DefaultQuiet:Duration = Duration::from_millis(700);
+
+/// How long the page may say nothing at all before the wait is reported as a
+/// stall.
+///
+/// A detector and not a budget: a stall re-arms the agent and the wait goes on.
+/// Only `--timeout` ends a call, and it ends it without an answer.
+pub const DefaultStall:Duration = Duration::from_secs(90);
 
 /// A release that has not finished in this long is reported, not waited on.
 pub const DefaultDisposeBudget:Duration = Duration::from_secs(5);
@@ -154,18 +170,33 @@ pub struct Options {
 	pub Selectors:Selectors,
 	/// How long between two reads of the answer while it is being written.
 	pub Poll:Duration,
+	/// How still the page must be before its agent calls it settled.
+	pub Quiet:Duration,
+	/// How long the page may say nothing before the wait is reported as a stall.
+	pub Stall:Duration,
+	/// Whether to read the thread until it stops changing even when the page
+	/// offers to say so.
+	///
+	/// The fallback is what a page that cannot signal gets; this asks for it
+	/// anyway, which is what a caller comparing the two paths, or driving a
+	/// build whose agent does not work, needs.
+	pub Forced:bool,
 	/// How long a release may take before it is reported as a failure.
 	pub DisposeBudget:Duration,
 }
 
 impl Options {
 	/// The defaults: the reference product's selectors, a quarter-second
-	/// between reads, and five seconds for a release.
+	/// between reads, a 700 ms quiet window, a 90 s stall detector and five
+	/// seconds for a release.
 	pub fn New(URL:impl Into<String>) -> Self {
 		Self {
 			URL:URL.into(),
 			Selectors:DefaultSelectors(),
 			Poll:DefaultPoll,
+			Quiet:DefaultQuiet,
+			Stall:DefaultStall,
+			Forced:false,
 			DisposeBudget:DefaultDisposeBudget,
 		}
 	}
@@ -173,9 +204,9 @@ impl Options {
 
 /// A `Chat` over one `Page`.
 pub struct Driver {
-	Page:Arc<dyn Page>,
-	Options:Options,
-	Pace:Arc<dyn Pace>,
+	pub(crate) Page:Arc<dyn Page>,
+	pub(crate) Options:Options,
+	pub(crate) Pace:Arc<dyn Pace>,
 	Report:Report,
 }
 
@@ -205,10 +236,10 @@ impl Driver {
 	}
 
 	/// How much of the caller's budget is left, for a failure's wording.
-	fn Budget(&self, Call:&Call) -> Duration { Call.Remaining(self.Pace.as_ref()) }
+	pub(crate) fn Budget(&self, Call:&Call) -> Duration { Call.Remaining(self.Pace.as_ref()) }
 
 	/// One expression, run inside whatever budget is left.
-	async fn Probe(
+	pub(crate) async fn Probe(
 		&self,
 		Phase:&str,
 		Expression:String,
@@ -466,7 +497,13 @@ impl Driver {
 	}
 
 	/// One read of the thread, refusing a page that answers something else.
-	async fn ReadAnswers(&self, Phase:&str, Target:&Target, Call:&Call, Budget:Duration) -> Result<Answers, Error> {
+	pub(crate) async fn ReadAnswers(
+		&self,
+		Phase:&str,
+		Target:&Target,
+		Call:&Call,
+		Budget:Duration,
+	) -> Result<Answers, Error> {
 		let Selectors = &self.Options.Selectors;
 		let Expression = ReadAnswers(Selectors, Selectors.Format);
 		let Value = self.Probe(Phase, Expression, Target, Call, Budget).await?;
@@ -507,13 +544,13 @@ impl Driver {
 	}
 
 	/// Everything between an open page and a released one.
-	async fn Body<'a>(
-		&'a self,
+	async fn Body(
+		&self,
 		Question:&Question,
 		Call:&Call,
 		Budget:Duration,
 		Target:&Target,
-		mut Sink:Option<&'a mut (dyn FnMut(&Observation) -> Control + Send)>,
+		mut Sink:Option<&mut (dyn FnMut(&Observation) -> Control + Send)>,
 	) -> Result<Answer, Error> {
 		let Selectors = &self.Options.Selectors;
 
@@ -635,62 +672,29 @@ impl Driver {
 			},
 		}
 
-		// Completion is stable text: unchanged for three consecutive reads.
+		// Completion is the page's own statement.
 		//
-		// The loop carries a pair out of itself: the text it settled on, and
-		// the second rendering the same read returned. They leave together
-		// because they arrived together - reading the page again after it had
-		// settled, to fetch the other rendering, would be reading a second
-		// moment and calling it the same answer.
-		let mut Progress = Settlement::Empty;
-		let (Text, Second) = loop {
-			// The deadline is checked here, not only inside the read, so a page
-			// that keeps writing is reported as an answer that
-			// never settled rather than as one slow read.
-			if Call.Expired(self.Pace.as_ref()) {
-				return Err(Error::NotReady(
-					format!("the answer did not settle within the {}ms deadline", Budget.as_millis()),
-					format!("the last read was {}", DescribeText(Progress.Text())),
-				));
+		// The agent installed in the page observes the answer container and
+		// calls a binding when nothing has changed for the quiet window, and
+		// this waits for that call and reads once - no interval, no budget to
+		// guess, and a timer that fires at the moment the page actually stopped
+		// rather than at the next tick of a poll.
+		//
+		// A page that cannot signal - no binding, no agent, no observers - is
+		// read until the text stops moving instead, and the answer says which of
+		// the two happened. `--poll` asks for that path on a page that could
+		// signal, which is how the two are compared.
+		let Outcome = if self.Options.Forced {
+			self.Polled(Target, &Before.Marks, Call, Budget, Sink.as_deref_mut()).await?
+		} else {
+			let Signalled = self.Signalled(Target, &Before.Marks, Call, Budget, Sink.as_deref_mut()).await?;
+			match Signalled {
+				Some(Outcome) => Outcome,
+				None => self.Polled(Target, &Before.Marks, Call, Budget, Sink).await?,
 			}
-			let Read = self.ReadAnswers("answer", Target, Call, Budget).await?;
-			// A new turn is recognised by membership, not by position: a
-			// virtualised thread reorders and unmounts its turns, so the last
-			// element in document order is not reliably the newest turn, and a
-			// count is not reliably growing. An answer whose identity was not
-			// in the thread before the question is the only reading that
-			// survives both.
-			let Fresh = !Read.Text.is_empty() && !Before.Marks.contains(&Mark(&Read.Text));
-			let Current = if Fresh { Some(Read.Text.as_str()) } else { None };
-			// A page that says it is still producing the answer has not
-			// finished, whatever its text is doing: a pause between tokens, a
-			// reasoning step and a slow code block all leave the text unchanged
-			// while the answer is demonstrably incomplete. So a busy read
-			// resets the confirmations instead of advancing them.
-			let Settled = if Read.Busy {
-				Progress = Settlement::Empty;
-				false
-			} else {
-				Progress.Observe(Current)
-			};
-			// The observation is pushed before the loop acts on it, so an
-			// observer sees the read that settled the answer rather than
-			// missing the one that mattered.
-			if let Some(Sink) = Sink.as_deref_mut() {
-				let Seen = Observation { Count:Read.Count, Text:Read.Text.clone(), Busy:Read.Busy, Fresh, Settled };
-				if Sink(&Seen) == Control::Stop {
-					break (Read.Text, Read.Markdown);
-				}
-			}
-			if Settled {
-				// `Progress` holds the text this read confirmed, which is this
-				// read's own text: the second rendering beside it is from the
-				// same evaluate.
-				break (Progress.Text().unwrap_or_default().to_string(), Read.Markdown);
-			}
-			let Wait = self.Options.Poll.min(Call.Remaining(self.Pace.as_ref()));
-			self.Pace.Sleep(Wait).await;
 		};
+		let Text = Outcome.Text;
+		let Second = Outcome.Markdown;
 
 		// A call that asked for both renderings has not got them if the page
 		// answered only one. Reporting an empty second rendering would be a
@@ -751,7 +755,11 @@ impl Driver {
 			Trace,
 			Sources,
 			Model,
-			Mode:"search".to_string(),
+			Composer:"search".to_string(),
+			Settle:Outcome.Mode,
+			Settled:Outcome.Settled,
+			Stalled:Outcome.Stalled,
+			Offscreen:Outcome.Offscreen,
 		})
 	}
 

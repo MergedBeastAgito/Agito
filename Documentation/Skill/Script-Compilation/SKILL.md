@@ -93,7 +93,7 @@ that catches a cut which ate a bracket, and it runs at build time rather than on
 marker, declared where a reader and the build both see it:
 
 ```ts
-declare const __PARAM_Scroll__: string; // data: escaped on substitution
+declare const __PARAM_Answer__: string; // data: escaped on substitution
 declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
 ```
 
@@ -114,7 +114,7 @@ declare const __PARAM_Pattern__: RegExp | null; // code: spliced as it stands
   again, so a question whose text contains `__PARAM_Seen__` cannot have another parameter's code
   spliced into the middle of its string.
 - **An unfilled marker stays.** `Unfilled` reports it, and a page receiving one throws
-  `ReferenceError: __PARAM_Scroll__ is not defined` rather than matching nothing.
+  `ReferenceError: __PARAM_Answer__ is not defined` rather than matching nothing.
 
 `Escape` is held to `serde_json` byte for byte over every control character and every non-ASCII
 character, with one deliberate exception: `U+2028` and `U+2029` stay raw, as JSON leaves them and as
@@ -164,7 +164,7 @@ stops a no-op edit from rebuilding everything downstream.
 
 ## What the build does not check
 
-Types. OXC parses; it does not infer. A `declare const __PARAM_Scroll__: string;` is a declaration a
+Types. OXC parses; it does not infer. A `declare const __PARAM_Answer__: string;` is a declaration a
 type checker would hold a call site to, and nothing in this build is that checker. What the build
 buys is that the expression is parsed - a syntax error, an unsupported construct, a
 marker/declaration disagreement or an erasure that left invalid JavaScript fails the build - not

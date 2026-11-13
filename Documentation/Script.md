@@ -100,7 +100,7 @@ serializer. The declaration is written in the script, in TypeScript, where a rea
 both see it:
 
 ```ts
-declare const __PARAM_Scroll__: string;
+declare const __PARAM_Answer__: string;
 declare const __PARAM_Pattern__: RegExp | null;
 ```
 
@@ -108,7 +108,7 @@ declare const __PARAM_Pattern__: RegExp | null;
   escaped JavaScript string literal, so a selector holding a quote, a backslash or a newline cannot
   end the string it sits in. Any other declared type is code - a function, a `RegExp`, an array
   literal - and is spliced as it stands.
-- **The names are checked at compile time.** `script!("Expression/ReadAnswers"; Scroll = ...)` is
+- **The names are checked at compile time.** `script!("Expression/ReadAnswers"; Answer = ...)` is
   compared against the script's own declarations in a `const` context: a missing parameter, an extra
   one, or the same one twice is a `cargo build` error pointing at the call site, not a
   `ReferenceError` in a page.
@@ -116,7 +116,7 @@ declare const __PARAM_Pattern__: RegExp | null;
   again, so a question whose text happens to contain `__PARAM_Seen__` cannot have another
   parameter's code spliced into the middle of its string.
 - **An unfilled marker stays.** A marker with no value is left in place and reported by
-  `RunTime::Unfilled`; a page receiving one throws `ReferenceError: __PARAM_Scroll__ is not defined`
+  `RunTime::Unfilled`; a page receiving one throws `ReferenceError: __PARAM_Answer__ is not defined`
   rather than matching nothing.
 - **Escaping is held to `serde_json`.** `Escape` produces exactly what the JSON encoder these
   expressions were built with produced, byte for byte, for every control character and every
@@ -138,7 +138,7 @@ identical mtimes.
 
 ## What the build does not check
 
-- **Types.** OXC parses; it does not infer. `declare const __PARAM_Scroll__: string;` is a
+- **Types.** OXC parses; it does not infer. `declare const __PARAM_Answer__: string;` is a
   declaration a type checker would hold a call site to, and nothing in the build is that checker.
   What the build buys is that the expression is _parsed_ - a syntax error, an unsupported construct,
   or a marker/declaration disagreement fails the build - not that its types are consistent.

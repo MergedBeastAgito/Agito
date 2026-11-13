@@ -68,11 +68,16 @@ pub struct Selectors {
 	pub Done:String,
 	/// The control that returns the thread to its end.
 	///
-	/// A thread is virtualised, so the newest turn is not in the DOM while it
-	/// is off-screen: a read that does not scroll first measures whichever
-	/// turns happen to be mounted, which is how an old answer gets returned
-	/// as a new one. Pressing this is the page's own way of getting there,
-	/// so it is tried before any scrolling of our own.
+	/// Retained, and pressed by nothing. A virtualised thread does not mount
+	/// what is off screen, and this control is how a page that has one reaches
+	/// the newest turn - which is why the name survives here rather than being
+	/// deleted: a selector file may still declare it, and a driver that silently
+	/// dropped a key would be a driver whose configuration lies.
+	///
+	/// It is not the path. Pressing it moves the viewport under whoever is
+	/// looking at the thread, and the driver does not do that: the answer is
+	/// read through the DOM, and whether it is on screen is reported as
+	/// `offscreen` rather than corrected.
 	pub Scroll:String,
 	/// How the answer's text is read: the page's rendered text, or the page's
 	/// DOM serialised as Markdown.
