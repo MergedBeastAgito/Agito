@@ -259,6 +259,98 @@ impl Browse for Session {
 		})
 	}
 
+	/// The same target lookup and the same refusal as an evaluate, plus the
+	/// binding itself: a session that holds no transport for the target
+	/// cannot register a binding on it.
+	fn Bind<'a>(&'a self, Target:&'a Target, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Error>> {
+		Box::pin(async move {
+			let Transport = Self::Lock(&self.Held).get(&Target.Ws).cloned();
+			let Some(Transport) = Transport else {
+				return Err(Error::Unavailable(
+					"this session holds no transport for the target",
+					format!("{} was never opened here, or it was already disposed", Target.Ws),
+				));
+			};
+			if Transport.Closed() {
+				return Err(Error::Unavailable(
+					"the transport is closed",
+					format!("{} is no longer connected", Target.Ws),
+				));
+			}
+			if Call.Cancelled() {
+				return Err(Error::Timeout(
+					"binding was cancelled before it started",
+					"the signal was already fired",
+				));
+			}
+			let Work = Transport.Bind(Name, Call.clone());
+			match Bound(Work, &Call, self.Pace.as_ref()).await {
+				Ok(Ok(())) => Ok(()),
+				Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
+				Err(Expired::Timeout) => Err(Error::Timeout(
+					"binding exceeded its deadline",
+					"the browser never answered",
+				)),
+				Err(Expired::Cancelled) => Err(Error::Timeout(
+					"binding was cancelled by the caller",
+					"the signal fired while the binding was being registered",
+				)),
+			}
+		})
+	}
+
+	/// One wait for a page's signal, bounded by `Budget` and never past the
+	/// call's own deadline.
+	///
+	/// The budget is taken here rather than by the caller because this is the
+	/// only layer holding a clock. The derived call keeps the caller's
+	/// cancellation, so a signal that fires still ends the wait.
+	fn Signal<'a>(
+		&'a self,
+		Target:&'a Target,
+		Name:&'a str,
+		Budget:Duration,
+		Call:Call,
+	) -> FutureBox<'a, Result<String, Error>> {
+		Box::pin(async move {
+			let Transport = Self::Lock(&self.Held).get(&Target.Ws).cloned();
+			let Some(Transport) = Transport else {
+				return Err(Error::Unavailable(
+					"this session holds no transport for the target",
+					format!("{} was never opened here, or it was already disposed", Target.Ws),
+				));
+			};
+			if Transport.Closed() {
+				return Err(Error::Unavailable(
+					"the transport is closed",
+					format!("{} is no longer connected", Target.Ws),
+				));
+			}
+			if Call.Cancelled() {
+				return Err(Error::Timeout(
+					"the wait was cancelled before it started",
+					"the signal was already fired",
+				));
+			}
+			let Now = self.Pace.Now();
+			let Deadline = (Now + Budget).min(Call.Deadline);
+			let Bounded = Call { Deadline, Cancellation:Call.Cancellation.clone() };
+			let Work = Transport.Signal(Name, Bounded.clone());
+			match Bound(Work, &Bounded, self.Pace.as_ref()).await {
+				Ok(Ok(Payload)) => Ok(Payload),
+				Ok(Err(Why)) => Err(ClassifyPage(Why, Transport.Closed())),
+				Err(Expired::Timeout) => Err(Error::Timeout(
+					format!("no signal arrived within {}ms", Budget.as_millis()),
+					"the page did not call the binding it was given",
+				)),
+				Err(Expired::Cancelled) => Err(Error::Timeout(
+					"the wait was cancelled by the caller",
+					"the signal fired while the page was being waited on",
+				)),
+			}
+		})
+	}
+
 	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()> {
 		Box::pin(async move {
 			// Never throws: not on a failed release, and not on a target this

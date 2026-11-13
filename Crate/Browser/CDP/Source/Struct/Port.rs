@@ -11,6 +11,8 @@ use serde_json::Value;
 
 use crate::Struct::Error::Error;
 
+use std::time::Duration;
+
 /// Who owns the page behind a target, and therefore who may close it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Ownership {
@@ -198,6 +200,28 @@ pub trait Browse: Send + Sync {
 	/// happened is read back with an expression, which is the only honest
 	/// source for it.
 	fn Input<'a>(&'a self, Target:&'a Target, Input:&'a Input, Call:Call) -> FutureBox<'a, Result<(), Error>>;
+	/// Register `Name` as a binding the page may call.
+	///
+	/// The page's half of a signal: the protocol installs a function under
+	/// this name, and every call of it arrives as `Runtime.bindingCalled` on
+	/// the connection this session already holds. A browser that cannot
+	/// register one fails here, and a caller that reads the page instead is
+	/// degraded rather than broken.
+	fn Bind<'a>(&'a self, Target:&'a Target, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Error>>;
+	/// Wait for the page's next call of a binding, bounded by `Budget`.
+	///
+	/// `Budget` and not the whole call's deadline: a stall detector has to
+	/// give up long before the call does, and this is the only layer that
+	/// holds a clock. A wait that finds nothing inside the budget is
+	/// `timeout`, which a caller reads as "the page said nothing", not as a
+	/// failure.
+	fn Signal<'a>(
+		&'a self,
+		Target:&'a Target,
+		Name:&'a str,
+		Budget:Duration,
+		Call:Call,
+	) -> FutureBox<'a, Result<String, Error>>;
 	/// Release everything this session holds. Never fails.
 	fn Dispose<'a>(&'a self, Target:Target) -> FutureBox<'a, ()>;
 }

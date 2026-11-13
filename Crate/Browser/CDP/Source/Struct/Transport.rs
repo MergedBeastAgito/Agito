@@ -40,6 +40,25 @@ pub trait Transport: Send + Sync {
 	/// substrate that cannot deliver input says so by failing here rather than
 	/// by accepting the call and doing nothing.
 	fn Input<'a>(&'a self, Input:&'a Input, Call:Call) -> FutureBox<'a, Result<(), Error>>;
+	/// Register `Name` as a binding the page may call.
+	///
+	/// A binding is the page's half of a signal: the page calls the function
+	/// the protocol installs under this name, and the payload arrives as
+	/// `Runtime.bindingCalled` on the connection this transport already holds.
+	/// A substrate that cannot register one says so here, and the caller
+	/// degrades to reading the page instead of failing.
+	///
+	/// Registering the same name twice replaces the subscription rather than
+	/// stacking a second one, which is what makes a re-arm after a navigation
+	/// safe.
+	fn Bind<'a>(&'a self, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Error>>;
+	/// Wait for the page's next call of a binding registered with
+	/// [`Transport::Bind`], and return its payload.
+	///
+	/// `Call` bounds the wait: a page that says nothing is a deadline, not a
+	/// hang. The payload is returned as the page wrote it - this layer does
+	/// not parse what the page said.
+	fn Signal<'a>(&'a self, Name:&'a str, Call:Call) -> FutureBox<'a, Result<String, Error>>;
 	/// Close the page this session launched.
 	fn Close(&self) -> FutureBox<'_, ()>;
 	/// Let go of a page somebody else owns, without closing it.

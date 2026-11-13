@@ -31,7 +31,11 @@ use chromiumoxide::{
 	BrowserConfig,
 	Handler,
 	Page,
-	cdp::browser_protocol::input::{DispatchKeyEventParams, DispatchKeyEventType, InsertTextParams},
+	cdp::{
+		browser_protocol::input::{DispatchKeyEventParams, DispatchKeyEventType, InsertTextParams},
+		js_protocol::runtime::{AddBindingParams, EventBindingCalled},
+	},
+	listeners::EventStream,
 };
 use futures_util::StreamExt;
 use serde_json::Value;
@@ -204,6 +208,7 @@ impl Chrome {
 			Handler:Mutex::new(Some(Task)),
 			Endpoint,
 			Closed,
+			Signals:tokio::sync::Mutex::new(None),
 		}))
 	}
 }
@@ -258,6 +263,13 @@ struct ChromeTransport {
 	/// connection that accepts commands and never answers them must be reported
 	/// as closed, not waited on.
 	Closed:Arc<AtomicBool>,
+	/// The page's binding calls, once a binding has been registered.
+	///
+	/// One stream rather than one per wait: an event that arrived between two
+	/// waits is still in the stream's queue, so a page that spoke while this
+	/// session was reading the thread is not a page that said nothing. The
+	/// lock is tokio's because the wait holds it across an await.
+	Signals:tokio::sync::Mutex<Option<EventStream<EventBindingCalled>>>,
 }
 
 impl ChromeTransport {
@@ -347,6 +359,50 @@ impl Transport for ChromeTransport {
 					Err(Classify(&Why))
 				},
 			}
+		})
+	}
+
+	fn Bind<'a>(&'a self, Name:&'a str, Call:Call) -> FutureBox<'a, Result<(), Error>> {
+		Box::pin(async move {
+			// The binding is the page's half and the listener is this
+			// session's half, and both are made here so that a re-arm replaces
+			// the pair instead of stacking a second subscription on the first.
+			self.Page
+				.execute(AddBindingParams::new(Name))
+				.await
+				.map_err(|Why| Classify(&Why))?;
+			let Stream = self
+				.Page
+				.event_listener::<EventBindingCalled>()
+				.await
+				.map_err(|Why| Classify(&Why))?;
+			*self.Signals.lock().await = Some(Stream);
+			Ok(())
+		})
+	}
+
+	fn Signal<'a>(&'a self, Name:&'a str, Call:Call) -> FutureBox<'a, Result<String, Error>> {
+		Box::pin(async move {
+			let _ = &Call;
+			let mut Held = self.Signals.lock().await;
+			let Some(Stream) = Held.as_mut() else {
+				return Err(Error::Navigation(
+					"the page carries no binding this session registered",
+					format!("{Name} was never added to this page"),
+				));
+			};
+			// Every binding this page calls arrives on the same stream, so a
+			// page with two of them is filtered here rather than trusted to
+			// call them in order.
+			while let Some(Event) = Stream.next().await {
+				if Event.name == Name {
+					return Ok(Event.payload.clone());
+				}
+			}
+			Err(Error::Unavailable(
+				"the page's event stream ended",
+				format!("{Name} can no longer be called: the page was closed or navigated away"),
+			))
 		})
 	}
 
